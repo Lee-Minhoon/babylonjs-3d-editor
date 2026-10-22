@@ -1,4 +1,4 @@
-import { EditorViewport } from "./_components/EditorViewport";
+import { EditorViewport } from "./_components/editor-viewport";
 
 export default function Home() {
   return (

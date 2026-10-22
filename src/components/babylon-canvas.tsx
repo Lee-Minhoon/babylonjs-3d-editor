@@ -5,7 +5,7 @@ import type { ComponentProps } from "react";
 import {
   type SceneReadyHandler,
   useBabylonScene,
-} from "@/hooks/useBabylonScene";
+} from "@/hooks/use-babylon-scene";
 import type { CreateEngineOptions } from "@/lib/babylon/engine";
 
 type BabylonCanvasProps = Omit<ComponentProps<"canvas">, "ref"> & {

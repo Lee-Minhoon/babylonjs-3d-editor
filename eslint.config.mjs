@@ -5,6 +5,37 @@ import prettier from "eslint-config-prettier/flat";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import unusedImports from "eslint-plugin-unused-imports";
 
+import { findViolation, toRelative } from "./scripts/check-naming.mjs";
+
+/** 파일명·폴더명 kebab-case 규칙. 기준은 scripts/check-naming.mjs (훅/pre-commit과 공유). */
+const localPlugin = {
+  rules: {
+    "kebab-case-path": {
+      meta: {
+        type: "problem",
+        docs: { description: "파일명·폴더명은 kebab-case여야 한다" },
+        messages: {
+          file: "파일명 '{{name}}'은 kebab-case여야 합니다 (예: babylon-canvas.tsx). scripts/check-naming.mjs 참고.",
+          folder:
+            "폴더명 '{{name}}'은 kebab-case여야 합니다 ({{path}}). scripts/check-naming.mjs 참고.",
+        },
+        schema: [],
+      },
+      create(context) {
+        const violation = findViolation(toRelative(context.filename));
+        if (violation) {
+          context.report({
+            loc: { line: 1, column: 0 },
+            messageId: violation.kind,
+            data: { name: violation.name, path: violation.path },
+          });
+        }
+        return {};
+      },
+    },
+  },
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -12,8 +43,11 @@ const eslintConfig = defineConfig([
     plugins: {
       "simple-import-sort": simpleImportSort,
       "unused-imports": unusedImports,
+      local: localPlugin,
     },
     rules: {
+      "local/kebab-case-path": "error",
+
       // import 정렬 (autofix). 그룹 사이엔 빈 줄이 들어간다.
       "simple-import-sort/imports": [
         "error",

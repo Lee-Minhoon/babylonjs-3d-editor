@@ -16,10 +16,11 @@ pnpm typecheck  # tsc --noEmit
 pnpm lint       # eslint
 pnpm format     # prettier --write .
 pnpm format:check
+pnpm lint:naming  # 파일명·폴더명 kebab-case 검사
 pnpm build      # 프로덕션 빌드
 ```
 
-작업을 마치기 전 `pnpm typecheck && pnpm lint && pnpm format:check`가 통과해야 한다. (Stop 훅이 typecheck를 강제함)
+작업을 마치기 전 `pnpm typecheck && pnpm lint && pnpm format:check && pnpm lint:naming`가 통과해야 한다. (Stop 훅이 typecheck와 이름 규칙 검사를 강제함)
 
 ## 포맷 / 린트
 
@@ -40,6 +41,12 @@ src/
     └── babylon/     # 엔진 생성, 로더 등록, 인스펙터
 ```
 
+- **파일명·폴더명은 kebab-case**: `babylon-canvas.tsx`, `use-babylon-scene.ts`, `src/lib/babylon/`, `app/editor-settings/`. React 컴포넌트·훅 파일도 kebab-case (export하는 이름은 `BabylonCanvas`, `useBabylonScene` 그대로).
+  - 적용 범위: `src/`, `scripts/`, `.claude/hooks/` 아래의 모든 폴더·파일. 루트 설정 파일(`next.config.ts` 등)은 도구가 이름을 정하므로 제외.
+  - 폴더 예외 (Next.js 라우팅 문법, 괄호/접두사 안쪽 이름은 kebab-case): `_components`, `(group)`, `[id]`, `[...slug]`, `[[...slug]]`, `@modal`, `(.)photo`/`(..)photo`/`(...)photo`.
+  - `engine.test.ts`, `types.d.ts`처럼 첫 `.` 뒤의 확장자 부분은 검사하지 않는다.
+  - 판정 기준과 예외 목록은 [scripts/check-naming.mjs](scripts/check-naming.mjs) 하나뿐이다. 규칙을 바꿀 땐 이 파일만 고친다.
+  - 강제 지점: ESLint(`local/kebab-case-path`), Write 전 PreToolUse 훅(생성 차단), Stop 훅(전체 검사), git pre-commit(husky).
 - `lib/`에는 비즈니스(에디터 기능) 로직을 넣지 않는다. 에디터 기능이 아니라 "어디서든 쓸 수 있는 인프라"만.
 - 한 곳에서만 쓰는 컴포넌트는 `components/`가 아니라 해당 라우트의 `_components/`에 둔다.
 - import는 `@/*` (→ `src/*`) 별칭 사용.

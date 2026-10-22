@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint:fix": "eslint --fix"
+    "lint:fix": "eslint --fix",
+    "prepare": "husky",
+    "lint:naming": "node scripts/check-naming.mjs"
   },
   "dependencies": {
     "@babylonjs/core": "9.32.0",
@@ -31,6 +33,7 @@
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-simple-import-sort": "14.0.0",
     "eslint-plugin-unused-imports": "4.4.1",
+    "husky": "9.1.7",
     "prettier": "3.9.10",
     "prettier-plugin-tailwindcss": "0.8.1",
     "tailwindcss": "^4",

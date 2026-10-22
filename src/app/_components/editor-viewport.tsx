@@ -8,7 +8,7 @@ import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
 import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder";
 import type { Scene } from "@babylonjs/core/scene";
 
-import { BabylonCanvas } from "@/components/BabylonCanvas";
+import { BabylonCanvas } from "@/components/babylon-canvas";
 import { attachInspectorToggle } from "@/lib/babylon/inspector";
 
 function setupScene(scene: Scene) {

@@ -24,6 +24,9 @@ pnpm dev
 | `pnpm typecheck`    | TypeScript 타입 검사              |
 | `pnpm format`       | Prettier로 전체 포맷              |
 | `pnpm format:check` | 포맷 검사 (CI용)                  |
+| `pnpm lint:naming`  | 파일명·폴더명 kebab-case 검사     |
+
+커밋 시 husky pre-commit 훅이 새로 추가된 파일의 파일명·폴더명을 검사합니다. (`pnpm install` 시 자동 설정)
 
 VS Code를 쓴다면 추천 확장(Prettier, ESLint, Tailwind CSS)을 설치하세요. 저장 시 자동 포맷됩니다.
 
