@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# babylonjs-3d-editor
+
+Next.js + Babylon.js 기반 3D 에디터.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+corepack enable   # package.json의 packageManager(pnpm) 버전을 사용
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+[http://localhost:3000](http://localhost:3000) 에서 확인.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| 명령 | 설명 |
+| --- | --- |
+| `pnpm dev` | 개발 서버 |
+| `pnpm build` | 프로덕션 빌드 |
+| `pnpm start` | 빌드 결과 실행 |
+| `pnpm lint` | ESLint |
+| `pnpm typecheck` | TypeScript 타입 검사 |
 
-## Learn More
+## 폴더 구조
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+├── app/          # Next.js App Router (라우트, 레이아웃)
+├── components/   # 공용 컴포넌트
+├── hooks/        # 공용 훅
+└── lib/          # 비즈니스 도메인에 종속되지 않는 외부 SDK 초기화 / 전역 인프라 유틸리티
+    └── babylon/  # Babylon.js 엔진 생성 등
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 개발 팁
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 개발 모드에서 `Shift + Alt + I` 로 Babylon Inspector를 열 수 있습니다.
+- 코딩 규칙(폴더 역할, Babylon import 방식 등)은 [CLAUDE.md](CLAUDE.md)에 정리되어 있습니다.
