@@ -14,13 +14,18 @@ pnpm dev
 
 ## Scripts
 
-| 명령 | 설명 |
-| --- | --- |
-| `pnpm dev` | 개발 서버 |
-| `pnpm build` | 프로덕션 빌드 |
-| `pnpm start` | 빌드 결과 실행 |
-| `pnpm lint` | ESLint |
-| `pnpm typecheck` | TypeScript 타입 검사 |
+| 명령                | 설명                              |
+| ------------------- | --------------------------------- |
+| `pnpm dev`          | 개발 서버                         |
+| `pnpm build`        | 프로덕션 빌드                     |
+| `pnpm start`        | 빌드 결과 실행                    |
+| `pnpm lint`         | ESLint                            |
+| `pnpm lint:fix`     | ESLint 자동 수정 (import 정렬 등) |
+| `pnpm typecheck`    | TypeScript 타입 검사              |
+| `pnpm format`       | Prettier로 전체 포맷              |
+| `pnpm format:check` | 포맷 검사 (CI용)                  |
+
+VS Code를 쓴다면 추천 확장(Prettier, ESLint, Tailwind CSS)을 설치하세요. 저장 시 자동 포맷됩니다.
 
 ## 폴더 구조
 

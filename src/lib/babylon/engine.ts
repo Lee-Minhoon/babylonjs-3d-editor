@@ -22,7 +22,8 @@ export async function createEngine(
   }: CreateEngineOptions = {},
 ): Promise<AbstractEngine> {
   if (preferWebGPU) {
-    const { WebGPUEngine } = await import("@babylonjs/core/Engines/webgpuEngine");
+    const { WebGPUEngine } =
+      await import("@babylonjs/core/Engines/webgpuEngine");
 
     if (await WebGPUEngine.IsSupportedAsync) {
       const engine = new WebGPUEngine(canvas, {
@@ -34,7 +35,10 @@ export async function createEngine(
         await engine.initAsync();
         return engine;
       } catch (error) {
-        console.warn("[babylon] WebGPU 초기화 실패, WebGL로 폴백합니다.", error);
+        console.warn(
+          "[babylon] WebGPU 초기화 실패, WebGL로 폴백합니다.",
+          error,
+        );
         engine.dispose();
       }
     }

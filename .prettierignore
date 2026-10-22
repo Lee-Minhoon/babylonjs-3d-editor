@@ -1,0 +1,3 @@
+# .gitignore에 있는 경로는 Prettier가 자동으로 무시한다.
+pnpm-lock.yaml
+public/

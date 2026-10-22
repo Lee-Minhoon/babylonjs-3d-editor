@@ -14,10 +14,20 @@ Next.js(App Router) + Babylon.js 기반 브라우저 3D 에디터.
 pnpm dev        # 개발 서버
 pnpm typecheck  # tsc --noEmit
 pnpm lint       # eslint
+pnpm format     # prettier --write .
+pnpm format:check
 pnpm build      # 프로덕션 빌드
 ```
 
-작업을 마치기 전 `pnpm typecheck && pnpm lint`가 통과해야 한다. (Stop 훅이 typecheck를 강제함)
+작업을 마치기 전 `pnpm typecheck && pnpm lint && pnpm format:check`가 통과해야 한다. (Stop 훅이 typecheck를 강제함)
+
+## 포맷 / 린트
+
+- 포맷은 **Prettier**, 코드 품질은 **ESLint**가 담당한다. ESLint에서 포맷 규칙은 `eslint-config-prettier`로 꺼져 있다.
+- Prettier 설정은 기본값 + `prettier-plugin-tailwindcss`(클래스 정렬)만 쓴다. 스타일 옵션을 추가하지 말 것.
+- 파일을 수정하면 PostToolUse 훅이 `eslint --fix` → Prettier 순으로 자동 실행한다. 포맷·import 정렬은 직접 맞추려 하지 말고 훅에 맡긴다. 훅이 파일을 다시 쓰므로, 이어서 같은 파일을 Edit 할 땐 최신 내용을 기준으로 한다.
+- **import 정렬** (`simple-import-sort`, autofix): 사이드이펙트 → `react`/`next` → 외부 패키지 → `@/` → 상대 경로 → CSS 순, 그룹 사이 빈 줄.
+- **미사용 코드** (`unused-imports`): 안 쓰는 import는 자동 제거(error). 안 쓰는 변수/인자는 warn이며, 의도적으로 안 쓰는 건 `_` 접두사를 붙인다.
 
 ## 폴더 규칙
 

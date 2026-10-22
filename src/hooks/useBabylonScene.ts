@@ -2,8 +2,10 @@
 
 // 메시에 머티리얼을 지정하지 않았을 때 쓰이는 기본 머티리얼 등록
 import "@babylonjs/core/Materials/standardMaterial";
-import { Scene } from "@babylonjs/core/scene";
+
 import { useEffect, useEffectEvent, useRef } from "react";
+
+import { Scene } from "@babylonjs/core/scene";
 
 import { createEngine, type CreateEngineOptions } from "@/lib/babylon/engine";
 import { ensureLoadersRegistered } from "@/lib/babylon/loaders";
