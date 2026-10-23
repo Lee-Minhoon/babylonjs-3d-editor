@@ -1,5 +1,6 @@
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
+import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
 import { CreateCapsule } from "@babylonjs/core/Meshes/Builders/capsuleBuilder";
@@ -116,28 +117,22 @@ function nextName(scene: Scene, preset: MeshPreset): string {
   return `${preset.label} ${max + 1}`;
 }
 
-/** 배치 격자: 1.5 간격 5×5 칸 (-3 ~ 3) */
-const GRID_STEP = 1.5;
-const GRID_CELLS = [-2, -1, 0, 1, 2].flatMap((x) =>
-  [-2, -1, 0, 1, 2].map((z) => ({ x: x * GRID_STEP, z: z * GRID_STEP })),
-);
-
-/** 다른 에디터 메쉬와 겹치지 않는 빈 칸 중 하나를 고른다. 다 찼으면 아무 칸이나. */
-function pickFreeCell(scene: Scene): { x: number; z: number } {
-  const occupied = scene.meshes.filter(isEditorMesh).map((m) => m.position);
-  const free = GRID_CELLS.filter((cell) =>
-    occupied.every((p) => Math.hypot(p.x - cell.x, p.z - cell.z) >= GRID_STEP),
-  );
-  const candidates = free.length > 0 ? free : GRID_CELLS;
-  return candidates[Math.floor(Math.random() * candidates.length)];
-}
-
-/** 프리셋 메쉬를 씬에 추가한다. 머티리얼은 메쉬마다 별도로 만들고 랜덤 색을 준다. */
-export function addPresetMesh(scene: Scene, preset: MeshPreset): Mesh {
+/**
+ * 프리셋 메쉬를 씬에 추가한다. 머티리얼은 메쉬마다 별도로 만들고 랜덤 색을 준다.
+ * @param surfacePoint 메쉬 밑면이 닿을 표면 위의 점 (바닥 또는 다른 메쉬 윗면)
+ */
+export function addPresetMesh(
+  scene: Scene,
+  preset: MeshPreset,
+  surfacePoint: Vector3,
+): Mesh {
   const name = nextName(scene, preset);
-  const { x, z } = pickFreeCell(scene);
   const mesh = preset.create(name, scene);
-  mesh.position.set(x, preset.restY, z);
+  mesh.position.set(
+    surfacePoint.x,
+    surfacePoint.y + preset.restY,
+    surfacePoint.z,
+  );
 
   const material = new StandardMaterial(`${name} Material`, scene);
   material.diffuseColor = Color3.FromHSV(Math.random() * 360, 0.5, 0.9);

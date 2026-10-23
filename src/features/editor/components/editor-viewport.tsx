@@ -11,6 +11,8 @@ import type { Scene } from "@babylonjs/core/scene";
 import { BabylonCanvas } from "@/components/babylon-canvas";
 import { attachInspectorToggle } from "@/lib/babylon/inspector";
 
+import { createPlacementTool, type PlacementTool } from "../lib/placement-tool";
+
 function setupScene(scene: Scene) {
   scene.clearColor = new Color4(0.1, 0.1, 0.12, 1);
 
@@ -36,24 +38,34 @@ function setupScene(scene: Scene) {
   ground.material = groundMaterial;
 }
 
-type EditorViewportProps = {
-  /** 씬이 준비되면 Scene, 정리되면 null로 호출된다. */
-  onSceneChange: (scene: Scene | null) => void;
+/** 뷰포트가 만들어 에디터 UI에 넘겨주는 씬과 씬에 붙은 도구들 */
+export type EditorRuntime = {
+  scene: Scene;
+  placement: PlacementTool;
 };
 
-export function EditorViewport({ onSceneChange }: EditorViewportProps) {
+type EditorViewportProps = {
+  /** 씬이 준비되면 런타임, 정리되면 null로 호출된다. */
+  onRuntimeChange: (runtime: EditorRuntime | null) => void;
+};
+
+export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
   return (
     <BabylonCanvas
       onSceneReady={(scene) => {
         setupScene(scene);
         const detachInspector = attachInspectorToggle(scene);
-        onSceneChange(scene);
+        const placement = createPlacementTool(scene);
+        onRuntimeChange({ scene, placement });
 
         return () => {
-          onSceneChange(null);
+          onRuntimeChange(null);
+          placement.dispose();
           detachInspector();
         };
       }}
+      // 우클릭은 배치 취소에 쓰므로 브라우저 컨텍스트 메뉴를 막는다
+      onContextMenu={(event) => event.preventDefault()}
     />
   );
 }
