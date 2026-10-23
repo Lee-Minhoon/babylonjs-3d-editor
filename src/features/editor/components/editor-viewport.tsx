@@ -11,6 +11,11 @@ import type { Scene } from "@babylonjs/core/scene";
 import { BabylonCanvas } from "@/components/babylon-canvas";
 import { attachInspectorToggle } from "@/lib/babylon/inspector";
 
+import {
+  bindHistoryShortcuts,
+  createHistory,
+  type History,
+} from "../lib/history";
 import { createPlacementTool, type PlacementTool } from "../lib/placement-tool";
 
 function setupScene(scene: Scene) {
@@ -41,6 +46,7 @@ function setupScene(scene: Scene) {
 /** 뷰포트가 만들어 에디터 UI에 넘겨주는 씬과 씬에 붙은 도구들 */
 export type EditorRuntime = {
   scene: Scene;
+  history: History;
   placement: PlacementTool;
 };
 
@@ -55,12 +61,17 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
       onSceneReady={(scene) => {
         setupScene(scene);
         const detachInspector = attachInspectorToggle(scene);
-        const placement = createPlacementTool(scene);
-        onRuntimeChange({ scene, placement });
+        const history = createHistory();
+        const unbindHistoryShortcuts = bindHistoryShortcuts(history);
+        const placement = createPlacementTool(scene, history);
+        onRuntimeChange({ scene, history, placement });
 
         return () => {
           onRuntimeChange(null);
           placement.dispose();
+          unbindHistoryShortcuts();
+          // undo로 씬에서 떼어둔 메쉬는 scene.dispose()가 모르므로 여기서 해제
+          history.dispose();
           detachInspector();
         };
       }}

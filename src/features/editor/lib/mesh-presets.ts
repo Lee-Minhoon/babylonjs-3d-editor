@@ -107,14 +107,18 @@ export function isEditorMesh(mesh: AbstractMesh): boolean {
   return Boolean((mesh.metadata as Partial<EditorMeshMetadata> | null)?.editor);
 }
 
-/** "Box 1", "Box 2" … 같은 타입 중 가장 큰 번호 + 1 */
+const nameCounters = new WeakMap<Scene, Map<MeshPresetId, number>>();
+
+/**
+ * "Box 1", "Box 2" … 씬·프리셋별로 계속 증가하는 번호.
+ * undo로 씬에서 떼어둔 메쉬는 scene.meshes에 없으므로, 씬을 뒤져 번호를 정하면 이름이 겹칠 수 있다.
+ */
 function nextName(scene: Scene, preset: MeshPreset): string {
-  const pattern = new RegExp(`^${preset.label} (\\d+)$`);
-  const max = scene.meshes.reduce((acc, mesh) => {
-    const match = pattern.exec(mesh.name);
-    return match ? Math.max(acc, Number(match[1])) : acc;
-  }, 0);
-  return `${preset.label} ${max + 1}`;
+  let counters = nameCounters.get(scene);
+  if (!counters) nameCounters.set(scene, (counters = new Map()));
+  const next = (counters.get(preset.id) ?? 0) + 1;
+  counters.set(preset.id, next);
+  return `${preset.label} ${next}`;
 }
 
 /**
@@ -142,9 +146,4 @@ export function addPresetMesh(
     editor: { presetId: preset.id },
   } satisfies EditorMeshMetadata;
   return mesh;
-}
-
-/** 메쉬와 그 메쉬 전용 머티리얼을 함께 제거한다. */
-export function removeEditorMesh(mesh: AbstractMesh) {
-  mesh.dispose(false, true);
 }

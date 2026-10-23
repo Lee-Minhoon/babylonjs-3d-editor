@@ -9,11 +9,9 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
 
-import {
-  addPresetMesh,
-  type MeshPreset,
-  type MeshPresetId,
-} from "./mesh-presets";
+import type { History } from "./history";
+import { createAddMeshCommand } from "./mesh-commands";
+import type { MeshPreset, MeshPresetId } from "./mesh-presets";
 
 /** 이 값 이상으로 위를 향한 면에만 쌓는다 (옆면/아랫면에 맞으면 바닥 평면으로 폴백) */
 const TOP_FACE_MIN_NORMAL_Y = 0.7;
@@ -44,7 +42,11 @@ type ActivePlacement = {
   surfacePoint: Vector3 | null;
 };
 
-export function createPlacementTool(scene: Scene): PlacementTool {
+/** 배치는 history를 거쳐 실행되므로 undo/redo 대상이 된다. */
+export function createPlacementTool(
+  scene: Scene,
+  history: History,
+): PlacementTool {
   let active: ActivePlacement | null = null;
   const listeners = new Set<() => void>();
   const emit = () => listeners.forEach((listener) => listener());
@@ -116,7 +118,9 @@ export function createPlacementTool(scene: Scene): PlacementTool {
     if (!active) return;
     updatePreview();
     if (!active.surfacePoint) return;
-    addPresetMesh(scene, active.preset, active.surfacePoint);
+    history.execute(
+      createAddMeshCommand(scene, active.preset, active.surfacePoint),
+    );
     // 방금 놓은 메쉬 위로 미리보기를 다시 올린다
     updatePreview();
   }
