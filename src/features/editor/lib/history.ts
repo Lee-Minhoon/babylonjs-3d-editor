@@ -85,36 +85,3 @@ export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
     },
   };
 }
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable ||
-      target.tagName === "INPUT" ||
-      target.tagName === "TEXTAREA" ||
-      target.tagName === "SELECT")
-  );
-}
-
-/**
- * ⌘/Ctrl+Z → undo, ⌘/Ctrl+Shift+Z · Ctrl+Y → redo.
- * 입력 필드에 포커스가 있으면 브라우저 기본 동작(텍스트 undo)을 그대로 둔다.
- */
-export function bindHistoryShortcuts(history: History): () => void {
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
-    if (isTypingTarget(event.target)) return;
-
-    const key = event.key.toLowerCase();
-    if (key === "z" && !event.shiftKey) {
-      event.preventDefault();
-      history.undo();
-    } else if ((key === "z" && event.shiftKey) || key === "y") {
-      event.preventDefault();
-      history.redo();
-    }
-  };
-
-  window.addEventListener("keydown", onKeyDown);
-  return () => window.removeEventListener("keydown", onKeyDown);
-}

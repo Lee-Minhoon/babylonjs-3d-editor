@@ -1,7 +1,6 @@
 // scene.createPickingRay / pickWithRay 등록
 import "@babylonjs/core/Culling/ray";
 
-import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Plane } from "@babylonjs/core/Maths/math.plane";
@@ -17,19 +16,19 @@ import type { MeshPreset, MeshPresetId } from "./mesh-presets";
 const TOP_FACE_MIN_NORMAL_Y = 0.7;
 const GROUND_PLANE = new Plane(0, 1, 0, 0);
 
-const LEFT_BUTTON = 0;
-const RIGHT_BUTTON = 2;
-
 /**
  * 프리셋 배치 모드.
  * toggle(preset) → 반투명 미리보기가 커서를 따라다니고, 클릭(탭)할 때마다 그 위치에 메쉬를 만든다.
  * 모드는 Esc·우클릭·같은 프리셋 다시 선택으로 끌 때까지 유지된다.
- * 드래그는 카메라 조작으로 남겨두기 위해 POINTERTAP(거의 움직이지 않은 클릭)만 배치로 처리한다.
  */
 export type PlacementTool = {
   /** 배치 모드 시작. 같은 프리셋으로 다시 호출하면 종료(토글). */
   toggle(preset: MeshPreset): void;
   cancel(): void;
+  /** 현재 커서 위치에 메쉬를 놓는다 (배치 모드가 아니면 무시) */
+  place(): void;
+  /** 커서가 움직였을 때 미리보기 위치 갱신 */
+  updatePointer(): void;
   getActivePresetId(): MeshPresetId | null;
   subscribe(onChange: () => void): () => void;
   dispose(): void;
@@ -125,32 +124,15 @@ export function createPlacementTool(
     updatePreview();
   }
 
-  const pointerObserver = scene.onPointerObservable.add((info) => {
-    if (!active) return;
-    if (info.type === PointerEventTypes.POINTERMOVE) {
-      updatePreview();
-    } else if (
-      info.type === PointerEventTypes.POINTERTAP ||
-      // 300ms 안의 두 번째 클릭은 위치와 무관하게 DOUBLETAP으로만 온다 (연속 배치 시 누락 방지)
-      info.type === PointerEventTypes.POINTERDOUBLETAP
-    ) {
-      const event = info.event as PointerEvent;
-      if (event.button === LEFT_BUTTON) place();
-      else if (event.button === RIGHT_BUTTON) stop();
-    }
-  });
-
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (active && event.key === "Escape") stop();
-  };
-  window.addEventListener("keydown", onKeyDown);
-
+  // 포인터 입력은 pointer-router가, Esc는 editor-shortcuts가 이 메서드들을 호출한다
   return {
     toggle(preset) {
       if (active?.preset.id === preset.id) stop();
       else start(preset);
     },
     cancel: stop,
+    place,
+    updatePointer: updatePreview,
     getActivePresetId: () => active?.preset.id ?? null,
     subscribe(onChange) {
       listeners.add(onChange);
@@ -158,8 +140,6 @@ export function createPlacementTool(
     },
     dispose() {
       stop();
-      pointerObserver.remove();
-      window.removeEventListener("keydown", onKeyDown);
       previewMaterial.dispose();
       listeners.clear();
     },

@@ -11,12 +11,13 @@ import type { Scene } from "@babylonjs/core/scene";
 import { BabylonCanvas } from "@/components/babylon-canvas";
 import { attachInspectorToggle } from "@/lib/babylon/inspector";
 
-import {
-  bindHistoryShortcuts,
-  createHistory,
-  type History,
-} from "../lib/history";
+import { bindEditorShortcuts } from "../lib/editor-shortcuts";
+import { createHistory, type History } from "../lib/history";
 import { createPlacementTool, type PlacementTool } from "../lib/placement-tool";
+import { bindPointerRouter } from "../lib/pointer-router";
+import { createSelection, type Selection } from "../lib/selection";
+import { createToolState, type ToolState } from "../lib/tools";
+import { createTransformGizmo } from "../lib/transform-gizmo";
 
 function setupScene(scene: Scene) {
   scene.clearColor = new Color4(0.1, 0.1, 0.12, 1);
@@ -48,6 +49,8 @@ export type EditorRuntime = {
   scene: Scene;
   history: History;
   placement: PlacementTool;
+  selection: Selection;
+  tools: ToolState;
 };
 
 type EditorViewportProps = {
@@ -62,14 +65,35 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
         setupScene(scene);
         const detachInspector = attachInspectorToggle(scene);
         const history = createHistory();
-        const unbindHistoryShortcuts = bindHistoryShortcuts(history);
+        const tools = createToolState();
         const placement = createPlacementTool(scene, history);
-        onRuntimeChange({ scene, history, placement });
+        const selection = createSelection(scene);
+        const gizmo = createTransformGizmo(scene, {
+          history,
+          selection,
+          tools,
+          placement,
+        });
+        const unbindPointer = bindPointerRouter(scene, {
+          gizmo,
+          placement,
+          selection,
+        });
+        const unbindShortcuts = bindEditorShortcuts({
+          history,
+          placement,
+          selection,
+          tools,
+        });
+        onRuntimeChange({ scene, history, placement, selection, tools });
 
         return () => {
           onRuntimeChange(null);
+          unbindShortcuts();
+          unbindPointer();
+          gizmo.dispose();
+          selection.dispose();
           placement.dispose();
-          unbindHistoryShortcuts();
           // undo로 씬에서 떼어둔 메쉬는 scene.dispose()가 모르므로 여기서 해제
           history.dispose();
           detachInspector();

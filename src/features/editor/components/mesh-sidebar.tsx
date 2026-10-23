@@ -2,6 +2,7 @@
 
 import { type ReactNode, useSyncExternalStore } from "react";
 
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import {
   Box,
   Cone,
@@ -37,6 +38,7 @@ import {
   type MeshPresetId,
 } from "../lib/mesh-presets";
 import type { PlacementTool } from "../lib/placement-tool";
+import type { Selection } from "../lib/selection";
 import type { EditorRuntime } from "./editor-viewport";
 
 /**
@@ -75,6 +77,16 @@ function useHistoryState(history: History | undefined): HistoryState {
     history?.subscribe ?? subscribeNoop,
     history?.getState ?? getEmptyHistory,
     getEmptyHistory,
+  );
+}
+
+function useSelectedMesh(
+  selection: Selection | undefined,
+): AbstractMesh | null {
+  return useSyncExternalStore(
+    selection?.subscribe ?? subscribeNoop,
+    selection?.getSelected ?? getNull,
+    getNull,
   );
 }
 
@@ -137,6 +149,7 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
     .toSorted((a, b) => a.uniqueId - b.uniqueId);
   const activePresetId = useActivePresetId(runtime?.placement);
   const { undoLabel, redoLabel } = useHistoryState(runtime?.history);
+  const selectedMesh = useSelectedMesh(runtime?.selection);
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">
@@ -208,17 +221,29 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
               {meshes.map((mesh) => {
                 const presetId = getPresetId(mesh);
                 const Icon = presetId ? PRESET_ICONS[presetId] : Box;
+                const isSelected = mesh === selectedMesh;
                 return (
                   <li
                     key={mesh.uniqueId}
-                    className="group flex h-7 items-center gap-2 rounded-md px-1.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    className={`group flex h-7 items-center rounded-md pr-1 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                      isSelected
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-sidebar-ring/50"
+                        : ""
+                    }`}
                   >
-                    <Icon
-                      className="size-3.5 shrink-0 text-muted-foreground"
-                      strokeWidth={1.75}
-                      aria-hidden
-                    />
-                    <span className="flex-1 truncate">{mesh.name}</span>
+                    <Button
+                      variant="ghost"
+                      className="h-full flex-1 justify-start gap-2 px-1.5 font-normal hover:bg-transparent dark:hover:bg-transparent"
+                      aria-pressed={isSelected}
+                      onClick={() => runtime?.selection.select(mesh)}
+                    >
+                      <Icon
+                        className="size-3.5 text-muted-foreground"
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
+                      <span className="truncate">{mesh.name}</span>
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon-xs"
