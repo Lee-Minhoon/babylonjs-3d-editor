@@ -1,0 +1,155 @@
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
+import { CreateCapsule } from "@babylonjs/core/Meshes/Builders/capsuleBuilder";
+import { CreateCylinder } from "@babylonjs/core/Meshes/Builders/cylinderBuilder";
+import { CreateIcoSphere } from "@babylonjs/core/Meshes/Builders/icoSphereBuilder";
+import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder";
+import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
+import { CreateTorus } from "@babylonjs/core/Meshes/Builders/torusBuilder";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh";
+import type { Scene } from "@babylonjs/core/scene";
+
+export type MeshPresetId =
+  | "box"
+  | "sphere"
+  | "ico-sphere"
+  | "cylinder"
+  | "cone"
+  | "capsule"
+  | "torus"
+  | "plane";
+
+export type MeshPreset = {
+  id: MeshPresetId;
+  label: string;
+  create: (name: string, scene: Scene) => Mesh;
+  /** 바닥(y=0) 위에 올려두기 위한 높이 오프셋 */
+  restY: number;
+};
+
+export const MESH_PRESETS: readonly MeshPreset[] = [
+  {
+    id: "box",
+    label: "Box",
+    create: (name, scene) => CreateBox(name, { size: 1 }, scene),
+    restY: 0.5,
+  },
+  {
+    id: "sphere",
+    label: "Sphere",
+    create: (name, scene) =>
+      CreateSphere(name, { diameter: 1, segments: 32 }, scene),
+    restY: 0.5,
+  },
+  {
+    id: "ico-sphere",
+    label: "IcoSphere",
+    create: (name, scene) =>
+      CreateIcoSphere(name, { radius: 0.5, subdivisions: 2 }, scene),
+    restY: 0.5,
+  },
+  {
+    id: "cylinder",
+    label: "Cylinder",
+    create: (name, scene) =>
+      CreateCylinder(name, { height: 1, diameter: 1 }, scene),
+    restY: 0.5,
+  },
+  {
+    id: "cone",
+    label: "Cone",
+    create: (name, scene) =>
+      CreateCylinder(
+        name,
+        { height: 1, diameterTop: 0, diameterBottom: 1 },
+        scene,
+      ),
+    restY: 0.5,
+  },
+  {
+    id: "capsule",
+    label: "Capsule",
+    create: (name, scene) =>
+      CreateCapsule(name, { height: 1, radius: 0.25 }, scene),
+    restY: 0.5,
+  },
+  {
+    id: "torus",
+    label: "Torus",
+    create: (name, scene) =>
+      CreateTorus(
+        name,
+        { diameter: 1, thickness: 0.3, tessellation: 48 },
+        scene,
+      ),
+    restY: 0.15,
+  },
+  {
+    id: "plane",
+    label: "Plane",
+    create: (name, scene) =>
+      CreatePlane(
+        name,
+        { size: 1, sideOrientation: 2 /* DOUBLESIDE */ },
+        scene,
+      ),
+    restY: 0.5,
+  },
+];
+
+/** 에디터에서 추가한 메쉬에 붙는 메타데이터 */
+type EditorMeshMetadata = { editor: { presetId: MeshPresetId } };
+
+export function isEditorMesh(mesh: AbstractMesh): boolean {
+  return Boolean((mesh.metadata as Partial<EditorMeshMetadata> | null)?.editor);
+}
+
+/** "Box 1", "Box 2" … 같은 타입 중 가장 큰 번호 + 1 */
+function nextName(scene: Scene, preset: MeshPreset): string {
+  const pattern = new RegExp(`^${preset.label} (\\d+)$`);
+  const max = scene.meshes.reduce((acc, mesh) => {
+    const match = pattern.exec(mesh.name);
+    return match ? Math.max(acc, Number(match[1])) : acc;
+  }, 0);
+  return `${preset.label} ${max + 1}`;
+}
+
+/** 배치 격자: 1.5 간격 5×5 칸 (-3 ~ 3) */
+const GRID_STEP = 1.5;
+const GRID_CELLS = [-2, -1, 0, 1, 2].flatMap((x) =>
+  [-2, -1, 0, 1, 2].map((z) => ({ x: x * GRID_STEP, z: z * GRID_STEP })),
+);
+
+/** 다른 에디터 메쉬와 겹치지 않는 빈 칸 중 하나를 고른다. 다 찼으면 아무 칸이나. */
+function pickFreeCell(scene: Scene): { x: number; z: number } {
+  const occupied = scene.meshes.filter(isEditorMesh).map((m) => m.position);
+  const free = GRID_CELLS.filter((cell) =>
+    occupied.every((p) => Math.hypot(p.x - cell.x, p.z - cell.z) >= GRID_STEP),
+  );
+  const candidates = free.length > 0 ? free : GRID_CELLS;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+/** 프리셋 메쉬를 씬에 추가한다. 머티리얼은 메쉬마다 별도로 만들고 랜덤 색을 준다. */
+export function addPresetMesh(scene: Scene, preset: MeshPreset): Mesh {
+  const name = nextName(scene, preset);
+  const { x, z } = pickFreeCell(scene);
+  const mesh = preset.create(name, scene);
+  mesh.position.set(x, preset.restY, z);
+
+  const material = new StandardMaterial(`${name} Material`, scene);
+  material.diffuseColor = Color3.FromHSV(Math.random() * 360, 0.5, 0.9);
+  mesh.material = material;
+
+  mesh.metadata = {
+    editor: { presetId: preset.id },
+  } satisfies EditorMeshMetadata;
+  return mesh;
+}
+
+/** 메쉬와 그 메쉬 전용 머티리얼을 함께 제거한다. */
+export function removeEditorMesh(mesh: AbstractMesh) {
+  mesh.dispose(false, true);
+}

@@ -4,6 +4,7 @@ import nextTs from "eslint-config-next/typescript";
 import prettier from "eslint-config-prettier/flat";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import unusedImports from "eslint-plugin-unused-imports";
+import { readdirSync } from "node:fs";
 
 import { findViolation, toRelative } from "./scripts/check-naming.mjs";
 
@@ -36,6 +37,55 @@ const localPlugin = {
   },
 };
 
+/**
+ * 의존 방향: app → features → 공용(components, hooks, lib).
+ * - 공용 코드는 features/app을, features는 app을 import 할 수 없다.
+ * - feature끼리는 서로 import 할 수 없다 (feature 폴더 목록으로 zone 자동 생성).
+ * - app은 feature의 index.ts(public API)만 import 할 수 있다.
+ * 경로를 실제 파일로 resolve해서 검사하므로 상대 경로로 우회해도 잡힌다.
+ */
+const SHARED = ["./src/components", "./src/hooks", "./src/lib"];
+const features = (() => {
+  try {
+    return readdirSync(new URL("./src/features", import.meta.url), {
+      withFileTypes: true,
+    })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch (error) {
+    // features 폴더가 아직 없을 때만 무시
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+})();
+
+const boundaryZones = [
+  {
+    target: SHARED,
+    from: ["./src/features", "./src/app"],
+    message:
+      "공용 코드(components/hooks/lib)는 features·app에 의존할 수 없습니다. 필요한 코드를 공용으로 올리세요.",
+  },
+  {
+    target: "./src/features",
+    from: "./src/app",
+    message: "features는 app에 의존할 수 없습니다.",
+  },
+  ...features.map((feature) => ({
+    target: `./src/features/${feature}`,
+    from: "./src/features",
+    except: [`./${feature}`],
+    message:
+      "feature끼리는 서로 import 할 수 없습니다. 공용 폴더로 올리거나 app에서 조합하세요.",
+  })),
+  {
+    target: "./src/app",
+    from: ["./src/features/*/!(index).*", "./src/features/*/*/**"],
+    message:
+      'feature는 public API(index.ts)로만 import 하세요. 예: import { Editor } from "@/features/editor"',
+  },
+];
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -47,6 +97,10 @@ const eslintConfig = defineConfig([
     },
     rules: {
       "local/kebab-case-path": "error",
+      "import/no-restricted-paths": [
+        "error",
+        { basePath: import.meta.dirname, zones: boundaryZones },
+      ],
 
       // import 정렬 (autofix). 그룹 사이엔 빈 줄이 들어간다.
       "simple-import-sort/imports": [

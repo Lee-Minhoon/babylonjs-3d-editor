@@ -1,9 +1,9 @@
-import { EditorViewport } from "./_components/editor-viewport";
+import { Editor } from "@/features/editor";
 
 export default function Home() {
   return (
-    <main className="flex h-dvh w-full">
-      <EditorViewport />
+    <main className="h-dvh w-full">
+      <Editor />
     </main>
   );
 }

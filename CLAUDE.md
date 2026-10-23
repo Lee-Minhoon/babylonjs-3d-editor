@@ -29,26 +29,43 @@ pnpm build      # 프로덕션 빌드
 - 파일을 수정하면 PostToolUse 훅이 `eslint --fix` → Prettier 순으로 자동 실행한다. 포맷·import 정렬은 직접 맞추려 하지 말고 훅에 맡긴다. 훅이 파일을 다시 쓰므로, 이어서 같은 파일을 Edit 할 땐 최신 내용을 기준으로 한다.
 - **import 정렬** (`simple-import-sort`, autofix): 사이드이펙트 → `react`/`next` → 외부 패키지 → `@/` → 상대 경로 → CSS 순, 그룹 사이 빈 줄.
 - **미사용 코드** (`unused-imports`): 안 쓰는 import는 자동 제거(error). 안 쓰는 변수/인자는 warn이며, 의도적으로 안 쓰는 건 `_` 접두사를 붙인다.
+  - ⚠️ import만 먼저 추가하는 Edit를 따로 하면 훅이 "미사용"으로 보고 즉시 지운다. **import와 그것을 쓰는 코드는 같은 Edit(또는 Write)에서 추가**한다.
 
 ## 폴더 규칙
 
 ```
 src/
-├── app/             # 라우트. 특정 라우트 전용 컴포넌트는 app/**/_components/
-├── components/      # 여러 곳에서 쓰는 공용 컴포넌트
-├── hooks/           # 공용 훅
-└── lib/             # 도메인에 종속되지 않는 외부 SDK 초기화 / 전역 인프라 유틸
-    └── babylon/     # 엔진 생성, 로더 등록, 인스펙터
+├── app/                 # 라우팅 전용 (thin): 라우트, 레이아웃, metadata, 데이터 fetch 진입점만
+├── features/            # 기능 단위 모듈
+│   └── editor/
+│       ├── components/  # feature 전용 컴포넌트
+│       ├── hooks/       # feature 전용 훅
+│       ├── lib/         # feature 전용 로직 (예: mesh-presets.ts)
+│       └── index.ts     # public API — feature 밖으로 공개할 것만 export
+├── components/          # 공용 컴포넌트 (어느 feature에도 속하지 않음)
+├── hooks/               # 공용 훅
+└── lib/                 # 도메인에 종속되지 않는 외부 SDK 초기화 / 전역 인프라 유틸
+    └── babylon/         # 엔진 생성, 로더 등록, 인스펙터
 ```
+
+### 의존 방향 (ESLint `import/no-restricted-paths`로 강제)
+
+`app` → `features` → 공용(`components`, `hooks`, `lib`). 역방향 import는 에러.
+
+- 공용 코드는 `features`·`app`을 import 할 수 없다. 공용에서 필요해지면 그 코드를 공용으로 올린다.
+- **feature끼리는 서로 import 할 수 없다.** 둘 다 필요한 건 공용으로 올리거나, `app`에서 두 feature를 조합한다.
+- feature 밖에서는 **`index.ts`로만** import 한다: `import { Editor } from "@/features/editor"` ✅, `@/features/editor/lib/...` ❌.
+- feature 내부에서는 상대 경로(`../lib/mesh-presets`)를 쓴다. index 배럴은 feature 루트에 하나만 두고 하위 폴더에는 만들지 않는다.
+- 새 feature는 `src/features/<name>/` 폴더만 만들면 된다. 경계 zone은 폴더 목록으로 자동 생성된다 (`eslint.config.mjs`).
 
 - **파일명·폴더명은 kebab-case**: `babylon-canvas.tsx`, `use-babylon-scene.ts`, `src/lib/babylon/`, `app/editor-settings/`. React 컴포넌트·훅 파일도 kebab-case (export하는 이름은 `BabylonCanvas`, `useBabylonScene` 그대로).
   - 적용 범위: `src/`, `scripts/`, `.claude/hooks/` 아래의 모든 폴더·파일. 루트 설정 파일(`next.config.ts` 등)은 도구가 이름을 정하므로 제외.
-  - 폴더 예외 (Next.js 라우팅 문법, 괄호/접두사 안쪽 이름은 kebab-case): `_components`, `(group)`, `[id]`, `[...slug]`, `[[...slug]]`, `@modal`, `(.)photo`/`(..)photo`/`(...)photo`.
+  - 폴더 예외 (Next.js 라우팅 문법, 괄호/접두사 안쪽 이름은 kebab-case): `_private`, `(group)`, `[id]`, `[...slug]`, `[[...slug]]`, `@modal`, `(.)photo`/`(..)photo`/`(...)photo`.
   - `engine.test.ts`, `types.d.ts`처럼 첫 `.` 뒤의 확장자 부분은 검사하지 않는다.
   - 판정 기준과 예외 목록은 [scripts/check-naming.mjs](scripts/check-naming.mjs) 하나뿐이다. 규칙을 바꿀 땐 이 파일만 고친다.
   - 강제 지점: ESLint(`local/kebab-case-path`), Write 전 PreToolUse 훅(생성 차단), Stop 훅(전체 검사), git pre-commit(husky).
-- `lib/`에는 비즈니스(에디터 기능) 로직을 넣지 않는다. 에디터 기능이 아니라 "어디서든 쓸 수 있는 인프라"만.
-- 한 곳에서만 쓰는 컴포넌트는 `components/`가 아니라 해당 라우트의 `_components/`에 둔다.
+- 루트 `lib/`에는 비즈니스(에디터 기능) 로직을 넣지 않는다. "어디서든 쓸 수 있는 인프라"만. 기능 로직은 `features/<name>/lib/`.
+- 한 feature에서만 쓰는 코드는 공용 폴더가 아니라 그 feature 안에 둔다. `app/` 안에 `_components` 같은 폴더를 만들지 않는다.
 - import는 `@/*` (→ `src/*`) 별칭 사용.
 
 ## Babylon.js 규칙

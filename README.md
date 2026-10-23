@@ -34,7 +34,8 @@ VS Code를 쓴다면 추천 확장(Prettier, ESLint, Tailwind CSS)을 설치하�
 
 ```
 src/
-├── app/          # Next.js App Router (라우트, 레이아웃)
+├── app/          # Next.js App Router (라우팅만, thin하게 유지)
+├── features/     # 기능 단위 모듈 (예: editor). 외부에는 index.ts로만 공개
 ├── components/   # 공용 컴포넌트
 ├── hooks/        # 공용 훅
 └── lib/          # 비즈니스 도메인에 종속되지 않는 외부 SDK 초기화 / 전역 인프라 유틸리티
