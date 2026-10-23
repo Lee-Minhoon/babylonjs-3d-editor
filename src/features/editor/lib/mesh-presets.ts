@@ -103,8 +103,17 @@ export const MESH_PRESETS: readonly MeshPreset[] = [
 /** 에디터에서 추가한 메쉬에 붙는 메타데이터 */
 type EditorMeshMetadata = { editor: { presetId: MeshPresetId } };
 
+function getEditorMetadata(mesh: AbstractMesh) {
+  return (mesh.metadata as Partial<EditorMeshMetadata> | null)?.editor;
+}
+
 export function isEditorMesh(mesh: AbstractMesh): boolean {
-  return Boolean((mesh.metadata as Partial<EditorMeshMetadata> | null)?.editor);
+  return Boolean(getEditorMetadata(mesh));
+}
+
+/** 에디터에서 추가한 메쉬의 프리셋 id. 에디터 메쉬가 아니면 null */
+export function getPresetId(mesh: AbstractMesh): MeshPresetId | null {
+  return getEditorMetadata(mesh)?.presetId ?? null;
 }
 
 const nameCounters = new WeakMap<Scene, Map<MeshPresetId, number>>();

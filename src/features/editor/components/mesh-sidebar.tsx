@@ -2,17 +2,48 @@
 
 import { useSyncExternalStore } from "react";
 
+import {
+  Box,
+  Cone,
+  Cylinder,
+  Gem,
+  Globe,
+  type LucideIcon,
+  Pill,
+  Redo2,
+  Square,
+  Torus,
+  Undo2,
+  X,
+} from "lucide-react";
+
 import { useSceneMeshes } from "@/hooks/use-scene-meshes";
 
 import type { History, HistoryState } from "../lib/history";
 import { createRemoveMeshCommand } from "../lib/mesh-commands";
 import {
+  getPresetId,
   isEditorMesh,
   MESH_PRESETS,
   type MeshPresetId,
 } from "../lib/mesh-presets";
 import type { PlacementTool } from "../lib/placement-tool";
 import type { EditorRuntime } from "./editor-viewport";
+
+/**
+ * 프리셋 아이콘. lib(mesh-presets)에 UI 의존성을 넣지 않으려고 여기서 매핑한다.
+ * Record<MeshPresetId, …>라서 프리셋을 추가하고 아이콘을 빠뜨리면 타입 에러가 난다.
+ */
+const PRESET_ICONS: Record<MeshPresetId, LucideIcon> = {
+  box: Box,
+  sphere: Globe,
+  "ico-sphere": Gem,
+  cylinder: Cylinder,
+  cone: Cone,
+  capsule: Pill,
+  torus: Torus,
+  plane: Square,
+};
 
 const subscribeNoop = () => () => {};
 const getNull = () => null;
@@ -58,9 +89,10 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
           disabled={!undoLabel}
           onClick={() => runtime?.history.undo()}
           title={undoLabel ? `실행 취소: ${undoLabel} (⌘/Ctrl+Z)` : "실행 취소"}
-          className="flex-1 rounded-md bg-zinc-800 px-2 py-1.5 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-zinc-800 px-2 py-1.5 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          ↶ 실행 취소
+          <Undo2 className="size-4" aria-hidden />
+          실행 취소
         </button>
         <button
           type="button"
@@ -69,9 +101,10 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
           title={
             redoLabel ? `다시 실행: ${redoLabel} (⌘/Ctrl+Shift+Z)` : "다시 실행"
           }
-          className="flex-1 rounded-md bg-zinc-800 px-2 py-1.5 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-zinc-800 px-2 py-1.5 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          ↷ 다시 실행
+          <Redo2 className="size-4" aria-hidden />
+          다시 실행
         </button>
       </div>
 
@@ -82,6 +115,7 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
         <div className="grid grid-cols-2 gap-1.5">
           {MESH_PRESETS.map((preset) => {
             const isActive = activePresetId === preset.id;
+            const Icon = PRESET_ICONS[preset.id];
             return (
               <button
                 key={preset.id}
@@ -89,12 +123,17 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
                 disabled={!runtime}
                 aria-pressed={isActive}
                 onClick={() => runtime?.placement.toggle(preset)}
-                className={`rounded-md px-2 py-1.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                   isActive
                     ? "bg-sky-600 text-white hover:bg-sky-500"
                     : "bg-zinc-800 hover:bg-zinc-700"
                 }`}
               >
+                <Icon
+                  className={`size-4 shrink-0 ${isActive ? "text-white" : "text-zinc-400"}`}
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
                 {preset.label}
               </button>
             );
@@ -120,26 +159,35 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
           <p className="text-zinc-500">아직 추가된 메쉬가 없습니다.</p>
         ) : (
           <ul className="-mx-1 flex-1 space-y-0.5 overflow-y-auto">
-            {meshes.map((mesh) => (
-              <li
-                key={mesh.uniqueId}
-                className="group flex items-center justify-between rounded-md px-1 py-1 hover:bg-zinc-800"
-              >
-                <span className="truncate">{mesh.name}</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    runtime?.history.execute(
-                      createRemoveMeshCommand(runtime.scene, mesh),
-                    )
-                  }
-                  aria-label={`${mesh.name} 삭제`}
-                  className="rounded px-1.5 text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-zinc-700 hover:text-zinc-100 focus-visible:opacity-100"
+            {meshes.map((mesh) => {
+              const presetId = getPresetId(mesh);
+              const Icon = presetId ? PRESET_ICONS[presetId] : Box;
+              return (
+                <li
+                  key={mesh.uniqueId}
+                  className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-zinc-800"
                 >
-                  ✕
-                </button>
-              </li>
-            ))}
+                  <Icon
+                    className="size-3.5 shrink-0 text-zinc-500"
+                    strokeWidth={1.75}
+                    aria-hidden
+                  />
+                  <span className="flex-1 truncate">{mesh.name}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      runtime?.history.execute(
+                        createRemoveMeshCommand(runtime.scene, mesh),
+                      )
+                    }
+                    aria-label={`${mesh.name} 삭제`}
+                    className="rounded p-0.5 text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-zinc-700 hover:text-zinc-100 focus-visible:opacity-100"
+                  >
+                    <X className="size-3.5" aria-hidden />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
