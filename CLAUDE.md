@@ -79,7 +79,10 @@ src/
 - 패널 표시값은 Babylon 객체를 직접 구독해서 얻는다 (`hooks/use-mesh-transform.ts`, `onAfterWorldMatrixUpdateObservable`). React state에 복사해 두지 않는다 — 기즈모·undo·입력 어디서 바뀌든 한 경로로 반영된다.
 - **씬을 바꾸는 동작은 반드시 Command로 만들어 `history.execute()`로 실행**한다 (undo/redo 대상). 메쉬를 직접 `dispose()`하지 않는다 — 삭제는 `createRemoveMeshCommand`.
 - 선택(`selection`)은 히스토리에 기록하지 않는다. 선택된 메쉬가 씬에서 빠지면 자동 해제된다.
-- **키보드 단축키는 `lib/editor-shortcuts.ts` 한 곳에서만 등록**한다. 도구에서 `window.addEventListener("keydown")`을 직접 달지 않는다 (같은 키의 우선순위가 등록 순서에 묶이기 때문).
+- **키보드 단축키는 `lib/editor-shortcuts.ts` 한 곳에서만 등록**한다. 도구에서 `window.addEventListener("keydown")`을 직접 달지 않는다 (같은 키의 우선순위가 등록 순서에 묶이기 때문). 현재 키 목록은 그 파일 상단 주석이 기준이다.
+  - 사용 중: Esc · Delete/Backspace · Q/W/E/R(도구) · 1~8(메쉬 프리셋, `MESH_PRESETS` 순서, 상단 숫자열만) · ⌘Z/⌘⇧Z/Ctrl+Y.
+  - **예약 — 다른 기능에 쓰지 않는다:** ⌘/Ctrl+S(저장, 지금은 브라우저 저장 창만 막음), ⌘/Ctrl+C/V/X(복사/붙여넣기/잘라내기), ⌘/Ctrl+D(복제), ⌘/Ctrl+A(전체 선택), F(선택 메쉬 포커스), 숫자패드(카메라 시점).
+  - 단축키를 UI에 보여줄 땐 하드코딩하지 말고 `editor-shortcuts.ts`에서 가져온다 (예: `getPresetShortcut`).
 - 뷰포트 클릭은 `POINTERTAP`으로 처리한다 (드래그 = 카메라 조작·기즈모 드래그와 구분).
 
 ## UI 규칙 (shadcn / Base UI)

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useSceneMeshes } from "@/hooks/use-scene-meshes";
 
+import { getPresetShortcut } from "../lib/editor-shortcuts";
 import type { History, HistoryState } from "../lib/history";
 import { createRemoveMeshCommand } from "../lib/mesh-commands";
 import {
@@ -124,7 +125,7 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
   const selectedMesh = useSelectedMesh(runtime?.selection);
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">
+    <aside className="flex w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">
       <div className="flex gap-1.5 p-3">
         <HistoryButton
           icon={Undo2}
@@ -150,18 +151,32 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
           {MESH_PRESETS.map((preset) => {
             const isActive = activePresetId === preset.id;
             const Icon = PRESET_ICONS[preset.id];
+            const shortcut = getPresetShortcut(preset.id);
             return (
               <Button
                 key={preset.id}
                 variant={isActive ? "default" : "secondary"}
                 size="lg"
-                className="justify-start gap-2"
+                // min-w-0: 라벨+단축키가 길어도 그리드 칸을 넘지 않게
+                className="min-w-0 justify-start gap-2 pr-1.5"
                 disabled={!runtime}
                 aria-pressed={isActive}
+                aria-keyshortcuts={shortcut ?? undefined}
                 onClick={() => runtime?.placement.toggle(preset)}
               >
                 <Icon strokeWidth={1.75} aria-hidden />
-                {preset.label}
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {preset.label}
+                </span>
+                {shortcut && (
+                  <Kbd
+                    className={
+                      isActive ? "bg-primary-foreground/15 text-current" : ""
+                    }
+                  >
+                    {shortcut}
+                  </Kbd>
+                )}
               </Button>
             );
           })}
