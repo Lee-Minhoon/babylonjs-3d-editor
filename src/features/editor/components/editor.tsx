@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
+
 import { type EditorRuntime, EditorViewport } from "./editor-viewport";
 import { MeshSidebar } from "./mesh-sidebar";
 
@@ -10,11 +12,13 @@ export function Editor() {
   const [runtime, setRuntime] = useState<EditorRuntime | null>(null);
 
   return (
-    <div className="flex h-dvh w-full bg-zinc-950">
-      <MeshSidebar runtime={runtime} />
-      <div className="relative min-w-0 flex-1">
-        <EditorViewport onRuntimeChange={setRuntime} />
+    <TooltipProvider>
+      <div className="flex h-dvh w-full bg-background text-foreground">
+        <MeshSidebar runtime={runtime} />
+        <div className="relative min-w-0 flex-1">
+          <EditorViewport onRuntimeChange={setRuntime} />
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

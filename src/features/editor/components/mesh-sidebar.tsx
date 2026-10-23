@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { type ReactNode, useSyncExternalStore } from "react";
 
 import {
   Box,
@@ -17,6 +17,15 @@ import {
   X,
 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useSceneMeshes } from "@/hooks/use-scene-meshes";
 
 import type { History, HistoryState } from "../lib/history";
@@ -69,6 +78,54 @@ function useHistoryState(history: History | undefined): HistoryState {
   );
 }
 
+function SectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <h2 className="mb-2 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground uppercase">
+      {children}
+    </h2>
+  );
+}
+
+type HistoryButtonProps = {
+  icon: LucideIcon;
+  label: string;
+  /** 되돌릴/다시 할 작업 이름. 없으면 비활성 */
+  actionLabel: string | null;
+  shortcut: string;
+  onClick: () => void;
+};
+
+function HistoryButton({
+  icon: Icon,
+  label,
+  actionLabel,
+  shortcut,
+  onClick,
+}: HistoryButtonProps) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="secondary"
+            size="lg"
+            className="flex-1"
+            disabled={!actionLabel}
+            onClick={onClick}
+          />
+        }
+      >
+        <Icon aria-hidden />
+        {label}
+      </TooltipTrigger>
+      <TooltipContent>
+        {actionLabel ? `${label}: ${actionLabel}` : label}
+        <Kbd>{shortcut}</Kbd>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 type MeshSidebarProps = {
   runtime: EditorRuntime | null;
 };
@@ -82,68 +139,52 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
   const { undoLabel, redoLabel } = useHistoryState(runtime?.history);
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-900 text-sm text-zinc-200">
-      <div className="flex gap-1.5 border-b border-zinc-800 p-3">
-        <button
-          type="button"
-          disabled={!undoLabel}
+    <aside className="flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">
+      <div className="flex gap-1.5 p-3">
+        <HistoryButton
+          icon={Undo2}
+          label="실행 취소"
+          actionLabel={undoLabel}
+          shortcut="⌘Z"
           onClick={() => runtime?.history.undo()}
-          title={undoLabel ? `실행 취소: ${undoLabel} (⌘/Ctrl+Z)` : "실행 취소"}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-zinc-800 px-2 py-1.5 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Undo2 className="size-4" aria-hidden />
-          실행 취소
-        </button>
-        <button
-          type="button"
-          disabled={!redoLabel}
+        />
+        <HistoryButton
+          icon={Redo2}
+          label="다시 실행"
+          actionLabel={redoLabel}
+          shortcut="⌘⇧Z"
           onClick={() => runtime?.history.redo()}
-          title={
-            redoLabel ? `다시 실행: ${redoLabel} (⌘/Ctrl+Shift+Z)` : "다시 실행"
-          }
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-zinc-800 px-2 py-1.5 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Redo2 className="size-4" aria-hidden />
-          다시 실행
-        </button>
+        />
       </div>
 
-      <section className="border-b border-zinc-800 p-3">
-        <h2 className="mb-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">
-          메쉬 추가
-        </h2>
+      <Separator />
+
+      <section className="p-3">
+        <SectionTitle>메쉬 추가</SectionTitle>
         <div className="grid grid-cols-2 gap-1.5">
           {MESH_PRESETS.map((preset) => {
             const isActive = activePresetId === preset.id;
             const Icon = PRESET_ICONS[preset.id];
             return (
-              <button
+              <Button
                 key={preset.id}
-                type="button"
+                variant={isActive ? "default" : "secondary"}
+                size="lg"
+                className="justify-start gap-2"
                 disabled={!runtime}
                 aria-pressed={isActive}
                 onClick={() => runtime?.placement.toggle(preset)}
-                className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                  isActive
-                    ? "bg-sky-600 text-white hover:bg-sky-500"
-                    : "bg-zinc-800 hover:bg-zinc-700"
-                }`}
               >
-                <Icon
-                  className={`size-4 shrink-0 ${isActive ? "text-white" : "text-zinc-400"}`}
-                  strokeWidth={1.75}
-                  aria-hidden
-                />
+                <Icon strokeWidth={1.75} aria-hidden />
                 {preset.label}
-              </button>
+              </Button>
             );
           })}
         </div>
-        <p className="mt-2 min-h-8 text-xs leading-4 text-zinc-500">
+        <p className="mt-2 flex min-h-5 flex-wrap items-center gap-1 text-xs text-muted-foreground">
           {activePresetId ? (
             <>
-              씬을 클릭할 때마다 배치 · <kbd className="text-zinc-300">Esc</kbd>
-              /우클릭 종료
+              씬을 클릭할 때마다 배치 · <Kbd>Esc</Kbd> / 우클릭 종료
             </>
           ) : (
             "메쉬를 고른 뒤 씬에서 놓을 위치를 클릭하세요."
@@ -151,44 +192,51 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
         </p>
       </section>
 
-      <section className="flex min-h-0 flex-1 flex-col p-3">
-        <h2 className="mb-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">
-          씬 <span className="text-zinc-500">({meshes.length})</span>
-        </h2>
+      <Separator />
+
+      <section className="flex min-h-0 flex-1 flex-col p-3 pr-0">
+        <SectionTitle>
+          씬 <span className="text-muted-foreground/70">({meshes.length})</span>
+        </SectionTitle>
         {meshes.length === 0 ? (
-          <p className="text-zinc-500">아직 추가된 메쉬가 없습니다.</p>
+          <p className="pr-3 text-xs text-muted-foreground">
+            아직 추가된 메쉬가 없습니다.
+          </p>
         ) : (
-          <ul className="-mx-1 flex-1 space-y-0.5 overflow-y-auto">
-            {meshes.map((mesh) => {
-              const presetId = getPresetId(mesh);
-              const Icon = presetId ? PRESET_ICONS[presetId] : Box;
-              return (
-                <li
-                  key={mesh.uniqueId}
-                  className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-zinc-800"
-                >
-                  <Icon
-                    className="size-3.5 shrink-0 text-zinc-500"
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                  <span className="flex-1 truncate">{mesh.name}</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      runtime?.history.execute(
-                        createRemoveMeshCommand(runtime.scene, mesh),
-                      )
-                    }
-                    aria-label={`${mesh.name} 삭제`}
-                    className="rounded p-0.5 text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-zinc-700 hover:text-zinc-100 focus-visible:opacity-100"
+          <ScrollArea className="min-h-0 flex-1 pr-3">
+            <ul className="-mx-1 space-y-0.5">
+              {meshes.map((mesh) => {
+                const presetId = getPresetId(mesh);
+                const Icon = presetId ? PRESET_ICONS[presetId] : Box;
+                return (
+                  <li
+                    key={mesh.uniqueId}
+                    className="group flex h-7 items-center gap-2 rounded-md px-1.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                   >
-                    <X className="size-3.5" aria-hidden />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+                    <Icon
+                      className="size-3.5 shrink-0 text-muted-foreground"
+                      strokeWidth={1.75}
+                      aria-hidden
+                    />
+                    <span className="flex-1 truncate">{mesh.name}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                      aria-label={`${mesh.name} 삭제`}
+                      onClick={() =>
+                        runtime?.history.execute(
+                          createRemoveMeshCommand(runtime.scene, mesh),
+                        )
+                      }
+                    >
+                      <X aria-hidden />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          </ScrollArea>
         )}
       </section>
     </aside>

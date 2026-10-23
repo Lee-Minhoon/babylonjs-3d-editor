@@ -27,6 +27,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="ko"
       className={cn(
+        // 에디터는 다크 테마 고정 (shadcn 토큰의 .dark 값 사용)
+        "dark",
         "h-full",
         "antialiased",
         geistSans.variable,

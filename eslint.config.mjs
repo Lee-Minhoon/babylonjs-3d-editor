@@ -86,6 +86,15 @@ const boundaryZones = [
   },
 ];
 
+/** shadcn은 Base UI 기반(components.json style: base-*). Radix 패턴이 섞이지 않게 막는다. */
+const RADIX_MESSAGE =
+  "이 프로젝트의 shadcn은 Base UI 기반입니다. @/components/ui 또는 @base-ui/react를 쓰세요.";
+const AS_CHILD_RULE = {
+  selector: "JSXAttribute[name.name='asChild']",
+  message:
+    "Base UI는 asChild 대신 render prop을 씁니다. 예: <TooltipTrigger render={<Button />}>…</TooltipTrigger>",
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -141,6 +150,36 @@ const eslintConfig = defineConfig([
           caughtErrors: "all",
           caughtErrorsIgnorePattern: "^_",
           ignoreRestSiblings: true,
+        },
+      ],
+    },
+  },
+  // shadcn(Base UI) 규칙 — 전역
+  {
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [{ name: "radix-ui", message: RADIX_MESSAGE }],
+          patterns: [{ group: ["@radix-ui/*"], message: RADIX_MESSAGE }],
+        },
+      ],
+      "no-restricted-syntax": ["error", AS_CHILD_RULE],
+    },
+  },
+  // features/app에서는 네이티브 폼 요소 대신 components/ui를 쓴다
+  // (no-restricted-syntax는 블록끼리 병합되지 않고 덮어쓰므로 asChild 규칙을 다시 포함)
+  {
+    files: ["src/features/**/*.{ts,tsx}", "src/app/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        AS_CHILD_RULE,
+        {
+          selector:
+            "JSXOpeningElement[name.name=/^(button|input|select|textarea)$/]",
+          message:
+            "네이티브 폼 요소 대신 @/components/ui의 Button / Input / NativeSelect / Textarea를 쓰세요.",
         },
       ],
     },

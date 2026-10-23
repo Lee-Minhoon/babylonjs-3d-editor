@@ -6,6 +6,7 @@ Next.js(App Router) + Babylon.js 기반 브라우저 3D 에디터.
 
 - Next.js 16 / React 19 (React Compiler 켜짐) / TypeScript strict / Tailwind v4
 - Babylon.js 9: `@babylonjs/core`, `@babylonjs/loaders`, `@babylonjs/inspector`
+- UI: shadcn/ui (**Base UI 기반**, `components.json` style `base-mira`) + `lucide-react` 아이콘
 - 패키지 매니저: **pnpm만 사용** (`packageManager` 필드로 버전 고정). npm/yarn/bun 금지, 일회성 실행은 `pnpm dlx`.
 
 ## 명령
@@ -67,6 +68,17 @@ src/
 - 루트 `lib/`에는 비즈니스(에디터 기능) 로직을 넣지 않는다. "어디서든 쓸 수 있는 인프라"만. 기능 로직은 `features/<name>/lib/`.
 - 한 feature에서만 쓰는 코드는 공용 폴더가 아니라 그 feature 안에 둔다. `app/` 안에 `_components` 같은 폴더를 만들지 않는다.
 - import는 `@/*` (→ `src/*`) 별칭 사용.
+
+## UI 규칙 (shadcn / Base UI)
+
+- UI는 `@/components/ui`의 shadcn 컴포넌트로 만든다. `src/features`·`src/app`에서 네이티브 `<button>`, `<input>`, `<select>`, `<textarea>`는 ESLint 에러 → `Button`, `Input`, `NativeSelect`, `Textarea`.
+- **Base UI 기반이다. Radix 문법을 쓰지 않는다.**
+  - 다른 요소로 렌더링할 땐 `asChild`가 아니라 **`render` prop**: `<TooltipTrigger render={<Button variant="secondary" />}>내용</TooltipTrigger>` (`asChild`는 ESLint 에러).
+  - `radix-ui`, `@radix-ui/*` import 금지 (ESLint 에러). primitive가 필요하면 `@base-ui/react/<component>`.
+- 색은 하드코딩(`zinc-800` 등)하지 말고 테마 토큰을 쓴다: `bg-background`, `bg-sidebar`, `text-muted-foreground`, `border-sidebar-border`, `bg-sidebar-accent` … (`src/app/globals.css`). 앱은 `<html class="dark">`로 다크 테마 고정.
+- 아이콘은 `lucide-react`. 아이콘만 있는 버튼엔 `aria-label`, 장식용 아이콘엔 `aria-hidden`.
+- 툴팁은 `Tooltip`(+ 단축키는 `Kbd`). 브라우저 `title` 속성으로 대신하지 않는다. `TooltipProvider`는 `Editor` 루트에 있다.
+- `components/ui/*`는 우리가 소유한 코드다 (필요하면 수정 가능). **`pnpm dlx shadcn@latest add <name>`으로 추가한 뒤에는 `pnpm format && pnpm lint:fix`를 실행**한다 — CLI가 쓴 파일은 편집 훅을 거치지 않아 import 정렬·포맷이 맞지 않는다.
 
 ## Babylon.js 규칙
 
