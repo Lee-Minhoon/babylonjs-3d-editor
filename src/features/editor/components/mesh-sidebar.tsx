@@ -3,20 +3,7 @@
 import { type ReactNode, useSyncExternalStore } from "react";
 
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
-import {
-  Box,
-  Cone,
-  Cylinder,
-  Gem,
-  Globe,
-  type LucideIcon,
-  Pill,
-  Redo2,
-  Square,
-  Torus,
-  Undo2,
-  X,
-} from "lucide-react";
+import { type LucideIcon, Redo2, Undo2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -32,7 +19,6 @@ import { useSceneMeshes } from "@/hooks/use-scene-meshes";
 import type { History, HistoryState } from "../lib/history";
 import { createRemoveMeshCommand } from "../lib/mesh-commands";
 import {
-  getPresetId,
   isEditorMesh,
   MESH_PRESETS,
   type MeshPresetId,
@@ -40,21 +26,7 @@ import {
 import type { PlacementTool } from "../lib/placement-tool";
 import type { Selection } from "../lib/selection";
 import type { EditorRuntime } from "./editor-viewport";
-
-/**
- * 프리셋 아이콘. lib(mesh-presets)에 UI 의존성을 넣지 않으려고 여기서 매핑한다.
- * Record<MeshPresetId, …>라서 프리셋을 추가하고 아이콘을 빠뜨리면 타입 에러가 난다.
- */
-const PRESET_ICONS: Record<MeshPresetId, LucideIcon> = {
-  box: Box,
-  sphere: Globe,
-  "ico-sphere": Gem,
-  cylinder: Cylinder,
-  cone: Cone,
-  capsule: Pill,
-  torus: Torus,
-  plane: Square,
-};
+import { MeshIcon, PRESET_ICONS } from "./preset-icons";
 
 const subscribeNoop = () => () => {};
 const getNull = () => null;
@@ -219,8 +191,6 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
           <ScrollArea className="min-h-0 flex-1 pr-3">
             <ul className="-mx-1 space-y-0.5">
               {meshes.map((mesh) => {
-                const presetId = getPresetId(mesh);
-                const Icon = presetId ? PRESET_ICONS[presetId] : Box;
                 const isSelected = mesh === selectedMesh;
                 return (
                   <li
@@ -237,10 +207,9 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
                       aria-pressed={isSelected}
                       onClick={() => runtime?.selection.select(mesh)}
                     >
-                      <Icon
+                      <MeshIcon
+                        mesh={mesh}
                         className="size-3.5 text-muted-foreground"
-                        strokeWidth={1.75}
-                        aria-hidden
                       />
                       <span className="truncate">{mesh.name}</span>
                     </Button>

@@ -20,7 +20,10 @@ export function captureTransform(mesh: AbstractMesh): TransformSnapshot {
   };
 }
 
-function applyTransform(mesh: AbstractMesh, snapshot: TransformSnapshot) {
+export function applyTransform(
+  mesh: AbstractMesh,
+  snapshot: TransformSnapshot,
+) {
   mesh.position.copyFrom(snapshot.position);
   if (snapshot.rotationQuaternion) {
     mesh.rotationQuaternion = snapshot.rotationQuaternion.clone();
