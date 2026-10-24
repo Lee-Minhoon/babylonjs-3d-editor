@@ -11,6 +11,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import type { History } from "./history";
 import { createAddMeshCommand } from "./mesh-commands";
 import type { MeshPreset, MeshPresetId } from "./mesh-presets";
+import { snapValue, type ToolState } from "./tools";
 
 /** 이 값 이상으로 위를 향한 면에만 쌓는다 (옆면/아랫면에 맞으면 바닥 평면으로 폴백) */
 const TOP_FACE_MIN_NORMAL_Y = 0.7;
@@ -45,6 +46,7 @@ type ActivePlacement = {
 export function createPlacementTool(
   scene: Scene,
   history: History,
+  tools: ToolState,
 ): PlacementTool {
   let active: ActivePlacement | null = null;
   const listeners = new Set<() => void>();
@@ -81,7 +83,12 @@ export function createPlacementTool(
 
   function updatePreview() {
     if (!active) return;
-    const point = findSurfacePoint(active.preview);
+    const hit = findSurfacePoint(active.preview);
+    // X/Z만 스냅 (Y는 바닥·윗면 높이 그대로)
+    const snap = tools.isSnapEnabled();
+    const point = hit
+      ? new Vector3(snapValue(hit.x, snap), hit.y, snapValue(hit.z, snap))
+      : null;
     active.surfacePoint = point;
     active.preview.setEnabled(point !== null);
     if (point) {

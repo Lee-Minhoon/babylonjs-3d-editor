@@ -5,7 +5,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import type { History } from "./history";
 import type { PlacementTool } from "./placement-tool";
 import type { Selection } from "./selection";
-import type { ToolState, TransformTool } from "./tools";
+import { POSITION_SNAP, type ToolState, type TransformTool } from "./tools";
 import {
   captureTransform,
   createTransformCommand,
@@ -89,6 +89,12 @@ export function createTransformGizmo(
     manager.rotationGizmoEnabled = visible && tool === "rotate";
     manager.scaleGizmoEnabled = visible && tool === "scale";
     observe(manager.gizmos.positionGizmo, "move");
+    // 드래그 변화량을 스냅 단위로 끊는다 (배치도 스냅되므로 격자 위에서 시작해 격자 위에 머문다)
+    if (manager.gizmos.positionGizmo) {
+      manager.gizmos.positionGizmo.snapDistance = tools.isSnapEnabled()
+        ? POSITION_SNAP
+        : 0;
+    }
     observe(manager.gizmos.rotationGizmo, "rotate");
     observe(manager.gizmos.scaleGizmo, "scale");
 

@@ -2,11 +2,11 @@
 
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
-import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder";
 import type { Scene } from "@babylonjs/core/scene";
+import { GridMaterial } from "@babylonjs/materials/grid/gridMaterial";
 
 import { BabylonCanvas } from "@/components/babylon-canvas";
 import { attachInspectorToggle } from "@/lib/babylon/inspector";
@@ -31,17 +31,22 @@ function setupScene(scene: Scene) {
     scene,
   );
   camera.lowerRadiusLimit = 2;
-  camera.upperRadiusLimit = 50;
+  camera.upperRadiusLimit = 120;
   camera.wheelDeltaPercentage = 0.01;
   camera.attachControl(scene.getEngine().getRenderingCanvas(), true);
 
   new HemisphericLight("light", new Vector3(0.3, 1, 0.2), scene);
 
-  const ground = CreateGround("ground", { width: 10, height: 10 }, scene);
-  const groundMaterial = new StandardMaterial("ground Material", scene);
-  groundMaterial.diffuseColor = new Color3(0.22, 0.22, 0.25);
-  groundMaterial.specularColor = Color3.Black();
-  ground.material = groundMaterial;
+  // 바닥: 100×100, 1유닛 격자 + 10유닛마다 굵은 선
+  const ground = CreateGround("ground", { width: 100, height: 100 }, scene);
+  const grid = new GridMaterial("ground Material", scene);
+  grid.mainColor = new Color3(0.13, 0.13, 0.15);
+  grid.lineColor = new Color3(0.42, 0.42, 0.48);
+  grid.gridRatio = 1;
+  grid.majorUnitFrequency = 10;
+  grid.minorUnitVisibility = 0.35;
+  grid.backFaceCulling = false;
+  ground.material = grid;
 }
 
 /** 뷰포트가 만들어 에디터 UI에 넘겨주는 씬과 씬에 붙은 도구들 */
@@ -66,7 +71,7 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
         const detachInspector = attachInspectorToggle(scene);
         const history = createHistory();
         const tools = createToolState();
-        const placement = createPlacementTool(scene, history);
+        const placement = createPlacementTool(scene, history, tools);
         const selection = createSelection(scene);
         const gizmo = createTransformGizmo(scene, {
           history,
