@@ -2,16 +2,15 @@
 
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
-import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
+import { Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder";
 import type { Scene } from "@babylonjs/core/scene";
-import { GridMaterial } from "@babylonjs/materials/grid/gridMaterial";
 
 import { BabylonCanvas } from "@/components/babylon-canvas";
 import { attachInspectorToggle } from "@/lib/babylon/inspector";
 
 import { bindEditorShortcuts } from "../lib/editor-shortcuts";
+import { createGroundGrid } from "../lib/ground-grid";
 import { createHistory, type History } from "../lib/history";
 import { createPlacementTool, type PlacementTool } from "../lib/placement-tool";
 import { bindPointerRouter } from "../lib/pointer-router";
@@ -37,16 +36,7 @@ function setupScene(scene: Scene) {
 
   new HemisphericLight("light", new Vector3(0.3, 1, 0.2), scene);
 
-  // 바닥: 100×100, 1유닛 격자 + 10유닛마다 굵은 선
-  const ground = CreateGround("ground", { width: 100, height: 100 }, scene);
-  const grid = new GridMaterial("ground Material", scene);
-  grid.mainColor = new Color3(0.13, 0.13, 0.15);
-  grid.lineColor = new Color3(0.42, 0.42, 0.48);
-  grid.gridRatio = 1;
-  grid.majorUnitFrequency = 10;
-  grid.minorUnitVisibility = 0.35;
-  grid.backFaceCulling = false;
-  ground.material = grid;
+  createGroundGrid(scene);
 }
 
 /** 뷰포트가 만들어 에디터 UI에 넘겨주는 씬과 씬에 붙은 도구들 */
