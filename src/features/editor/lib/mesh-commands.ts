@@ -1,9 +1,7 @@
-import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 
 import type { Command } from "./history";
-import { addPresetMesh, type MeshPreset } from "./mesh-presets";
 
 /*
  * 메쉬 생성/삭제 Command.
@@ -54,20 +52,6 @@ export function createSpawnMeshCommand(
       if (mesh && !inScene) disposeMesh(mesh);
     },
   };
-}
-
-export function createAddMeshCommand(
-  scene: Scene,
-  preset: MeshPreset,
-  surfacePoint: Vector3,
-): SpawnMeshCommand {
-  const point = surfacePoint.clone();
-  return createSpawnMeshCommand(
-    scene,
-    () => addPresetMesh(scene, preset, point),
-    "추가",
-    preset.label,
-  );
 }
 
 export function createRemoveMeshCommand(

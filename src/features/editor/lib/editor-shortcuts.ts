@@ -18,6 +18,7 @@ import type { ToolState, TransformTool } from "./tools";
  * 도구마다 keydown을 따로 달면 같은 키(Esc 등)의 우선순위가 등록 순서에 묶이므로 여기서 결정한다.
  *
  *   Esc               배치 모드 종료 → (배치 중이 아니면) 선택 해제
+ *   R / Shift+R       (배치 중일 때만) 미리보기 90° 회전 / 반대로. 배치 중이 아니면 R은 크기 도구
  *   Delete/Backspace  선택한 메쉬 삭제 (undo 가능)
  *   Q / W / E / R     선택 / 이동 / 회전 / 크기 도구
  *   1 ~ 8             메쉬 프리셋 배치 모드 토글 (MESH_PRESETS 순서, 상단 숫자열만)
@@ -84,6 +85,8 @@ export const SHORTCUT_LABELS = {
   duplicate: "⌘D",
   selectAll: "⌘A",
   focus: "F",
+  rotatePlacement: "R",
+  rotatePlacementBack: "⇧R",
 } as const;
 
 /**
@@ -141,6 +144,15 @@ export function bindEditorShortcuts({
         event.preventDefault();
         void sceneFile.open();
       }
+      return;
+    }
+
+    // 배치 중에는 R이 미리보기 회전 (크기 도구 전환보다 우선)
+    if (
+      key === "r" &&
+      !event.altKey &&
+      placement.rotate(event.shiftKey ? -1 : 1)
+    ) {
       return;
     }
 

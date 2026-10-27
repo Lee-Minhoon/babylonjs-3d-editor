@@ -29,6 +29,16 @@ function SectionTitle({ children }: { children: ReactNode }) {
   );
 }
 
+/** 배치 중 회전 안내: "R 회전 (90°)" */
+function RotateHint({ yaw }: { yaw: number }) {
+  return (
+    <>
+      <Kbd>{SHORTCUT_LABELS.rotatePlacement}</Kbd> 회전
+      {yaw !== 0 && <span className="tabular-nums">({yaw}°)</span>}
+    </>
+  );
+}
+
 type MeshSidebarProps = {
   runtime: EditorRuntime | null;
 };
@@ -84,12 +94,13 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
         <p className="mt-2 flex min-h-5 flex-wrap items-center gap-1 text-xs text-muted-foreground">
           {placement?.kind === "preset" ? (
             <>
-              씬을 클릭할 때마다 배치 · <Kbd>{SHORTCUT_LABELS.deselect}</Kbd> /
-              우클릭 종료
+              씬을 클릭할 때마다 배치 · <RotateHint yaw={placement.yaw} /> ·{" "}
+              <Kbd>{SHORTCUT_LABELS.deselect}</Kbd> / 우클릭 종료
             </>
           ) : placement?.kind === "snapshot" ? (
             <>
               놓을 위치를 클릭해 {placement.verb} ·{" "}
+              <RotateHint yaw={placement.yaw} /> ·{" "}
               <Kbd>{SHORTCUT_LABELS.deselect}</Kbd> / 우클릭 취소
             </>
           ) : (
