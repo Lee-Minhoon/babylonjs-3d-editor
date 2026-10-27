@@ -35,6 +35,7 @@ import {
   useActiveTool,
   useClipboardHasContent,
   useHistoryState,
+  useSceneFileState,
   useSelectedMesh,
   useSnap,
 } from "../hooks/use-editor-state";
@@ -113,7 +114,7 @@ type EditorHeaderProps = {
   runtime: EditorRuntime | null;
 };
 
-/** 상단 헤더: 앱 이름 · 메뉴바(파일/편집/추가/보기) · 실행 취소/다시 실행 · 렌더러 표시 */
+/** 상단 헤더: 앱 이름 · 메뉴바(파일/편집/추가/보기) · 실행 취소/다시 실행 · 파일 이름 · 렌더러 표시 */
 export function EditorHeader({ runtime }: EditorHeaderProps) {
   const { undoLabel, redoLabel } = useHistoryState(runtime);
   const selected = useSelectedMesh(runtime);
@@ -121,6 +122,7 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
   const activeTool = useActiveTool(runtime);
   const snap = useSnap(runtime);
   const canPaste = useClipboardHasContent(runtime);
+  const file = useSceneFileState(runtime);
   const isWebGPU = runtime?.scene.getEngine().isWebGPU;
 
   return (
@@ -134,11 +136,36 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
         <MenubarMenu>
           <MenubarTrigger>파일</MenubarTrigger>
           <MenubarContent>
-            <PlannedItem>새 씬</PlannedItem>
-            <PlannedItem>열기…</PlannedItem>
+            <MenubarItem
+              disabled={!runtime}
+              onClick={() => void runtime?.sceneFile.newScene()}
+            >
+              새 씬
+            </MenubarItem>
+            <MenubarItem
+              disabled={!runtime}
+              onClick={() => void runtime?.sceneFile.open()}
+            >
+              열기…
+              <MenubarShortcut>{SHORTCUT_LABELS.open}</MenubarShortcut>
+            </MenubarItem>
             <MenubarSeparator />
-            <PlannedItem shortcut={SHORTCUT_LABELS.save}>저장</PlannedItem>
-            <PlannedItem>내보내기…</PlannedItem>
+            <MenubarItem
+              disabled={!runtime}
+              onClick={() => void runtime?.sceneFile.save()}
+            >
+              저장
+              <MenubarShortcut>{SHORTCUT_LABELS.save}</MenubarShortcut>
+            </MenubarItem>
+            <MenubarItem
+              disabled={!runtime}
+              onClick={() => void runtime?.sceneFile.saveAs()}
+            >
+              다른 이름으로 저장…
+              <MenubarShortcut>{SHORTCUT_LABELS.saveAs}</MenubarShortcut>
+            </MenubarItem>
+            <MenubarSeparator />
+            <PlannedItem>glTF로 내보내기…</PlannedItem>
           </MenubarContent>
         </MenubarMenu>
 
@@ -335,7 +362,19 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
       </div>
 
       {runtime && (
-        <Badge variant="outline" className="ml-auto font-mono">
+        <div className="ml-auto flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="truncate">{file.fileName ?? "제목 없음"}</span>
+          {file.dirty && (
+            <span
+              className="size-1.5 shrink-0 rounded-full bg-primary"
+              aria-label="저장되지 않은 변경 사항"
+            />
+          )}
+        </div>
+      )}
+
+      {runtime && (
+        <Badge variant="outline" className="font-mono">
           {isWebGPU ? "WebGPU" : "WebGL"}
         </Badge>
       )}

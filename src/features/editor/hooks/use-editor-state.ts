@@ -8,6 +8,7 @@ import type { EditorRuntime } from "../components/editor-viewport";
 import type { HistoryState } from "../lib/history";
 import type { MeshPresetId } from "../lib/mesh-presets";
 import type { PlacementState } from "../lib/placement-tool";
+import type { SceneFileState } from "../lib/scene-file";
 import type { TransformTool } from "../lib/tools";
 
 /*
@@ -22,6 +23,12 @@ const getEmptyHistory = () => EMPTY_HISTORY;
 const getDefaultTool = (): TransformTool => "move";
 const getFalse = () => false;
 const getDefaultSnapStep = () => 0.5;
+const EMPTY_SCENE_FILE: SceneFileState = {
+  fileName: null,
+  dirty: false,
+  confirmPending: false,
+};
+const getEmptySceneFile = () => EMPTY_SCENE_FILE;
 
 type Runtime = EditorRuntime | null;
 
@@ -94,5 +101,15 @@ export function usePlacementState(runtime: Runtime): PlacementState | null {
     placement?.subscribe ?? subscribeNoop,
     placement?.getState ?? getNull,
     getNull,
+  );
+}
+
+/** 편집 중인 씬 파일: 이름·저장 안 된 변경·확인 대화상자 */
+export function useSceneFileState(runtime: Runtime): SceneFileState {
+  const sceneFile = runtime?.sceneFile;
+  return useSyncExternalStore(
+    sceneFile?.subscribe ?? subscribeNoop,
+    sceneFile?.getState ?? getEmptySceneFile,
+    getEmptySceneFile,
   );
 }

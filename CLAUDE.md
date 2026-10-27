@@ -71,8 +71,9 @@ src/
 
 ## 에디터 구조 (`src/features/editor`)
 
-- 뷰포트가 씬과 함께 도구들을 만들어 `EditorRuntime`(`{ scene, history, placement, selection, tools }`)으로 UI에 넘긴다. 도구는 순수 TS 객체(`lib/`)이고, React는 `subscribe`/`getX`를 `useSyncExternalStore`로 구독만 한다. 구독 훅은 `hooks/use-editor-state.ts`(`useHistoryState`, `useSelectedMesh`, `useActivePresetId`, `useActiveTool`, `useSnap`)에 모아 두고, 컴포넌트마다 다시 만들지 않는다.
+- 뷰포트가 씬과 함께 도구들을 만들어 `EditorRuntime`(`{ scene, history, placement, selection, tools, clipboard, sceneFile }`)으로 UI에 넘긴다. 도구는 순수 TS 객체(`lib/`)이고, React는 `subscribe`/`getX`를 `useSyncExternalStore`로 구독만 한다. 구독 훅은 `hooks/use-editor-state.ts`(`useHistoryState`, `useSelectedMesh`, `useActivePresetId`, `useActiveTool`, `useSnap`, `useSceneFileState` …)에 모아 두고, 컴포넌트마다 다시 만들지 않는다.
 - 레이아웃: 상단 `editor-header`(메뉴바: 파일/편집/추가/보기 + undo/redo), 왼쪽 `mesh-sidebar`, 가운데 뷰포트 + `transform-toolbar`, 오른쪽 `properties-panel`.
+- 단축키 처리기는 입력창과 대화상자(`role=dialog/alertdialog`) 안의 키를 무시한다.
 - 단축키·메뉴·버튼이 공유하는 동작은 `lib/editor-actions.ts`에 둔다 (예: `deleteSelected`). 입력 경로마다 로직을 따로 쓰지 않는다.
 - 메뉴에 아직 없는 기능(예약 키)은 `PlannedItem`으로 비활성 "준비 중" 표시. 기능을 붙일 때 `MenubarItem`으로 바꾸고 단축키를 `editor-shortcuts.ts`에 연결한다.
 - 활성 도구(`tools`): `select | move | rotate | scale` (Q/W/E/R). 배치 모드는 그 위에 잠깐 덮어쓰는 모드다. 기즈모는 선택된 메쉬 + move/rotate/scale + 배치 모드 아님일 때만 보인다.
@@ -84,10 +85,15 @@ src/
 - **씬을 바꾸는 동작은 반드시 Command로 만들어 `history.execute()`로 실행**한다 (undo/redo 대상). 메쉬를 직접 `dispose()`하지 않는다 — 삭제는 `createRemoveMeshCommand`.
 - 선택(`selection`)은 히스토리에 기록하지 않는다. 선택된 메쉬가 씬에서 빠지면 자동 해제된다.
 - 클립보드(`lib/clipboard.ts`)는 에디터 내부 전용이고, 메쉬 객체가 아니라 **다시 만들 수 있는 데이터(`MeshSnapshot`: 프리셋·변형·색)**를 담는다 → 잘라낸 원본이 해제돼도 붙여넣을 수 있다. 복사는 히스토리에 기록하지 않고, 잘라내기는 삭제 Command. **붙여넣기·복제는 바로 만들지 않고 배치 모드(`placement.startSnapshot`)로 들어간다** — 원본의 회전·크기를 입힌 미리보기가 커서를 따라다니고, 클릭 한 번에 놓인 뒤(Command, undo 가능) 놓은 메쉬가 선택되며 모드가 끝난다. 프리셋 배치(`toggle`)는 Esc까지 계속 놓는다. 새로 메쉬를 만드는 동작은 `createSpawnMeshCommand`를 쓰고, 만든 메쉬는 `getMesh()`로 받는다. 배치 중인지는 `placement.isActive()`로 판단한다 (`getActivePresetId()`는 프리셋 배치일 때만 값이 있다). 메쉬에 새 속성을 추가하면 `MeshSnapshot`에도 넣어야 복사된다.
+- 씬 파일: 형식은 `lib/scene-format.ts`(에디터 전용 JSON — 프리셋·이름·위치·회전(도)·크기·색만, `format`/`version` 필드), 문서 상태(파일 이름·핸들·저장 안 된 변경·새 씬/열기/저장)는 `lib/scene-file.ts`. 브라우저 파일 입출력은 공용 `src/lib/file-access.ts`(File System Access API, 없으면 input/다운로드 폴백).
+  - **새 씬·열기는 히스토리를 비운다** (undo 대상 아님, Command 예외). 이때만 에디터 메쉬를 직접 해제한다 (`clearEditorMeshes`, 반드시 `history.clear()` 뒤).
+  - 변경 여부는 저장 시점의 `history.peek()`와 비교한다 (undo로 저장 시점에 돌아오면 깨끗한 상태). 변경이 있으면 `DiscardChangesDialog`로 묻는다 (`confirmPending` → `resolveConfirm`).
+  - 열기는 파싱·검증(`parseSceneFile`)이 성공한 뒤에만 씬을 바꾼다. 실패 메시지(`SceneFileError`)는 토스트로 보여준다.
+  - 형식을 바꾸면 `SCENE_FILE_VERSION`을 올리고 이전 버전 변환을 `parseSceneFile`에 넣는다. 메쉬에 새 속성을 추가하면 `MeshSnapshot`과 씬 파일 둘 다에 넣는다.
 - **키보드 단축키는 `lib/editor-shortcuts.ts` 한 곳에서만 등록**한다. 도구에서 `window.addEventListener("keydown")`을 직접 달지 않는다 (같은 키의 우선순위가 등록 순서에 묶이기 때문). 현재 키 목록은 그 파일 상단 주석이 기준이다.
-  - 사용 중: Esc · Delete/Backspace · Q/W/E/R(도구) · 1~8(메쉬 프리셋, `MESH_PRESETS` 순서, 상단 숫자열만) · ⌘Z/⌘⇧Z/Ctrl+Y · ⌘C/⌘X/⌘V(복사/잘라내기/붙여넣기) · ⌘D(복제, 브라우저 북마크는 항상 막음).
-  - **예약 — 다른 기능에 쓰지 않는다:** ⌘/Ctrl+S(저장, 지금은 브라우저 저장 창만 막음), ⌘/Ctrl+A(전체 선택), F(선택 메쉬 포커스), 숫자패드(카메라 시점).
-  - 단축키를 UI에 보여줄 땐 하드코딩하지 말고 `editor-shortcuts.ts`에서 가져온다: `getPresetShortcut`, `getToolShortcut`, `SHORTCUT_LABELS`(undo/redo/delete/예약 키 등).
+  - 사용 중: Esc · Delete/Backspace · Q/W/E/R(도구) · 1~8(메쉬 프리셋, `MESH_PRESETS` 순서, 상단 숫자열만) · ⌘Z/⌘⇧Z/Ctrl+Y · ⌘C/⌘X/⌘V(복사/잘라내기/붙여넣기) · ⌘D(복제, 브라우저 북마크는 항상 막음) · ⌘S/⌘⇧S(저장/다른 이름으로 저장) · ⌘O(열기). 새 씬은 단축키 없음(⌘N은 브라우저가 가로챔).
+  - **예약 — 다른 기능에 쓰지 않는다:** ⌘/Ctrl+A(전체 선택), F(선택 메쉬 포커스), 숫자패드(카메라 시점).
+  - 단축키를 UI에 보여줄 땐 하드코딩하지 말고 `editor-shortcuts.ts`에서 가져온다: `getPresetShortcut`, `getToolShortcut`, `SHORTCUT_LABELS`(undo/redo/delete/save/open/예약 키 등).
   - 메뉴의 라디오·체크박스 항목엔 `closeOnClick`을 준다 (Base UI 기본값은 안 닫힘 → 다음 키 입력이 메뉴로 빨려 들어간다).
 - 뷰포트 클릭은 `POINTERTAP`으로 처리한다 (드래그 = 카메라 조작·기즈모 드래그와 구분).
 

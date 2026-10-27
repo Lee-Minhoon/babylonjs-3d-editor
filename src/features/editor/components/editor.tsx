@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 
+import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+import { DiscardChangesDialog } from "./discard-changes-dialog";
 import { EditorHeader } from "./editor-header";
 import { type EditorRuntime, EditorViewport } from "./editor-viewport";
 import { MeshSidebar } from "./mesh-sidebar";
@@ -20,22 +22,25 @@ export function Editor() {
   const [runtime, setRuntime] = useState<EditorRuntime | null>(null);
 
   return (
-    <TooltipProvider>
-      <div className="flex h-dvh w-full flex-col bg-background text-foreground">
-        <EditorHeader runtime={runtime} />
-        <div className="flex min-h-0 flex-1">
-          <MeshSidebar runtime={runtime} />
-          <div className="relative min-w-0 flex-1">
-            <EditorViewport onRuntimeChange={setRuntime} />
-            {runtime && (
-              <div className="absolute top-3 left-3">
-                <TransformToolbar runtime={runtime} />
-              </div>
-            )}
+    <Toaster>
+      <TooltipProvider>
+        <div className="flex h-dvh w-full flex-col bg-background text-foreground">
+          <EditorHeader runtime={runtime} />
+          <div className="flex min-h-0 flex-1">
+            <MeshSidebar runtime={runtime} />
+            <div className="relative min-w-0 flex-1">
+              <EditorViewport onRuntimeChange={setRuntime} />
+              {runtime && (
+                <div className="absolute top-3 left-3">
+                  <TransformToolbar runtime={runtime} />
+                </div>
+              )}
+            </div>
+            <PropertiesPanel runtime={runtime} />
           </div>
-          <PropertiesPanel runtime={runtime} />
         </div>
-      </div>
-    </TooltipProvider>
+        <DiscardChangesDialog runtime={runtime} />
+      </TooltipProvider>
+    </Toaster>
   );
 }

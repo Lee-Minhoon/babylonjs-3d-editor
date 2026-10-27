@@ -9,6 +9,7 @@ import {
 import type { History } from "./history";
 import { MESH_PRESETS, type MeshPresetId } from "./mesh-presets";
 import type { PlacementTool } from "./placement-tool";
+import type { SceneFile } from "./scene-file";
 import type { Selection } from "./selection";
 import type { ToolState, TransformTool } from "./tools";
 
@@ -24,9 +25,12 @@ import type { ToolState, TransformTool } from "./tools";
  *   ⌘/Ctrl+Shift+Z    redo  (Ctrl+Y도 redo)
  *   ⌘/Ctrl+C / X / V  복사 / 잘라내기 / 붙여넣기 (에디터 내부 클립보드)
  *   ⌘/Ctrl+D          복제
+ *   ⌘/Ctrl+S          저장 (⌘/Ctrl+Shift+S 다른 이름으로 저장)
+ *   ⌘/Ctrl+O          열기
+ *   (새 씬은 단축키 없음 — ⌘N은 브라우저가 가로채 막을 수 없다)
  *
  * 예약 (나중 기능용 — 다른 동작에 쓰지 말 것):
- *   ⌘/Ctrl+S 저장 · ⌘/Ctrl+A 전체 선택
+ *   ⌘/Ctrl+A 전체 선택
  *   F 선택 메쉬로 카메라 포커스 · 숫자패드 카메라 시점
  */
 
@@ -36,6 +40,7 @@ type EditorShortcutTargets = {
   selection: Selection;
   tools: ToolState;
   clipboard: Clipboard;
+  sceneFile: SceneFile;
 };
 
 const TOOL_KEYS: Record<string, TransformTool> = {
@@ -63,7 +68,7 @@ export function getToolShortcut(tool: TransformTool): string {
 
 /**
  * UI(메뉴·툴팁) 표시용 단축키 라벨. 실제 처리는 아래 onKeyDown이 기준이며 여기와 맞춰야 한다.
- * reserved: 아직 기능이 없는 예약 키 (메뉴에 비활성으로 표시).
+ * selectAll·focus: 아직 기능이 없는 예약 키 (메뉴에 비활성으로 표시).
  */
 export const SHORTCUT_LABELS = {
   undo: "⌘Z",
@@ -71,6 +76,8 @@ export const SHORTCUT_LABELS = {
   delete: "⌫",
   deselect: "Esc",
   save: "⌘S",
+  saveAs: "⌘⇧S",
+  open: "⌘O",
   copy: "⌘C",
   paste: "⌘V",
   cut: "⌘X",
@@ -79,14 +86,18 @@ export const SHORTCUT_LABELS = {
   focus: "F",
 } as const;
 
-/** 입력 필드에 포커스가 있으면 브라우저 기본 동작(텍스트 편집·undo)을 그대로 둔다. */
+/**
+ * 입력 필드에 포커스가 있으면 브라우저 기본 동작(텍스트 편집·undo)을 그대로 둔다.
+ * 대화상자(변경 사항 확인 등) 안의 키도 에디터로 보내지 않는다.
+ */
 function isTypingTarget(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLElement &&
     (target.isContentEditable ||
       target.tagName === "INPUT" ||
       target.tagName === "TEXTAREA" ||
-      target.tagName === "SELECT")
+      target.tagName === "SELECT" ||
+      target.closest('[role="dialog"], [role="alertdialog"]') !== null)
   );
 }
 
@@ -96,6 +107,7 @@ export function bindEditorShortcuts({
   selection,
   tools,
   clipboard,
+  sceneFile,
 }: EditorShortcutTargets): () => void {
   const onKeyDown = (event: KeyboardEvent) => {
     if (isTypingTarget(event.target)) return;
@@ -122,8 +134,12 @@ export function bindEditorShortcuts({
         event.preventDefault();
         duplicateSelected(context);
       } else if (key === "s") {
-        // 예약: 저장 기능 전까지는 브라우저 "페이지 저장" 대화상자만 막는다
+        // 브라우저 "페이지 저장" 대화상자 대신
         event.preventDefault();
+        void (event.shiftKey ? sceneFile.saveAs() : sceneFile.save());
+      } else if (key === "o" && !event.shiftKey) {
+        event.preventDefault();
+        void sceneFile.open();
       }
       return;
     }

@@ -134,6 +134,20 @@ function nextName(scene: Scene, preset: MeshPreset): string {
   return `${preset.label} ${next}`;
 }
 
+/** 파일에서 불러온 이름("Box 7")을 쓰면, 다음 새 메쉬 번호가 그 뒤부터 이어지게 한다. */
+function reserveName(scene: Scene, preset: MeshPreset, name: string) {
+  const number = Number(/ (\d+)$/.exec(name)?.[1]);
+  if (!name.startsWith(`${preset.label} `) || !Number.isInteger(number)) return;
+  let counters = nameCounters.get(scene);
+  if (!counters) nameCounters.set(scene, (counters = new Map()));
+  counters.set(preset.id, Math.max(counters.get(preset.id) ?? 0, number));
+}
+
+/** 새 씬·열기에서 이름 번호를 처음(1)부터 다시 매긴다. */
+export function resetMeshNames(scene: Scene) {
+  nameCounters.delete(scene);
+}
+
 /**
  * 프리셋 메쉬를 씬에 추가한다. 머티리얼은 메쉬마다 별도로 만들고 랜덤 색을 준다.
  * @param surfacePoint 메쉬 밑면이 닿을 표면 위의 점 (바닥 또는 다른 메쉬 윗면)
@@ -144,8 +158,11 @@ export function addPresetMesh(
   surfacePoint: Vector3,
   /** 지정하지 않으면 랜덤 색 (복사·복제는 원본 색을 넘긴다) */
   color?: Color3,
+  /** 지정하지 않으면 "Box 3"처럼 새 번호 (파일 열기는 저장된 이름을 넘긴다) */
+  name?: string,
 ): Mesh {
-  const name = nextName(scene, preset);
+  if (name) reserveName(scene, preset, name);
+  else name = nextName(scene, preset);
   const mesh = preset.create(name, scene);
   mesh.position.set(
     surfacePoint.x,

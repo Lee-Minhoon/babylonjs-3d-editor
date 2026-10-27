@@ -7,6 +7,7 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 
 import { BabylonCanvas } from "@/components/babylon-canvas";
+import { toast } from "@/components/ui/toast";
 import { attachInspectorToggle } from "@/lib/babylon/inspector";
 
 import { type Clipboard, createClipboard } from "../lib/clipboard";
@@ -15,6 +16,7 @@ import { createGroundGrid } from "../lib/ground-grid";
 import { createHistory, type History } from "../lib/history";
 import { createPlacementTool, type PlacementTool } from "../lib/placement-tool";
 import { bindPointerRouter } from "../lib/pointer-router";
+import { createSceneFile, type SceneFile } from "../lib/scene-file";
 import { createSelection, type Selection } from "../lib/selection";
 import { createToolState, type ToolState } from "../lib/tools";
 import { createTransformGizmo } from "../lib/transform-gizmo";
@@ -48,6 +50,7 @@ export type EditorRuntime = {
   selection: Selection;
   tools: ToolState;
   clipboard: Clipboard;
+  sceneFile: SceneFile;
 };
 
 type EditorViewportProps = {
@@ -77,12 +80,19 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           selection,
         });
         const clipboard = createClipboard();
+        const sceneFile = createSceneFile(scene, {
+          history,
+          selection,
+          placement,
+          notify: (notice) => toast.add(notice),
+        });
         const unbindShortcuts = bindEditorShortcuts({
           history,
           placement,
           selection,
           tools,
           clipboard,
+          sceneFile,
         });
         onRuntimeChange({
           scene,
@@ -91,11 +101,13 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           selection,
           tools,
           clipboard,
+          sceneFile,
         });
 
         return () => {
           onRuntimeChange(null);
           unbindShortcuts();
+          sceneFile.dispose();
           unbindPointer();
           gizmo.dispose();
           selection.dispose();

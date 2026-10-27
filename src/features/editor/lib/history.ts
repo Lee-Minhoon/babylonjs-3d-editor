@@ -24,7 +24,14 @@ export type History = {
   undo(): void;
   redo(): void;
   getState(): HistoryState;
+  /**
+   * 가장 최근에 실행된(undo 스택 맨 위) Command. 저장 시점과 비교해 변경 여부를 판단한다.
+   * undo로 저장 시점까지 되돌아가면 다시 같은 Command가 된다.
+   */
+  peek(): Command | null;
   subscribe(onChange: () => void): () => void;
+  /** 모든 기록을 버린다 (새 씬·열기). 구독은 유지된다. */
+  clear(): void;
   /** 모든 기록을 버리고 Command들을 dispose 한다. */
   dispose(): void;
 };
@@ -50,6 +57,12 @@ export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
     for (const command of commands.splice(0)) command.dispose?.();
   };
 
+  const clear = () => {
+    disposeAll(undoStack);
+    disposeAll(redoStack);
+    emit();
+  };
+
   return {
     execute(command) {
       command.execute();
@@ -73,14 +86,14 @@ export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
       emit();
     },
     getState: () => state,
+    peek: () => undoStack.at(-1) ?? null,
     subscribe(onChange) {
       listeners.add(onChange);
       return () => listeners.delete(onChange);
     },
+    clear,
     dispose() {
-      disposeAll(undoStack);
-      disposeAll(redoStack);
-      emit();
+      clear();
       listeners.clear();
     },
   };
