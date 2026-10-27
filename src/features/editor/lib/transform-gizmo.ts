@@ -82,8 +82,7 @@ export function createTransformGizmo(
   function sync() {
     const tool = tools.getTool();
     const mesh = selection.getSelected();
-    const visible =
-      mesh !== null && tool !== "select" && !placement.getActivePresetId();
+    const visible = mesh !== null && tool !== "select" && !placement.isActive();
 
     manager.positionGizmoEnabled = visible && tool === "move";
     manager.rotationGizmoEnabled = visible && tool === "rotate";

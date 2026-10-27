@@ -33,11 +33,18 @@ import {
 import {
   useActivePresetId,
   useActiveTool,
+  useClipboardHasContent,
   useHistoryState,
   useSelectedMesh,
   useSnap,
 } from "../hooks/use-editor-state";
-import { deleteSelected } from "../lib/editor-actions";
+import {
+  copySelected,
+  cutSelected,
+  deleteSelected,
+  duplicateSelected,
+  paste,
+} from "../lib/editor-actions";
 import {
   getPresetShortcut,
   getToolShortcut,
@@ -113,6 +120,7 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
   const activePresetId = useActivePresetId(runtime);
   const activeTool = useActiveTool(runtime);
   const snap = useSnap(runtime);
+  const canPaste = useClipboardHasContent(runtime);
   const isWebGPU = runtime?.scene.getEngine().isWebGPU;
 
   return (
@@ -162,16 +170,38 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
               <MenubarShortcut>{SHORTCUT_LABELS.redo}</MenubarShortcut>
             </MenubarItem>
             <MenubarSeparator />
-            <PlannedItem shortcut={SHORTCUT_LABELS.cut}>잘라내기</PlannedItem>
-            <PlannedItem shortcut={SHORTCUT_LABELS.copy}>복사</PlannedItem>
-            <PlannedItem shortcut={SHORTCUT_LABELS.paste}>붙여넣기</PlannedItem>
-            <PlannedItem shortcut={SHORTCUT_LABELS.duplicate}>복제</PlannedItem>
+            <MenubarItem
+              disabled={!selected}
+              onClick={() => runtime && cutSelected(runtime)}
+            >
+              잘라내기
+              <MenubarShortcut>{SHORTCUT_LABELS.cut}</MenubarShortcut>
+            </MenubarItem>
+            <MenubarItem
+              disabled={!selected}
+              onClick={() => runtime && copySelected(runtime)}
+            >
+              복사
+              <MenubarShortcut>{SHORTCUT_LABELS.copy}</MenubarShortcut>
+            </MenubarItem>
+            <MenubarItem
+              disabled={!canPaste}
+              onClick={() => runtime && paste(runtime)}
+            >
+              붙여넣기
+              <MenubarShortcut>{SHORTCUT_LABELS.paste}</MenubarShortcut>
+            </MenubarItem>
+            <MenubarItem
+              disabled={!selected}
+              onClick={() => runtime && duplicateSelected(runtime)}
+            >
+              복제
+              <MenubarShortcut>{SHORTCUT_LABELS.duplicate}</MenubarShortcut>
+            </MenubarItem>
             <MenubarItem
               variant="destructive"
               disabled={!selected}
-              onClick={() =>
-                runtime && deleteSelected(runtime.history, runtime.selection)
-              }
+              onClick={() => runtime && deleteSelected(runtime)}
             >
               삭제
               <MenubarShortcut>{SHORTCUT_LABELS.delete}</MenubarShortcut>

@@ -6,7 +6,7 @@ import type { Command } from "./history";
 import { addPresetMesh, type MeshPreset } from "./mesh-presets";
 
 /*
- * 메쉬 추가/삭제 Command.
+ * 메쉬 생성/삭제 Command.
  * undo/redo 시 메쉬를 dispose 하지 않고 씬에서 떼었다(removeMesh) 붙인다(addMesh).
  * → 객체가 그대로 유지되어 머티리얼·이후 추가될 속성을 다시 만들 필요가 없다.
  * 떼어둔 상태로 히스토리에서 빠지면(dispose) 그때 실제로 해제한다.
@@ -17,22 +17,32 @@ function disposeMesh(mesh: AbstractMesh) {
   mesh.dispose(false, true);
 }
 
-export function createAddMeshCommand(
+/** 새 메쉬를 만드는 Command. 실행 후 getMesh()로 만든 메쉬를 얻는다 (선택 등에 사용). */
+export type SpawnMeshCommand = Command & {
+  getMesh(): AbstractMesh | null;
+};
+
+/**
+ * 메쉬 생성 공통 Command (추가·붙여넣기·복제).
+ * spawn은 첫 execute에서 한 번만 호출되고, redo는 같은 객체를 다시 붙인다.
+ */
+export function createSpawnMeshCommand(
   scene: Scene,
-  preset: MeshPreset,
-  surfacePoint: Vector3,
-): Command {
+  spawn: () => AbstractMesh,
+  verb: string,
+  fallbackName: string,
+): SpawnMeshCommand {
   let mesh: AbstractMesh | null = null;
   let inScene = false;
-  const point = surfacePoint.clone();
 
   return {
     get label() {
-      return `${mesh?.name ?? preset.label} 추가`;
+      return `${mesh?.name ?? fallbackName} ${verb}`;
     },
+    getMesh: () => mesh,
     execute() {
       if (mesh) scene.addMesh(mesh);
-      else mesh = addPresetMesh(scene, preset, point);
+      else mesh = spawn();
       inScene = true;
     },
     undo() {
@@ -46,14 +56,30 @@ export function createAddMeshCommand(
   };
 }
 
+export function createAddMeshCommand(
+  scene: Scene,
+  preset: MeshPreset,
+  surfacePoint: Vector3,
+): SpawnMeshCommand {
+  const point = surfacePoint.clone();
+  return createSpawnMeshCommand(
+    scene,
+    () => addPresetMesh(scene, preset, point),
+    "추가",
+    preset.label,
+  );
+}
+
 export function createRemoveMeshCommand(
   scene: Scene,
   mesh: AbstractMesh,
+  /** 히스토리 라벨 동사 (잘라내기 등) */
+  verb = "삭제",
 ): Command {
   let inScene = true;
 
   return {
-    label: `${mesh.name} 삭제`,
+    label: `${mesh.name} ${verb}`,
     execute() {
       scene.removeMesh(mesh);
       inScene = false;

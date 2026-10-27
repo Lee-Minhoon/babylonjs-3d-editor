@@ -100,6 +100,10 @@ export const MESH_PRESETS: readonly MeshPreset[] = [
   },
 ];
 
+export function findPreset(id: MeshPresetId): MeshPreset | undefined {
+  return MESH_PRESETS.find((preset) => preset.id === id);
+}
+
 /** 에디터에서 추가한 메쉬에 붙는 메타데이터 */
 type EditorMeshMetadata = { editor: { presetId: MeshPresetId } };
 
@@ -138,6 +142,8 @@ export function addPresetMesh(
   scene: Scene,
   preset: MeshPreset,
   surfacePoint: Vector3,
+  /** 지정하지 않으면 랜덤 색 (복사·복제는 원본 색을 넘긴다) */
+  color?: Color3,
 ): Mesh {
   const name = nextName(scene, preset);
   const mesh = preset.create(name, scene);
@@ -148,7 +154,8 @@ export function addPresetMesh(
   );
 
   const material = new StandardMaterial(`${name} Material`, scene);
-  material.diffuseColor = Color3.FromHSV(Math.random() * 360, 0.5, 0.9);
+  material.diffuseColor =
+    color?.clone() ?? Color3.FromHSV(Math.random() * 360, 0.5, 0.9);
   mesh.material = material;
 
   mesh.metadata = {

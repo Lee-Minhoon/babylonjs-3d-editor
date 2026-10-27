@@ -9,6 +9,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import { BabylonCanvas } from "@/components/babylon-canvas";
 import { attachInspectorToggle } from "@/lib/babylon/inspector";
 
+import { type Clipboard, createClipboard } from "../lib/clipboard";
 import { bindEditorShortcuts } from "../lib/editor-shortcuts";
 import { createGroundGrid } from "../lib/ground-grid";
 import { createHistory, type History } from "../lib/history";
@@ -46,6 +47,7 @@ export type EditorRuntime = {
   placement: PlacementTool;
   selection: Selection;
   tools: ToolState;
+  clipboard: Clipboard;
 };
 
 type EditorViewportProps = {
@@ -74,13 +76,22 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           placement,
           selection,
         });
+        const clipboard = createClipboard();
         const unbindShortcuts = bindEditorShortcuts({
           history,
           placement,
           selection,
           tools,
+          clipboard,
         });
-        onRuntimeChange({ scene, history, placement, selection, tools });
+        onRuntimeChange({
+          scene,
+          history,
+          placement,
+          selection,
+          tools,
+          clipboard,
+        });
 
         return () => {
           onRuntimeChange(null);

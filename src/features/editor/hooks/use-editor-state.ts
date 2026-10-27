@@ -7,6 +7,7 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { EditorRuntime } from "../components/editor-viewport";
 import type { HistoryState } from "../lib/history";
 import type { MeshPresetId } from "../lib/mesh-presets";
+import type { PlacementState } from "../lib/placement-tool";
 import type { TransformTool } from "../lib/tools";
 
 /*
@@ -74,4 +75,24 @@ export function useSnap(runtime: Runtime): { enabled: boolean; step: number } {
     getDefaultSnapStep,
   );
   return { enabled, step };
+}
+
+/** 클립보드에 붙여넣을 내용이 있는지 */
+export function useClipboardHasContent(runtime: Runtime): boolean {
+  const clipboard = runtime?.clipboard;
+  return useSyncExternalStore(
+    clipboard?.subscribe ?? subscribeNoop,
+    clipboard?.hasContent ?? getFalse,
+    getFalse,
+  );
+}
+
+/** 배치 모드 상태 (프리셋 배치 / 붙여넣기·복제 배치). 배치 중이 아니면 null */
+export function usePlacementState(runtime: Runtime): PlacementState | null {
+  const placement = runtime?.placement;
+  return useSyncExternalStore(
+    placement?.subscribe ?? subscribeNoop,
+    placement?.getState ?? getNull,
+    getNull,
+  );
 }

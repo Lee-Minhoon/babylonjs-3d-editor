@@ -31,7 +31,7 @@ export function bindPointerRouter(
   { gizmo, placement, selection }: Targets,
 ): () => void {
   const observer = scene.onPointerObservable.add((info) => {
-    const isPlacing = placement.getActivePresetId() !== null;
+    const isPlacing = placement.isActive();
 
     if (info.type === PointerEventTypes.POINTERMOVE) {
       if (isPlacing) placement.updatePointer();

@@ -10,7 +10,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useSceneMeshes } from "@/hooks/use-scene-meshes";
 
-import { useActivePresetId, useSelectedMesh } from "../hooks/use-editor-state";
+import {
+  useActivePresetId,
+  usePlacementState,
+  useSelectedMesh,
+} from "../hooks/use-editor-state";
 import { getPresetShortcut, SHORTCUT_LABELS } from "../lib/editor-shortcuts";
 import { createRemoveMeshCommand } from "../lib/mesh-commands";
 import { isEditorMesh, MESH_PRESETS } from "../lib/mesh-presets";
@@ -36,6 +40,7 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
     // undo로 다시 붙은 메쉬는 scene.meshes 끝에 들어가므로 생성 순서(uniqueId)로 정렬
     .toSorted((a, b) => a.uniqueId - b.uniqueId);
   const activePresetId = useActivePresetId(runtime);
+  const placement = usePlacementState(runtime);
   const selectedMesh = useSelectedMesh(runtime);
 
   return (
@@ -77,10 +82,15 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
           })}
         </div>
         <p className="mt-2 flex min-h-5 flex-wrap items-center gap-1 text-xs text-muted-foreground">
-          {activePresetId ? (
+          {placement?.kind === "preset" ? (
             <>
               씬을 클릭할 때마다 배치 · <Kbd>{SHORTCUT_LABELS.deselect}</Kbd> /
               우클릭 종료
+            </>
+          ) : placement?.kind === "snapshot" ? (
+            <>
+              놓을 위치를 클릭해 {placement.verb} ·{" "}
+              <Kbd>{SHORTCUT_LABELS.deselect}</Kbd> / 우클릭 취소
             </>
           ) : (
             "메쉬를 고른 뒤 씬에서 놓을 위치를 클릭하세요."

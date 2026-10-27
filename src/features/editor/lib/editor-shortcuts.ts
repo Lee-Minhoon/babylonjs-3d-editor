@@ -1,4 +1,11 @@
-import { deleteSelected } from "./editor-actions";
+import type { Clipboard } from "./clipboard";
+import {
+  copySelected,
+  cutSelected,
+  deleteSelected,
+  duplicateSelected,
+  paste,
+} from "./editor-actions";
 import type { History } from "./history";
 import { MESH_PRESETS, type MeshPresetId } from "./mesh-presets";
 import type { PlacementTool } from "./placement-tool";
@@ -15,9 +22,11 @@ import type { ToolState, TransformTool } from "./tools";
  *   1 ~ 8             메쉬 프리셋 배치 모드 토글 (MESH_PRESETS 순서, 상단 숫자열만)
  *   ⌘/Ctrl+Z          undo
  *   ⌘/Ctrl+Shift+Z    redo  (Ctrl+Y도 redo)
+ *   ⌘/Ctrl+C / X / V  복사 / 잘라내기 / 붙여넣기 (에디터 내부 클립보드)
+ *   ⌘/Ctrl+D          복제
  *
  * 예약 (나중 기능용 — 다른 동작에 쓰지 말 것):
- *   ⌘/Ctrl+S 저장 · ⌘/Ctrl+C/V/X 복사/붙여넣기/잘라내기 · ⌘/Ctrl+D 복제 · ⌘/Ctrl+A 전체 선택
+ *   ⌘/Ctrl+S 저장 · ⌘/Ctrl+A 전체 선택
  *   F 선택 메쉬로 카메라 포커스 · 숫자패드 카메라 시점
  */
 
@@ -26,6 +35,7 @@ type EditorShortcutTargets = {
   placement: PlacementTool;
   selection: Selection;
   tools: ToolState;
+  clipboard: Clipboard;
 };
 
 const TOOL_KEYS: Record<string, TransformTool> = {
@@ -85,6 +95,7 @@ export function bindEditorShortcuts({
   placement,
   selection,
   tools,
+  clipboard,
 }: EditorShortcutTargets): () => void {
   const onKeyDown = (event: KeyboardEvent) => {
     if (isTypingTarget(event.target)) return;
@@ -93,12 +104,23 @@ export function bindEditorShortcuts({
     const mod = event.metaKey || event.ctrlKey;
 
     if (mod && !event.altKey) {
+      const context = { history, selection, clipboard, placement };
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
         history.undo();
       } else if ((key === "z" && event.shiftKey) || key === "y") {
         event.preventDefault();
         history.redo();
+      } else if (key === "c" && !event.shiftKey) {
+        if (copySelected(context)) event.preventDefault();
+      } else if (key === "x" && !event.shiftKey) {
+        if (cutSelected(context)) event.preventDefault();
+      } else if (key === "v" && !event.shiftKey) {
+        if (paste(context)) event.preventDefault();
+      } else if (key === "d" && !event.shiftKey) {
+        // 브라우저 북마크(⌘D)는 에디터 안에서 항상 막는다
+        event.preventDefault();
+        duplicateSelected(context);
       } else if (key === "s") {
         // 예약: 저장 기능 전까지는 브라우저 "페이지 저장" 대화상자만 막는다
         event.preventDefault();
@@ -123,13 +145,13 @@ export function bindEditorShortcuts({
     }
 
     if (key === "escape") {
-      if (placement.getActivePresetId()) placement.cancel();
+      if (placement.isActive()) placement.cancel();
       else selection.select(null);
       return;
     }
 
     if (key === "delete" || key === "backspace") {
-      if (deleteSelected(history, selection)) event.preventDefault();
+      if (deleteSelected({ history, selection })) event.preventDefault();
     }
   };
 
