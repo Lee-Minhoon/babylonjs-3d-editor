@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useSyncExternalStore } from "react";
+import { useRef } from "react";
 
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { NumberField } from "@base-ui/react/number-field";
@@ -8,9 +8,9 @@ import { NumberField } from "@base-ui/react/number-field";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
+import { useSelectedMesh } from "../hooks/use-editor-state";
 import { useMeshTransform } from "../hooks/use-mesh-transform";
 import type { History } from "../lib/history";
-import type { Selection } from "../lib/selection";
 import {
   applyTransform,
   captureTransform,
@@ -26,17 +26,6 @@ import {
 } from "../lib/transform-values";
 import type { EditorRuntime } from "./editor-viewport";
 import { MeshIcon } from "./preset-icons";
-
-const subscribeNoop = () => () => {};
-const getNull = () => null;
-
-function useSelectedMesh(selection: Selection | undefined) {
-  return useSyncExternalStore(
-    selection?.subscribe ?? subscribeNoop,
-    selection?.getSelected ?? getNull,
-    getNull,
-  );
-}
 
 const AXES = [
   { axis: 0, label: "X", color: "text-red-400" },
@@ -214,7 +203,7 @@ type PropertiesPanelProps = {
 
 /** 선택된 메쉬의 속성(변형) 패널 */
 export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
-  const mesh = useSelectedMesh(runtime?.selection);
+  const mesh = useSelectedMesh(runtime);
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-l border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">

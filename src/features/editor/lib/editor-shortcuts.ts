@@ -1,5 +1,5 @@
+import { deleteSelected } from "./editor-actions";
 import type { History } from "./history";
-import { createRemoveMeshCommand } from "./mesh-commands";
 import { MESH_PRESETS, type MeshPresetId } from "./mesh-presets";
 import type { PlacementTool } from "./placement-tool";
 import type { Selection } from "./selection";
@@ -44,6 +44,30 @@ const PRESET_SHORTCUTS = new Map(
 export function getPresetShortcut(presetId: MeshPresetId): string | null {
   return PRESET_SHORTCUTS.get(presetId) ?? null;
 }
+
+/** UI 표시용 도구 단축키 ("Q" …) */
+export function getToolShortcut(tool: TransformTool): string {
+  const key = Object.keys(TOOL_KEYS).find((k) => TOOL_KEYS[k] === tool);
+  return key?.toUpperCase() ?? "";
+}
+
+/**
+ * UI(메뉴·툴팁) 표시용 단축키 라벨. 실제 처리는 아래 onKeyDown이 기준이며 여기와 맞춰야 한다.
+ * reserved: 아직 기능이 없는 예약 키 (메뉴에 비활성으로 표시).
+ */
+export const SHORTCUT_LABELS = {
+  undo: "⌘Z",
+  redo: "⌘⇧Z",
+  delete: "⌫",
+  deselect: "Esc",
+  save: "⌘S",
+  copy: "⌘C",
+  paste: "⌘V",
+  cut: "⌘X",
+  duplicate: "⌘D",
+  selectAll: "⌘A",
+  focus: "F",
+} as const;
 
 /** 입력 필드에 포커스가 있으면 브라우저 기본 동작(텍스트 편집·undo)을 그대로 둔다. */
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -105,10 +129,7 @@ export function bindEditorShortcuts({
     }
 
     if (key === "delete" || key === "backspace") {
-      const mesh = selection.getSelected();
-      if (!mesh) return;
-      event.preventDefault();
-      history.execute(createRemoveMeshCommand(mesh.getScene(), mesh));
+      if (deleteSelected(history, selection)) event.preventDefault();
     }
   };
 

@@ -1,67 +1,21 @@
 "use client";
 
-import { type ReactNode, useSyncExternalStore } from "react";
+import type { ReactNode } from "react";
 
-import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
-import { type LucideIcon, Redo2, Undo2, X } from "lucide-react";
+import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useSceneMeshes } from "@/hooks/use-scene-meshes";
 
-import { getPresetShortcut } from "../lib/editor-shortcuts";
-import type { History, HistoryState } from "../lib/history";
+import { useActivePresetId, useSelectedMesh } from "../hooks/use-editor-state";
+import { getPresetShortcut, SHORTCUT_LABELS } from "../lib/editor-shortcuts";
 import { createRemoveMeshCommand } from "../lib/mesh-commands";
-import {
-  isEditorMesh,
-  MESH_PRESETS,
-  type MeshPresetId,
-} from "../lib/mesh-presets";
-import type { PlacementTool } from "../lib/placement-tool";
-import type { Selection } from "../lib/selection";
+import { isEditorMesh, MESH_PRESETS } from "../lib/mesh-presets";
 import type { EditorRuntime } from "./editor-viewport";
 import { MeshIcon, PRESET_ICONS } from "./preset-icons";
-
-const subscribeNoop = () => () => {};
-const getNull = () => null;
-const EMPTY_HISTORY: HistoryState = { undoLabel: null, redoLabel: null };
-const getEmptyHistory = () => EMPTY_HISTORY;
-
-/** 배치 모드에서 현재 선택된 프리셋 id (배치 중이 아니면 null) */
-function useActivePresetId(
-  placement: PlacementTool | undefined,
-): MeshPresetId | null {
-  return useSyncExternalStore(
-    placement?.subscribe ?? subscribeNoop,
-    placement?.getActivePresetId ?? getNull,
-    getNull,
-  );
-}
-
-function useHistoryState(history: History | undefined): HistoryState {
-  return useSyncExternalStore(
-    history?.subscribe ?? subscribeNoop,
-    history?.getState ?? getEmptyHistory,
-    getEmptyHistory,
-  );
-}
-
-function useSelectedMesh(
-  selection: Selection | undefined,
-): AbstractMesh | null {
-  return useSyncExternalStore(
-    selection?.subscribe ?? subscribeNoop,
-    selection?.getSelected ?? getNull,
-    getNull,
-  );
-}
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
@@ -71,80 +25,21 @@ function SectionTitle({ children }: { children: ReactNode }) {
   );
 }
 
-type HistoryButtonProps = {
-  icon: LucideIcon;
-  label: string;
-  /** 되돌릴/다시 할 작업 이름. 없으면 비활성 */
-  actionLabel: string | null;
-  shortcut: string;
-  onClick: () => void;
-};
-
-function HistoryButton({
-  icon: Icon,
-  label,
-  actionLabel,
-  shortcut,
-  onClick,
-}: HistoryButtonProps) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            variant="secondary"
-            size="lg"
-            className="flex-1"
-            disabled={!actionLabel}
-            onClick={onClick}
-          />
-        }
-      >
-        <Icon aria-hidden />
-        {label}
-      </TooltipTrigger>
-      <TooltipContent>
-        {actionLabel ? `${label}: ${actionLabel}` : label}
-        <Kbd>{shortcut}</Kbd>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 type MeshSidebarProps = {
   runtime: EditorRuntime | null;
 };
 
+/** 왼쪽 사이드바: 메쉬 추가(배치 모드) + 씬 목록 */
 export function MeshSidebar({ runtime }: MeshSidebarProps) {
   const meshes = useSceneMeshes(runtime?.scene ?? null)
     .filter(isEditorMesh)
     // undo로 다시 붙은 메쉬는 scene.meshes 끝에 들어가므로 생성 순서(uniqueId)로 정렬
     .toSorted((a, b) => a.uniqueId - b.uniqueId);
-  const activePresetId = useActivePresetId(runtime?.placement);
-  const { undoLabel, redoLabel } = useHistoryState(runtime?.history);
-  const selectedMesh = useSelectedMesh(runtime?.selection);
+  const activePresetId = useActivePresetId(runtime);
+  const selectedMesh = useSelectedMesh(runtime);
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">
-      <div className="flex gap-1.5 p-3">
-        <HistoryButton
-          icon={Undo2}
-          label="실행 취소"
-          actionLabel={undoLabel}
-          shortcut="⌘Z"
-          onClick={() => runtime?.history.undo()}
-        />
-        <HistoryButton
-          icon={Redo2}
-          label="다시 실행"
-          actionLabel={redoLabel}
-          shortcut="⌘⇧Z"
-          onClick={() => runtime?.history.redo()}
-        />
-      </div>
-
-      <Separator />
-
       <section className="p-3">
         <SectionTitle>메쉬 추가</SectionTitle>
         <div className="grid grid-cols-2 gap-1.5">
@@ -184,7 +79,8 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
         <p className="mt-2 flex min-h-5 flex-wrap items-center gap-1 text-xs text-muted-foreground">
           {activePresetId ? (
             <>
-              씬을 클릭할 때마다 배치 · <Kbd>Esc</Kbd> / 우클릭 종료
+              씬을 클릭할 때마다 배치 · <Kbd>{SHORTCUT_LABELS.deselect}</Kbd> /
+              우클릭 종료
             </>
           ) : (
             "메쉬를 고른 뒤 씬에서 놓을 위치를 클릭하세요."

@@ -71,11 +71,14 @@ src/
 
 ## 에디터 구조 (`src/features/editor`)
 
-- 뷰포트가 씬과 함께 도구들을 만들어 `EditorRuntime`(`{ scene, history, placement, selection, tools }`)으로 UI에 넘긴다. 도구는 순수 TS 객체(`lib/`)이고, React는 `subscribe`/`getX`를 `useSyncExternalStore`로 구독만 한다.
+- 뷰포트가 씬과 함께 도구들을 만들어 `EditorRuntime`(`{ scene, history, placement, selection, tools }`)으로 UI에 넘긴다. 도구는 순수 TS 객체(`lib/`)이고, React는 `subscribe`/`getX`를 `useSyncExternalStore`로 구독만 한다. 구독 훅은 `hooks/use-editor-state.ts`(`useHistoryState`, `useSelectedMesh`, `useActivePresetId`, `useActiveTool`, `useSnap`)에 모아 두고, 컴포넌트마다 다시 만들지 않는다.
+- 레이아웃: 상단 `editor-header`(메뉴바: 파일/편집/추가/보기 + undo/redo), 왼쪽 `mesh-sidebar`, 가운데 뷰포트 + `transform-toolbar`, 오른쪽 `properties-panel`.
+- 단축키·메뉴·버튼이 공유하는 동작은 `lib/editor-actions.ts`에 둔다 (예: `deleteSelected`). 입력 경로마다 로직을 따로 쓰지 않는다.
+- 메뉴에 아직 없는 기능(예약 키)은 `PlannedItem`으로 비활성 "준비 중" 표시. 기능을 붙일 때 `MenubarItem`으로 바꾸고 단축키를 `editor-shortcuts.ts`에 연결한다.
 - 활성 도구(`tools`): `select | move | rotate | scale` (Q/W/E/R). 배치 모드는 그 위에 잠깐 덮어쓰는 모드다. 기즈모는 선택된 메쉬 + move/rotate/scale + 배치 모드 아님일 때만 보인다.
 - **뷰포트 포인터 입력은 `lib/pointer-router.ts` 한 곳에서만 받는다.** 우선순위: 기즈모 위/드래그 중 → 배치 모드 → 선택. 새 도구가 클릭을 받아야 하면 `scene.onPointerObservable`을 직접 구독하지 말고 라우터에 분기를 추가한다 (기즈모 클릭이 선택 해제로 새는 식의 충돌 방지).
 - 기즈모 드래그는 시작/끝 스냅샷으로 **드래그 한 번 = 변형 Command 하나**를 기록한다 (`transform-command.ts`).
-- 위치 스냅: `tools.isSnapEnabled()` + `POSITION_SNAP`(0.5, `lib/tools.ts`). 배치는 X/Z를 절대 격자에 맞추고, 이동 기즈모는 Babylon `snapDistance`(변화량 단위)를 쓴다. 새 위치 입력 도구도 이 두 값을 따른다.
+- 위치 스냅: `tools.getActiveSnap()` (켜져 있으면 단위, 꺼져 있으면 `null`). 단위는 `SNAP_STEPS`(0.1/0.25/0.5/1, 기본 0.5, `lib/tools.ts`)에서 툴바 드롭다운·보기 메뉴로 고른다. 배치는 X/Z를 절대 격자에 맞추고(`snapValue`), 이동 기즈모는 Babylon `snapDistance`(변화량 단위)를 쓴다. 새 위치 입력 도구도 `getActiveSnap()`을 따른다.
 - 속성 패널 숫자 입력(`@base-ui/react/number-field`)도 같은 원칙: `onValueChange`에서는 메쉬에 바로 적용(미리보기, 기록 없음), `onValueCommitted`에서 편집 시작 전 스냅샷과 비교해 Command 하나. Enter는 blur로 커밋, Esc는 취소. `editor-shortcuts`는 입력창을 건너뛰므로 **입력창 안의 ⌘Z/⌘⇧Z는 필드가 직접 처리**한다 (편집 중이면 취소, 아니면 history undo/redo).
 - 패널 표시값은 Babylon 객체를 직접 구독해서 얻는다 (`hooks/use-mesh-transform.ts`, `onAfterWorldMatrixUpdateObservable`). React state에 복사해 두지 않는다 — 기즈모·undo·입력 어디서 바뀌든 한 경로로 반영된다.
 - **씬을 바꾸는 동작은 반드시 Command로 만들어 `history.execute()`로 실행**한다 (undo/redo 대상). 메쉬를 직접 `dispose()`하지 않는다 — 삭제는 `createRemoveMeshCommand`.
@@ -83,7 +86,8 @@ src/
 - **키보드 단축키는 `lib/editor-shortcuts.ts` 한 곳에서만 등록**한다. 도구에서 `window.addEventListener("keydown")`을 직접 달지 않는다 (같은 키의 우선순위가 등록 순서에 묶이기 때문). 현재 키 목록은 그 파일 상단 주석이 기준이다.
   - 사용 중: Esc · Delete/Backspace · Q/W/E/R(도구) · 1~8(메쉬 프리셋, `MESH_PRESETS` 순서, 상단 숫자열만) · ⌘Z/⌘⇧Z/Ctrl+Y.
   - **예약 — 다른 기능에 쓰지 않는다:** ⌘/Ctrl+S(저장, 지금은 브라우저 저장 창만 막음), ⌘/Ctrl+C/V/X(복사/붙여넣기/잘라내기), ⌘/Ctrl+D(복제), ⌘/Ctrl+A(전체 선택), F(선택 메쉬 포커스), 숫자패드(카메라 시점).
-  - 단축키를 UI에 보여줄 땐 하드코딩하지 말고 `editor-shortcuts.ts`에서 가져온다 (예: `getPresetShortcut`).
+  - 단축키를 UI에 보여줄 땐 하드코딩하지 말고 `editor-shortcuts.ts`에서 가져온다: `getPresetShortcut`, `getToolShortcut`, `SHORTCUT_LABELS`(undo/redo/delete/예약 키 등).
+  - 메뉴의 라디오·체크박스 항목엔 `closeOnClick`을 준다 (Base UI 기본값은 안 닫힘 → 다음 키 입력이 메뉴로 빨려 들어간다).
 - 뷰포트 클릭은 `POINTERTAP`으로 처리한다 (드래그 = 카메라 조작·기즈모 드래그와 구분).
 
 ## UI 규칙 (shadcn / Base UI)

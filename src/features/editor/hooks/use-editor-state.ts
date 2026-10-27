@@ -1,0 +1,77 @@
+"use client";
+
+import { useSyncExternalStore } from "react";
+
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+
+import type { EditorRuntime } from "../components/editor-viewport";
+import type { HistoryState } from "../lib/history";
+import type { MeshPresetId } from "../lib/mesh-presets";
+import type { TransformTool } from "../lib/tools";
+
+/*
+ * 에디터 도구 상태 구독 훅 모음. runtime이 아직 없으면(씬 준비 전) 기본값을 돌려준다.
+ * 도구 객체는 subscribe/getX를 제공하고, 여기서 useSyncExternalStore로 감싼다.
+ */
+
+const subscribeNoop = () => () => {};
+const getNull = () => null;
+const EMPTY_HISTORY: HistoryState = { undoLabel: null, redoLabel: null };
+const getEmptyHistory = () => EMPTY_HISTORY;
+const getDefaultTool = (): TransformTool => "move";
+const getFalse = () => false;
+const getDefaultSnapStep = () => 0.5;
+
+type Runtime = EditorRuntime | null;
+
+export function useHistoryState(runtime: Runtime): HistoryState {
+  const history = runtime?.history;
+  return useSyncExternalStore(
+    history?.subscribe ?? subscribeNoop,
+    history?.getState ?? getEmptyHistory,
+    getEmptyHistory,
+  );
+}
+
+export function useSelectedMesh(runtime: Runtime): AbstractMesh | null {
+  const selection = runtime?.selection;
+  return useSyncExternalStore(
+    selection?.subscribe ?? subscribeNoop,
+    selection?.getSelected ?? getNull,
+    getNull,
+  );
+}
+
+/** 배치 모드의 프리셋 id (배치 중이 아니면 null) */
+export function useActivePresetId(runtime: Runtime): MeshPresetId | null {
+  const placement = runtime?.placement;
+  return useSyncExternalStore(
+    placement?.subscribe ?? subscribeNoop,
+    placement?.getActivePresetId ?? getNull,
+    getNull,
+  );
+}
+
+export function useActiveTool(runtime: Runtime): TransformTool {
+  const tools = runtime?.tools;
+  return useSyncExternalStore(
+    tools?.subscribe ?? subscribeNoop,
+    tools?.getTool ?? getDefaultTool,
+    getDefaultTool,
+  );
+}
+
+export function useSnap(runtime: Runtime): { enabled: boolean; step: number } {
+  const tools = runtime?.tools;
+  const enabled = useSyncExternalStore(
+    tools?.subscribe ?? subscribeNoop,
+    tools?.isSnapEnabled ?? getFalse,
+    getFalse,
+  );
+  const step = useSyncExternalStore(
+    tools?.subscribe ?? subscribeNoop,
+    tools?.getSnapStep ?? getDefaultSnapStep,
+    getDefaultSnapStep,
+  );
+  return { enabled, step };
+}

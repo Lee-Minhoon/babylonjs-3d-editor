@@ -1,8 +1,7 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
-
 import {
+  ChevronDown,
   type LucideIcon,
   Magnet,
   MousePointer2,
@@ -11,6 +10,16 @@ import {
   Scale3d,
 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
 import { Separator } from "@/components/ui/separator";
 import { Toggle } from "@/components/ui/toggle";
@@ -21,43 +30,34 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-import {
-  POSITION_SNAP,
-  type ToolState,
-  type TransformTool,
-} from "../lib/tools";
+import { useActiveTool, useSnap } from "../hooks/use-editor-state";
+import { getToolShortcut } from "../lib/editor-shortcuts";
+import { SNAP_STEPS, type TransformTool } from "../lib/tools";
+import type { EditorRuntime } from "./editor-viewport";
 
-const TOOLS: {
+export const TOOL_ITEMS: {
   id: TransformTool;
   label: string;
   icon: LucideIcon;
-  shortcut: string;
 }[] = [
-  { id: "select", label: "선택", icon: MousePointer2, shortcut: "Q" },
-  { id: "move", label: "이동", icon: Move3d, shortcut: "W" },
-  { id: "rotate", label: "회전", icon: Rotate3d, shortcut: "E" },
-  { id: "scale", label: "크기", icon: Scale3d, shortcut: "R" },
+  { id: "select", label: "선택", icon: MousePointer2 },
+  { id: "move", label: "이동", icon: Move3d },
+  { id: "rotate", label: "회전", icon: Rotate3d },
+  { id: "scale", label: "크기", icon: Scale3d },
 ];
 
 const PRESSED_CLASS =
   "size-7 data-pressed:bg-primary data-pressed:text-primary-foreground";
 
 type TransformToolbarProps = {
-  tools: ToolState;
+  runtime: EditorRuntime;
 };
 
-/** 뷰포트 위에 띄우는 도구 바: 변형 도구(Q/W/E/R) + 스냅 토글 */
-export function TransformToolbar({ tools }: TransformToolbarProps) {
-  const active = useSyncExternalStore(
-    tools.subscribe,
-    tools.getTool,
-    tools.getTool,
-  );
-  const snap = useSyncExternalStore(
-    tools.subscribe,
-    tools.isSnapEnabled,
-    tools.isSnapEnabled,
-  );
+/** 뷰포트 위에 띄우는 도구 바: 변형 도구(Q/W/E/R) + 스냅 토글·단위 */
+export function TransformToolbar({ runtime }: TransformToolbarProps) {
+  const { tools } = runtime;
+  const active = useActiveTool(runtime);
+  const snap = useSnap(runtime);
 
   return (
     <div className="flex items-center gap-1 rounded-lg border border-border bg-background/80 p-1 shadow-sm backdrop-blur">
@@ -68,7 +68,7 @@ export function TransformToolbar({ tools }: TransformToolbarProps) {
         spacing={1}
         aria-label="변형 도구"
       >
-        {TOOLS.map(({ id, label, icon: Icon, shortcut }) => (
+        {TOOL_ITEMS.map(({ id, label, icon: Icon }) => (
           <Tooltip key={id}>
             <TooltipTrigger
               render={
@@ -84,7 +84,7 @@ export function TransformToolbar({ tools }: TransformToolbarProps) {
             </TooltipTrigger>
             <TooltipContent side="bottom">
               {label}
-              <Kbd>{shortcut}</Kbd>
+              <Kbd>{getToolShortcut(id)}</Kbd>
             </TooltipContent>
           </Tooltip>
         ))}
@@ -96,7 +96,7 @@ export function TransformToolbar({ tools }: TransformToolbarProps) {
         <TooltipTrigger
           render={
             <Toggle
-              pressed={snap}
+              pressed={snap.enabled}
               onPressedChange={tools.setSnapEnabled}
               size="sm"
               aria-label="스냅"
@@ -107,9 +107,56 @@ export function TransformToolbar({ tools }: TransformToolbarProps) {
           <Magnet aria-hidden />
         </TooltipTrigger>
         <TooltipContent side="bottom">
-          스냅 {snap ? "켜짐" : "꺼짐"} ({POSITION_SNAP} 단위)
+          스냅 {snap.enabled ? "켜짐" : "꺼짐"}
         </TooltipContent>
       </Tooltip>
+
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-0.5 px-1.5 tabular-nums"
+                    aria-label="스냅 단위"
+                    disabled={!snap.enabled}
+                  />
+                }
+              />
+            }
+          >
+            {snap.step}
+            <ChevronDown className="size-3 opacity-60" aria-hidden />
+          </TooltipTrigger>
+          <TooltipContent side="bottom">스냅 단위</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent className="min-w-32">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>스냅 단위</DropdownMenuLabel>
+            <SnapStepRadioItems runtime={runtime} />
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
+  );
+}
+
+/** 스냅 단위 라디오 항목 (툴바 드롭다운용) */
+function SnapStepRadioItems({ runtime }: { runtime: EditorRuntime }) {
+  const { step } = useSnap(runtime);
+  return (
+    <DropdownMenuRadioGroup
+      value={step}
+      onValueChange={(value: number) => runtime.tools.setSnapStep(value)}
+    >
+      {SNAP_STEPS.map((value) => (
+        <DropdownMenuRadioItem key={value} value={value} closeOnClick>
+          {value} 유닛
+        </DropdownMenuRadioItem>
+      ))}
+    </DropdownMenuRadioGroup>
   );
 }
