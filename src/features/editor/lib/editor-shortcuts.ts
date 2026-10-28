@@ -5,6 +5,7 @@ import {
   deleteSelected,
   duplicateSelected,
   paste,
+  startRename,
 } from "./editor-actions";
 import type { History } from "./history";
 import { MESH_PRESETS, type MeshPresetId } from "./mesh-presets";
@@ -20,6 +21,7 @@ import type { ToolState, TransformTool } from "./tools";
  *   Esc               배치 모드 종료 → (배치 중이 아니면) 선택 해제
  *   R / Shift+R       (배치 중일 때만) 미리보기 90° 회전 / 반대로. 배치 중이 아니면 R은 크기 도구
  *   Delete/Backspace  선택한 메쉬 삭제 (undo 가능)
+ *   F2                이름 바꾸기 (하나만 선택했을 때 속성 패널 이름 칸으로)
  *   Q / W / E / R     선택 / 이동 / 회전 / 크기 도구
  *   1 ~ 8             메쉬 프리셋 배치 모드 토글 (MESH_PRESETS 순서, 상단 숫자열만)
  *   ⌘/Ctrl+Z          undo
@@ -85,6 +87,7 @@ export const SHORTCUT_LABELS = {
   duplicate: "⌘D",
   selectAll: "⌘A",
   focus: "F",
+  rename: "F2",
   rotatePlacement: "R",
   rotatePlacementBack: "⇧R",
 } as const;
@@ -180,6 +183,11 @@ export function bindEditorShortcuts({
     const preset = digit ? MESH_PRESETS[Number(digit) - 1] : undefined;
     if (preset) {
       placement.toggle(preset);
+      return;
+    }
+
+    if (key === "f2") {
+      if (startRename({ selection })) event.preventDefault();
       return;
     }
 

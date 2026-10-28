@@ -1,6 +1,9 @@
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+
 import { captureMeshSnapshots, type Clipboard } from "./clipboard";
 import { createMacroCommand, type History, macroLabel } from "./history";
 import { createRemoveMeshCommand } from "./mesh-commands";
+import { createRenameCommand, MESH_NAME_INPUT_ID } from "./mesh-name";
 import type { PlacementTool } from "./placement-tool";
 import type { Selection } from "./selection";
 
@@ -17,6 +20,35 @@ type ActionContext = {
   clipboard: Clipboard;
   placement: PlacementTool;
 };
+
+/** 이름 바꾸기 (undo 가능). 이름이 그대로거나 비었으면 아무것도 하지 않는다 */
+export function renameMesh(
+  { history }: Pick<ActionContext, "history">,
+  mesh: AbstractMesh,
+  text: string,
+): boolean {
+  const command = createRenameCommand(mesh, text);
+  if (!command) return false;
+  history.execute(command);
+  return true;
+}
+
+/**
+ * 이름 바꾸기 시작 (F2·메뉴): 하나만 선택했을 때 속성 패널의 이름 입력칸으로 포커스를 옮긴다.
+ * 메뉴에서 부르면 메뉴가 닫히며 포커스를 트리거로 되돌리므로 다음 프레임에 옮긴다.
+ */
+export function startRename({
+  selection,
+}: Pick<ActionContext, "selection">): boolean {
+  if (selection.getMeshes().length !== 1) return false;
+  requestAnimationFrame(() => {
+    const input = document.getElementById(MESH_NAME_INPUT_ID);
+    if (!(input instanceof HTMLInputElement)) return;
+    input.focus();
+    input.select();
+  });
+  return true;
+}
 
 /** 선택한 메쉬들을 삭제하는 Command 하나 (여러 개여도 undo 한 번) */
 function removeSelected(

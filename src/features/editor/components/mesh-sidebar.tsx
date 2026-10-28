@@ -1,7 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -15,10 +16,12 @@ import {
   usePlacementState,
   useSelection,
 } from "../hooks/use-editor-state";
+import { useMeshName } from "../hooks/use-mesh-name";
 import { getPresetShortcut, SHORTCUT_LABELS } from "../lib/editor-shortcuts";
 import { createRemoveMeshCommand } from "../lib/mesh-commands";
 import { isEditorMesh, MESH_PRESETS } from "../lib/mesh-presets";
 import type { EditorRuntime } from "./editor-viewport";
+import { MeshNameInput } from "./mesh-name-input";
 import { MeshIcon, PRESET_ICONS } from "./preset-icons";
 
 function SectionTitle({ children }: { children: ReactNode }) {
@@ -36,6 +39,75 @@ function RotateHint({ yaw }: { yaw: number }) {
       <Kbd>{SHORTCUT_LABELS.rotatePlacement}</Kbd> 회전
       {yaw !== 0 && <span className="tabular-nums">({yaw}°)</span>}
     </>
+  );
+}
+
+/** 씬 목록 한 줄: 클릭 선택(Shift·⌘/Ctrl은 넣고 빼기), 더블클릭 이름 바꾸기, 삭제 버튼 */
+function SceneListItem({
+  mesh,
+  runtime,
+  isSelected,
+}: {
+  mesh: AbstractMesh;
+  runtime: EditorRuntime;
+  isSelected: boolean;
+}) {
+  const name = useMeshName(mesh);
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <li
+      className={`group flex h-7 items-center rounded-md pr-1 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+        isSelected
+          ? "bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-sidebar-ring/50"
+          : ""
+      }`}
+    >
+      {editing ? (
+        <div className="flex h-full flex-1 items-center gap-2 pl-1.5">
+          <MeshIcon mesh={mesh} className="size-3.5 text-muted-foreground" />
+          <MeshNameInput
+            mesh={mesh}
+            history={runtime.history}
+            autoFocus
+            className="h-6 px-1.5"
+            onDone={() => setEditing(false)}
+          />
+        </div>
+      ) : (
+        <Button
+          variant="ghost"
+          className="h-full flex-1 justify-start gap-2 px-1.5 font-normal hover:bg-transparent dark:hover:bg-transparent"
+          aria-pressed={isSelected}
+          onClick={(event) => {
+            if (event.shiftKey || event.metaKey || event.ctrlKey) {
+              runtime.selection.toggle(mesh);
+            } else {
+              runtime.selection.select(mesh);
+            }
+          }}
+          onDoubleClick={() => setEditing(true)}
+        >
+          <MeshIcon mesh={mesh} className="size-3.5 text-muted-foreground" />
+          <span className="truncate">{name}</span>
+        </Button>
+      )}
+      {!editing && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          aria-label={`${name} 삭제`}
+          onClick={() =>
+            runtime.history.execute(
+              createRemoveMeshCommand(runtime.scene, mesh),
+            )
+          }
+        >
+          <X aria-hidden />
+        </Button>
+      )}
+    </li>
   );
 }
 
@@ -116,59 +188,21 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
         <SectionTitle>
           씬 <span className="text-muted-foreground/70">({meshes.length})</span>
         </SectionTitle>
-        {meshes.length === 0 ? (
+        {!runtime || meshes.length === 0 ? (
           <p className="pr-3 text-xs text-muted-foreground">
             아직 추가된 메쉬가 없습니다.
           </p>
         ) : (
           <ScrollArea className="min-h-0 flex-1 pr-3">
             <ul aria-label="씬 메쉬" className="-mx-1 space-y-0.5">
-              {meshes.map((mesh) => {
-                const isSelected = selected.includes(mesh);
-                return (
-                  <li
-                    key={mesh.uniqueId}
-                    className={`group flex h-7 items-center rounded-md pr-1 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
-                      isSelected
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-sidebar-ring/50"
-                        : ""
-                    }`}
-                  >
-                    <Button
-                      variant="ghost"
-                      className="h-full flex-1 justify-start gap-2 px-1.5 font-normal hover:bg-transparent dark:hover:bg-transparent"
-                      aria-pressed={isSelected}
-                      // Shift·⌘/Ctrl+클릭: 선택에 넣고 빼기 (뷰포트와 같음)
-                      onClick={(event) => {
-                        if (event.shiftKey || event.metaKey || event.ctrlKey) {
-                          runtime?.selection.toggle(mesh);
-                        } else {
-                          runtime?.selection.select(mesh);
-                        }
-                      }}
-                    >
-                      <MeshIcon
-                        mesh={mesh}
-                        className="size-3.5 text-muted-foreground"
-                      />
-                      <span className="truncate">{mesh.name}</span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                      aria-label={`${mesh.name} 삭제`}
-                      onClick={() =>
-                        runtime?.history.execute(
-                          createRemoveMeshCommand(runtime.scene, mesh),
-                        )
-                      }
-                    >
-                      <X aria-hidden />
-                    </Button>
-                  </li>
-                );
-              })}
+              {meshes.map((mesh) => (
+                <SceneListItem
+                  key={mesh.uniqueId}
+                  mesh={mesh}
+                  runtime={runtime}
+                  isSelected={selected.includes(mesh)}
+                />
+              ))}
             </ul>
           </ScrollArea>
         )}

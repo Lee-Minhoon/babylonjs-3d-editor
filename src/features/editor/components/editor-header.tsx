@@ -45,6 +45,7 @@ import {
   deleteSelected,
   duplicateSelected,
   paste,
+  startRename,
 } from "../lib/editor-actions";
 import {
   getPresetShortcut,
@@ -117,7 +118,8 @@ type EditorHeaderProps = {
 /** 상단 헤더: 앱 이름 · 메뉴바(파일/편집/추가/보기) · 실행 취소/다시 실행 · 파일 이름 · 렌더러 표시 */
 export function EditorHeader({ runtime }: EditorHeaderProps) {
   const { undoLabel, redoLabel } = useHistoryState(runtime);
-  const hasSelection = useSelection(runtime).length > 0;
+  const selectionCount = useSelection(runtime).length;
+  const hasSelection = selectionCount > 0;
   const activePresetId = useActivePresetId(runtime);
   const activeTool = useActiveTool(runtime);
   const snap = useSnap(runtime);
@@ -224,6 +226,13 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
             >
               복제
               <MenubarShortcut>{SHORTCUT_LABELS.duplicate}</MenubarShortcut>
+            </MenubarItem>
+            <MenubarItem
+              disabled={selectionCount !== 1}
+              onClick={() => runtime && startRename(runtime)}
+            >
+              이름 바꾸기
+              <MenubarShortcut>{SHORTCUT_LABELS.rename}</MenubarShortcut>
             </MenubarItem>
             <MenubarItem
               variant="destructive"

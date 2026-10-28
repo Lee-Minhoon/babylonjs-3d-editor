@@ -9,9 +9,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
 import { useSelection } from "../hooks/use-editor-state";
+import { useMeshName } from "../hooks/use-mesh-name";
 import { useMeshTransform } from "../hooks/use-mesh-transform";
 import { getShortcutKey } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
+import { MESH_NAME_INPUT_ID } from "../lib/mesh-name";
 import {
   applyTransform,
   captureTransform,
@@ -27,6 +29,7 @@ import {
 } from "../lib/transform-values";
 import type { EditorRuntime } from "./editor-viewport";
 import { MaterialSection } from "./material-section";
+import { MeshNameInput } from "./mesh-name-input";
 import { MeshIcon } from "./preset-icons";
 
 const AXES = [
@@ -219,6 +222,10 @@ type PropertiesPanelProps = {
   runtime: EditorRuntime | null;
 };
 
+function MeshNameLabel({ mesh }: { mesh: AbstractMesh }) {
+  return <span className="truncate">{useMeshName(mesh)}</span>;
+}
+
 /** 여러 개 선택: 목록만 보여준다 (함께 편집은 아직 없음, 기즈모로는 함께 움직인다) */
 function MultiSelectionSummary({
   meshes,
@@ -232,7 +239,7 @@ function MultiSelectionSummary({
         {meshes.map((mesh) => (
           <li key={mesh.uniqueId} className="flex items-center gap-2">
             <MeshIcon mesh={mesh} className="size-3.5 text-muted-foreground" />
-            <span className="truncate">{mesh.name}</span>
+            <MeshNameLabel mesh={mesh} />
           </li>
         ))}
       </ul>
@@ -261,8 +268,17 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-4 p-3">
             <div className="flex items-center gap-2">
-              <MeshIcon mesh={mesh} className="size-4 text-muted-foreground" />
-              <span className="truncate text-sm font-medium">{mesh.name}</span>
+              <MeshIcon
+                mesh={mesh}
+                className="size-4 shrink-0 text-muted-foreground"
+              />
+              <MeshNameInput
+                key={mesh.uniqueId}
+                id={MESH_NAME_INPUT_ID}
+                mesh={mesh}
+                history={runtime.history}
+                className="h-7 text-sm font-medium"
+              />
             </div>
             {/* key: 다른 메쉬를 선택하면 편집 중 상태(before)를 버린다 */}
             <TransformSection

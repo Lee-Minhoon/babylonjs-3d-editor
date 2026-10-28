@@ -138,8 +138,11 @@ function nextName(scene: Scene, preset: MeshPreset): string {
   return `${preset.label} ${next}`;
 }
 
-/** 파일에서 불러온 이름("Box 7")을 쓰면, 다음 새 메쉬 번호가 그 뒤부터 이어지게 한다. */
-function reserveName(scene: Scene, preset: MeshPreset, name: string) {
+/**
+ * 이름이 "Box 7"처럼 프리셋 번호 형식이면, 다음 새 메쉬 번호가 그 뒤부터 이어지게 한다.
+ * (파일 열기·이름 바꾸기 — 번호는 늘어나기만 하므로 겹치는 이름이 새로 생기지 않는다)
+ */
+export function reserveName(scene: Scene, preset: MeshPreset, name: string) {
   const number = Number(/ (\d+)$/.exec(name)?.[1]);
   if (!name.startsWith(`${preset.label} `) || !Number.isInteger(number)) return;
   let counters = nameCounters.get(scene);
