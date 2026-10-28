@@ -11,6 +11,11 @@ import { BabylonCanvas } from "@/components/babylon-canvas";
 import { toast } from "@/components/ui/toast";
 import { attachInspectorToggle } from "@/lib/babylon/inspector";
 
+import {
+  type Autosave,
+  createAutosave,
+  createBrowserAutosaveStorage,
+} from "../lib/autosave";
 import { type Clipboard, createClipboard } from "../lib/clipboard";
 import { bindEditorShortcuts } from "../lib/editor-shortcuts";
 import { createGroundGrid } from "../lib/ground-grid";
@@ -57,6 +62,7 @@ export type EditorRuntime = {
   tools: ToolState;
   clipboard: Clipboard;
   sceneFile: SceneFile;
+  autosave: Autosave;
 };
 
 type EditorViewportProps = {
@@ -92,6 +98,17 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           placement,
           notify: (notice) => toast.add(notice),
         });
+        const autosave = createAutosave({
+          sceneFile,
+          storage: createBrowserAutosaveStorage(),
+          onError: (title, description) =>
+            toast.add({ type: "error", title, description }),
+        });
+        // 탭이 숨겨지면(닫기·전환) 기다리던 자동 저장을 바로 남긴다
+        const onVisibilityChange = () => {
+          if (document.visibilityState === "hidden") void autosave.flush();
+        };
+        document.addEventListener("visibilitychange", onVisibilityChange);
         const unbindShortcuts = bindEditorShortcuts({
           history,
           placement,
@@ -108,11 +125,16 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           tools,
           clipboard,
           sceneFile,
+          autosave,
         });
 
         return () => {
           onRuntimeChange(null);
           unbindShortcuts();
+          // 내용은 동기로 읽어 두므로 씬이 해제되기 전에 남길 수 있다
+          void autosave.flush();
+          autosave.dispose();
+          document.removeEventListener("visibilitychange", onVisibilityChange);
           sceneFile.dispose();
           unbindPointer();
           gizmo.dispose();

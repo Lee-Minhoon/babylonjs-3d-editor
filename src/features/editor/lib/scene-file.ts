@@ -19,6 +19,7 @@ import type { Selection } from "./selection";
  * 지금 편집 중인 씬 파일(문서) 상태: 파일 이름·핸들, 저장 안 된 변경 여부, 새 씬/열기/저장.
  * 새 씬·열기는 히스토리를 비운다 (undo 대상 아님).
  * 저장 안 된 변경이 있으면 버릴지 묻는다 — 질문은 상태(confirmPending)로 내보내고 UI가 대화상자를 띄운다.
+ * 자동 저장(autosave.ts)은 serialize로 내용을 받고, 복구는 restore로 한다.
  */
 
 export type SceneFileNotice = {
@@ -40,6 +41,13 @@ export type SceneFile = {
   open(): Promise<void>;
   save(): Promise<void>;
   saveAs(): Promise<void>;
+  /** 지금 씬을 씬 파일 텍스트로 (자동 저장용) */
+  serialize(): string;
+  /**
+   * 자동 저장한 내용으로 씬을 바꾼다 (히스토리는 비움). 파일로 저장하기 전까지 "변경 있음" 상태로 둔다.
+   * 내용이 잘못됐으면 SceneFileError — 이때 씬은 그대로다.
+   */
+  restore(text: string, fileName: string | null): void;
   resolveConfirm(discard: boolean): void;
   getState(): SceneFileState;
   subscribe(onChange: () => void): () => void;
@@ -67,6 +75,8 @@ export function createSceneFile(
   let handle: FileSystemFileHandle | null = null;
   /** 저장(또는 열기) 시점의 history.peek(). 지금 값과 다르면 변경이 있는 것 */
   let savedHead: Command | null = null;
+  /** 자동 저장에서 복구한 직후: 히스토리는 비었지만 파일로는 저장되지 않은 상태 */
+  let restored = false;
   let pendingConfirm: ((discard: boolean) => void) | null = null;
   /** 피커·저장이 진행 중이면 다음 요청을 무시한다 (단축키 연타) */
   let busy = false;
@@ -80,7 +90,7 @@ export function createSceneFile(
   const emit = () => {
     state = {
       fileName,
-      dirty: history.peek() !== savedHead,
+      dirty: restored || history.peek() !== savedHead,
       confirmPending: pendingConfirm !== null,
     };
     listeners.forEach((listener) => listener());
@@ -104,6 +114,7 @@ export function createSceneFile(
     clearEditorMeshes(scene);
     load?.(scene);
     savedHead = history.peek();
+    restored = false;
   };
 
   /** busy 동안 겹쳐 실행하지 않고, 예상 못 한 에러는 알림으로 보여준다 */
@@ -137,6 +148,7 @@ export function createSceneFile(
     fileName = saved.name;
     handle = saved.handle;
     savedHead = history.peek();
+    restored = false;
     emit();
     notify({ type: "success", title: `${saved.name} 저장됨` });
   };
@@ -145,7 +157,8 @@ export function createSceneFile(
   const onBeforeUnload = (event: BeforeUnloadEvent) => {
     if (state.dirty) event.preventDefault();
   };
-  window.addEventListener("beforeunload", onBeforeUnload);
+  // (window가 없는 단위 테스트 환경에서도 만들 수 있게)
+  globalThis.addEventListener?.("beforeunload", onBeforeUnload);
 
   return {
     newScene: () =>
@@ -188,6 +201,17 @@ export function createSceneFile(
     save: () => run(() => write(false), "저장하지 못했습니다"),
     saveAs: () => run(() => write(true), "저장하지 못했습니다"),
 
+    serialize: () => stringifySceneFile(serializeScene(scene)),
+    restore(text, name) {
+      const file = parseSceneFile(text);
+      replaceScene((target) => loadSceneFile(target, file));
+      fileName = name;
+      // 파일 핸들은 복구하지 않는다 → 첫 저장 때 위치를 다시 묻는다
+      handle = null;
+      restored = true;
+      emit();
+    },
+
     resolveConfirm(discard) {
       const resolve = pendingConfirm;
       pendingConfirm = null;
@@ -203,7 +227,7 @@ export function createSceneFile(
       pendingConfirm?.(false);
       pendingConfirm = null;
       unsubscribeHistory();
-      window.removeEventListener("beforeunload", onBeforeUnload);
+      globalThis.removeEventListener?.("beforeunload", onBeforeUnload);
       listeners.clear();
     },
   };

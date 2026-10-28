@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
 import type { EditorRuntime } from "../components/editor-viewport";
+import type { AutosaveState } from "../lib/autosave";
 import type { HistoryState } from "../lib/history";
 import type { MeshPresetId } from "../lib/mesh-presets";
 import type { PlacementState } from "../lib/placement-tool";
@@ -29,6 +30,8 @@ const EMPTY_SCENE_FILE: SceneFileState = {
   confirmPending: false,
 };
 const getEmptySceneFile = () => EMPTY_SCENE_FILE;
+const EMPTY_AUTOSAVE: AutosaveState = { pending: null };
+const getEmptyAutosave = () => EMPTY_AUTOSAVE;
 
 type Runtime = EditorRuntime | null;
 
@@ -111,5 +114,15 @@ export function useSceneFileState(runtime: Runtime): SceneFileState {
     sceneFile?.subscribe ?? subscribeNoop,
     sceneFile?.getState ?? getEmptySceneFile,
     getEmptySceneFile,
+  );
+}
+
+/** 자동 저장: 복구할지 묻는 중인 기록 */
+export function useAutosaveState(runtime: Runtime): AutosaveState {
+  const autosave = runtime?.autosave;
+  return useSyncExternalStore(
+    autosave?.subscribe ?? subscribeNoop,
+    autosave?.getState ?? getEmptyAutosave,
+    getEmptyAutosave,
   );
 }
