@@ -25,6 +25,7 @@ import {
   type TransformField,
 } from "../lib/transform-values";
 import type { EditorRuntime } from "./editor-viewport";
+import { MaterialSection } from "./material-section";
 import { MeshIcon } from "./preset-icons";
 
 const AXES = [
@@ -201,7 +202,7 @@ type PropertiesPanelProps = {
   runtime: EditorRuntime | null;
 };
 
-/** 선택된 메쉬의 속성(변형) 패널 */
+/** 선택된 메쉬의 속성 패널 (변형 · 머티리얼) */
 export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
   const mesh = useSelectedMesh(runtime);
 
@@ -229,11 +230,22 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
             <p className="text-muted-foreground">
               축 이름(X/Y/Z)을 좌우로 드래그해 값을 조절할 수 있습니다.
             </p>
+            <Separator />
+            <div>
+              <h3 className="mb-2 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground uppercase">
+                머티리얼
+              </h3>
+              <MaterialSection
+                key={mesh.uniqueId}
+                mesh={mesh}
+                history={runtime.history}
+              />
+            </div>
           </div>
         </ScrollArea>
       ) : (
         <p className="p-3 text-muted-foreground">
-          메쉬를 선택하면 위치·회전·크기를 편집할 수 있습니다.
+          메쉬를 선택하면 위치·회전·크기와 머티리얼을 편집할 수 있습니다.
         </p>
       )}
     </aside>

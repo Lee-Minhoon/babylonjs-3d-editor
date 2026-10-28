@@ -1,4 +1,3 @@
-import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
@@ -6,6 +5,11 @@ import type { Scene } from "@babylonjs/core/scene";
 import type { FileTypeOptions } from "@/lib/file-access";
 
 import { captureMeshSnapshot } from "./clipboard";
+import {
+  DEFAULT_METALLIC,
+  DEFAULT_ROUGHNESS,
+  type MaterialValues,
+} from "./mesh-material";
 import {
   addPresetMesh,
   findPreset,
@@ -17,24 +21,30 @@ import {
 
 /*
  * 씬 파일(.json) 형식. 에디터 메쉬는 모두 프리셋으로 만들어지므로
- * "어떤 프리셋을 어떤 변형·색으로 놓았는지"만 저장한다 (정점 데이터·카메라·바닥은 저장하지 않음).
+ * "어떤 프리셋을 어떤 변형·머티리얼로 놓았는지"만 저장한다 (정점 데이터·카메라·바닥은 저장하지 않음).
  *
  *   {
  *     "format": "babylonjs-3d-editor/scene",
- *     "version": 1,
+ *     "version": 2,
  *     "meshes": [
  *       { "presetId": "box", "name": "Box 1", "position": [0, 0.5, 0],
- *         "rotation": [0, 45, 0], "scaling": [1, 1, 1], "color": "#4F8EF7" }
+ *         "rotation": [0, 45, 0], "scaling": [1, 1, 1],
+ *         "material": { "color": "#4F8EF7", "metallic": 0, "roughness": 0.5 } }
  *     ]
  *   }
  *
- * rotation은 도(°) 단위 오일러 각 (속성 패널과 같음). color는 머티리얼 diffuse 색, 없으면 null.
+ * rotation은 도(°) 단위 오일러 각 (속성 패널과 같음).
+ * material은 PBR metallic-roughness (color는 sRGB), 없으면 null (열 때 랜덤 색).
+ *
+ * 버전 기록:
+ *   v1  "color": "#RRGGBB" | null (StandardMaterial diffuse) → v2에서 material.color로 옮기고
+ *       metallic·roughness는 기본값
  * 형식을 바꿀 땐 SCENE_FILE_VERSION을 올리고 parseSceneFile에서 이전 버전을 변환한다.
  * 메쉬에 새 속성을 추가하면 MeshSnapshot과 함께 여기도 넣어야 저장된다.
  */
 
 export const SCENE_FILE_FORMAT = "babylonjs-3d-editor/scene";
-export const SCENE_FILE_VERSION = 1;
+export const SCENE_FILE_VERSION = 2;
 
 export const SCENE_FILE_TYPE: FileTypeOptions = {
   description: "씬 파일",
@@ -50,7 +60,7 @@ export type SceneFileMesh = {
   position: Vec3;
   rotation: Vec3;
   scaling: Vec3;
-  color: string | null;
+  material: MaterialValues | null;
 };
 
 export type SceneFileData = {
@@ -102,7 +112,10 @@ export function serializeScene(scene: Scene): SceneFileData {
         position: toVec3(transform.position),
         rotation: toVec3(rotation, DEGREES),
         scaling: toVec3(transform.scaling),
-        color: snapshot.color?.toHexString() ?? null,
+        material: snapshot.material && {
+          ...snapshot.material,
+          color: snapshot.material.color.toUpperCase(),
+        },
       },
     ];
   });
@@ -132,10 +145,62 @@ function isVec3(value: unknown): value is Vec3 {
   );
 }
 
-function parseMesh(value: unknown, index: number): SceneFileMesh {
+const isHexColor = (value: unknown): value is string =>
+  typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+
+const isUnitNumber = (value: unknown): value is number =>
+  typeof value === "number" && value >= 0 && value <= 1;
+
+function parseMaterial(value: unknown, where: string): MaterialValues | null {
+  if (value === null) return null;
+  if (!isRecord(value)) {
+    throw new SceneFileError(
+      `${where}: material은 객체 또는 null이어야 합니다.`,
+    );
+  }
+  const { color, metallic, roughness } = value;
+  if (!isHexColor(color)) {
+    throw new SceneFileError(
+      `${where}: material.color는 "#RRGGBB"여야 합니다.`,
+    );
+  }
+  for (const [key, number] of Object.entries({ metallic, roughness })) {
+    if (!isUnitNumber(number)) {
+      throw new SceneFileError(
+        `${where}: material.${key}는 0~1 사이 숫자여야 합니다.`,
+      );
+    }
+  }
+  return {
+    color,
+    metallic: metallic as number,
+    roughness: roughness as number,
+  };
+}
+
+/** v1: "color" 하나 → v2 material */
+function parseV1Color(value: unknown, where: string): MaterialValues | null {
+  if (value === null || value === undefined) return null;
+  if (!isHexColor(value)) {
+    throw new SceneFileError(
+      `${where}: color는 "#RRGGBB" 또는 null이어야 합니다.`,
+    );
+  }
+  return {
+    color: value,
+    metallic: DEFAULT_METALLIC,
+    roughness: DEFAULT_ROUGHNESS,
+  };
+}
+
+function parseMesh(
+  value: unknown,
+  index: number,
+  version: number,
+): SceneFileMesh {
   const where = `meshes[${index}]`;
   if (!isRecord(value)) throw new SceneFileError(`${where}가 객체가 아닙니다.`);
-  const { presetId, name, position, rotation, scaling, color } = value;
+  const { presetId, name, position, rotation, scaling } = value;
 
   if (typeof presetId !== "string" || !PRESET_IDS.has(presetId)) {
     throw new SceneFileError(
@@ -152,14 +217,10 @@ function parseMesh(value: unknown, index: number): SceneFileMesh {
       );
     }
   }
-  if (
-    color !== null &&
-    (typeof color !== "string" || !/^#[0-9a-f]{6}$/i.test(color))
-  ) {
-    throw new SceneFileError(
-      `${where}: color는 "#RRGGBB" 또는 null이어야 합니다.`,
-    );
-  }
+  const material =
+    version === 1
+      ? parseV1Color(value.color, where)
+      : parseMaterial(value.material ?? null, where);
 
   return {
     presetId: presetId as MeshPresetId,
@@ -167,7 +228,7 @@ function parseMesh(value: unknown, index: number): SceneFileMesh {
     position: position as Vec3,
     rotation: rotation as Vec3,
     scaling: scaling as Vec3,
-    color,
+    material,
   };
 }
 
@@ -198,7 +259,9 @@ export function parseSceneFile(text: string): SceneFileData {
   return {
     format: SCENE_FILE_FORMAT,
     version: SCENE_FILE_VERSION,
-    meshes: data.meshes.map(parseMesh),
+    meshes: data.meshes.map((mesh, index) =>
+      parseMesh(mesh, index, data.version as number),
+    ),
   };
 }
 
@@ -220,7 +283,7 @@ export function loadSceneFile(scene: Scene, file: SceneFileData) {
       scene,
       preset,
       Vector3.Zero(),
-      entry.color ? Color3.FromHexString(entry.color) : undefined,
+      entry.material ?? undefined,
       entry.name,
     );
     mesh.position = Vector3.FromArray(entry.position);

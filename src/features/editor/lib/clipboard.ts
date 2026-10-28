@@ -1,10 +1,9 @@
-import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
-import type { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
 
+import { getMaterialValues, type MaterialValues } from "./mesh-material";
 import {
   addPresetMesh,
   findPreset,
@@ -24,20 +23,17 @@ import {
 export type MeshSnapshot = {
   presetId: MeshPresetId;
   transform: TransformSnapshot;
-  color: Color3 | null;
+  /** null이면 새 메쉬처럼 랜덤 값 */
+  material: MaterialValues | null;
 };
 
 export function captureMeshSnapshot(mesh: AbstractMesh): MeshSnapshot | null {
   const presetId = getPresetId(mesh);
   if (!presetId) return null;
-  const material = mesh.material;
   return {
     presetId,
     transform: captureTransform(mesh),
-    color:
-      material instanceof StandardMaterial
-        ? material.diffuseColor.clone()
-        : null,
+    material: getMaterialValues(mesh),
   };
 }
 
@@ -53,7 +49,7 @@ export function createMeshFromSnapshot(
     scene,
     preset,
     Vector3.Zero(),
-    snapshot.color ?? undefined,
+    snapshot.material ?? undefined,
   );
   applyTransform(mesh, snapshot.transform);
   mesh.position.addInPlace(offset);

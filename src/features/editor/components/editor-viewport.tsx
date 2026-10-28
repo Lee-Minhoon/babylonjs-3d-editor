@@ -2,6 +2,7 @@
 
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
+import { CubeTexture } from "@babylonjs/core/Materials/Textures/cubeTexture";
 import { Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
@@ -38,6 +39,11 @@ function setupScene(scene: Scene) {
   camera.attachControl(scene.getEngine().getRenderingCanvas(), true);
 
   new HemisphericLight("light", new Vector3(0.3, 1, 0.2), scene);
+  // PBR 반사·간접광용 환경 (스카이박스로 보여주진 않음). 금속은 이게 없으면 검게 보인다.
+  scene.environmentTexture = CubeTexture.CreateFromPrefilteredData(
+    "/environments/studio.env",
+    scene,
+  );
 
   createGroundGrid(scene);
 }

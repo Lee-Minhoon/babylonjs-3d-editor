@@ -1,5 +1,3 @@
-import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
-import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
@@ -11,6 +9,12 @@ import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
 import { CreateTorus } from "@babylonjs/core/Meshes/Builders/torusBuilder";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
+
+import {
+  createMeshMaterial,
+  type MaterialValues,
+  randomMaterialValues,
+} from "./mesh-material";
 
 export type MeshPresetId =
   | "box"
@@ -149,15 +153,15 @@ export function resetMeshNames(scene: Scene) {
 }
 
 /**
- * 프리셋 메쉬를 씬에 추가한다. 머티리얼은 메쉬마다 별도로 만들고 랜덤 색을 준다.
+ * 프리셋 메쉬를 씬에 추가한다. 머티리얼(PBR)은 메쉬마다 별도로 만든다.
  * @param surfacePoint 메쉬 밑면이 닿을 표면 위의 점 (바닥 또는 다른 메쉬 윗면)
  */
 export function addPresetMesh(
   scene: Scene,
   preset: MeshPreset,
   surfacePoint: Vector3,
-  /** 지정하지 않으면 랜덤 색 (복사·복제는 원본 색을 넘긴다) */
-  color?: Color3,
+  /** 지정하지 않으면 랜덤 색 (복사·복제·파일 열기는 원본 값을 넘긴다) */
+  material: MaterialValues = randomMaterialValues(),
   /** 지정하지 않으면 "Box 3"처럼 새 번호 (파일 열기는 저장된 이름을 넘긴다) */
   name?: string,
 ): Mesh {
@@ -170,10 +174,7 @@ export function addPresetMesh(
     surfacePoint.z,
   );
 
-  const material = new StandardMaterial(`${name} Material`, scene);
-  material.diffuseColor =
-    color?.clone() ?? Color3.FromHSV(Math.random() * 360, 0.5, 0.9);
-  mesh.material = material;
+  mesh.material = createMeshMaterial(`${name} Material`, scene, material);
 
   mesh.metadata = {
     editor: { presetId: preset.id },
