@@ -44,12 +44,16 @@ export function useHistoryState(runtime: Runtime): HistoryState {
   );
 }
 
-export function useSelectedMesh(runtime: Runtime): AbstractMesh | null {
+const EMPTY_SELECTION: readonly AbstractMesh[] = [];
+const getEmptySelection = () => EMPTY_SELECTION;
+
+/** 선택된 메쉬들 (고른 순서, 마지막이 primary) */
+export function useSelection(runtime: Runtime): readonly AbstractMesh[] {
   const selection = runtime?.selection;
   return useSyncExternalStore(
     selection?.subscribe ?? subscribeNoop,
-    selection?.getSelected ?? getNull,
-    getNull,
+    selection?.getMeshes ?? getEmptySelection,
+    getEmptySelection,
   );
 }
 

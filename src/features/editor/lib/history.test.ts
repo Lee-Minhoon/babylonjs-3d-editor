@@ -1,6 +1,11 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { type Command, createHistory } from "./history";
+import {
+  type Command,
+  createHistory,
+  createMacroCommand,
+  macroLabel,
+} from "./history";
 
 /** 실행/되돌리기 횟수와 dispose 여부를 기록하는 Command */
 function trackedCommand(label: string) {
@@ -104,5 +109,44 @@ describe("createHistory", () => {
   test("getState는 변경이 없으면 같은 객체 (useSyncExternalStore 요구 사항)", () => {
     const history = createHistory();
     expect(history.getState()).toBe(history.getState());
+  });
+});
+
+describe("createMacroCommand", () => {
+  test("순서대로 실행하고 역순으로 되돌린다, undo 한 번", () => {
+    const order: string[] = [];
+    const step = (name: string): Command => ({
+      label: name,
+      execute: () => void order.push(`do ${name}`),
+      undo: () => void order.push(`undo ${name}`),
+    });
+    const history = createHistory();
+    const commands = [step("a"), step("b"), step("c")];
+    history.execute(createMacroCommand(macroLabel(commands, "삭제"), commands));
+    expect(history.getState().undoLabel).toBe("메쉬 3개 삭제");
+
+    history.undo();
+    expect(order).toEqual([
+      "do a",
+      "do b",
+      "do c",
+      "undo c",
+      "undo b",
+      "undo a",
+    ]);
+    expect(history.getState().undoLabel).toBeNull();
+  });
+
+  test("dispose는 묶인 Command 모두에 전달된다", () => {
+    const a = trackedCommand("A");
+    const b = trackedCommand("B");
+    createMacroCommand("묶음", [a.command, b.command]).dispose?.();
+    expect([a.calls.dispose, b.calls.dispose]).toEqual([1, 1]);
+  });
+
+  test("하나뿐이면 그 Command 그대로 (라벨도 그대로)", () => {
+    const a = trackedCommand("Box 1 삭제");
+    expect(createMacroCommand("무시됨", [a.command])).toBe(a.command);
+    expect(macroLabel([a.command], "삭제")).toBe("Box 1 삭제");
   });
 });

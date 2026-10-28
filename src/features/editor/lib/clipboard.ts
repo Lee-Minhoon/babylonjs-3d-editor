@@ -56,31 +56,39 @@ export function createMeshFromSnapshot(
   return mesh;
 }
 
+/** 에디터 메쉬들의 스냅샷 (에디터 메쉬가 아닌 것은 건너뛴다) */
+export function captureMeshSnapshots(
+  meshes: readonly AbstractMesh[],
+): MeshSnapshot[] {
+  return meshes.flatMap((mesh) => captureMeshSnapshot(mesh) ?? []);
+}
+
 /**
- * 에디터 내부 클립보드 (시스템 클립보드는 쓰지 않는다).
+ * 에디터 내부 클립보드 (시스템 클립보드는 쓰지 않는다). 여러 메쉬를 한 번에 담는다.
  * 붙여넣을 위치는 배치 모드에서 사용자가 고른다 (placement.startSnapshot).
  */
 export type Clipboard = {
-  copy(mesh: AbstractMesh): boolean;
-  get(): MeshSnapshot | null;
+  /** 복사할 에디터 메쉬가 하나도 없으면 false (클립보드는 그대로) */
+  copy(meshes: readonly AbstractMesh[]): boolean;
+  get(): readonly MeshSnapshot[] | null;
   hasContent(): boolean;
   subscribe(onChange: () => void): () => void;
 };
 
 export function createClipboard(): Clipboard {
-  let snapshot: MeshSnapshot | null = null;
+  let snapshots: readonly MeshSnapshot[] | null = null;
   const listeners = new Set<() => void>();
 
   return {
-    copy(mesh) {
-      const next = captureMeshSnapshot(mesh);
-      if (!next) return false;
-      snapshot = next;
+    copy(meshes) {
+      const next = captureMeshSnapshots(meshes);
+      if (next.length === 0) return false;
+      snapshots = next;
       listeners.forEach((listener) => listener());
       return true;
     },
-    get: () => snapshot,
-    hasContent: () => snapshot !== null,
+    get: () => snapshots,
+    hasContent: () => snapshots !== null,
     subscribe(onChange) {
       listeners.add(onChange);
       return () => listeners.delete(onChange);

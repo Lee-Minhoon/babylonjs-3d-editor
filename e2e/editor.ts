@@ -35,13 +35,18 @@ export async function placePreset(page: Page, digit: string, dx = 0, dy = 0) {
   await page.keyboard.press("Escape");
 }
 
-/** 사이드바 씬 목록의 메쉬 이름들 */
+/** 사이드바 씬 목록의 항목들 (속성 패널의 여러 개 선택 목록과 구분) */
 export function sceneList(page: Page) {
-  return page.locator("aside li");
+  return page.getByRole("list", { name: "씬 메쉬" }).getByRole("listitem");
 }
 
 export async function expectScene(page: Page, names: string[]) {
-  await expect(sceneList(page)).toHaveText(names);
+  // 비어 있으면 목록 자체가 없고 안내 문구가 나온다
+  if (names.length === 0) {
+    await expect(page.getByText("아직 추가된 메쉬가 없습니다.")).toBeVisible();
+  } else {
+    await expect(sceneList(page)).toHaveText(names);
+  }
 }
 
 export async function selectMesh(page: Page, name: string) {

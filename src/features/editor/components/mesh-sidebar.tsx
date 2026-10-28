@@ -13,7 +13,7 @@ import { useSceneMeshes } from "@/hooks/use-scene-meshes";
 import {
   useActivePresetId,
   usePlacementState,
-  useSelectedMesh,
+  useSelection,
 } from "../hooks/use-editor-state";
 import { getPresetShortcut, SHORTCUT_LABELS } from "../lib/editor-shortcuts";
 import { createRemoveMeshCommand } from "../lib/mesh-commands";
@@ -51,7 +51,7 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
     .toSorted((a, b) => a.uniqueId - b.uniqueId);
   const activePresetId = useActivePresetId(runtime);
   const placement = usePlacementState(runtime);
-  const selectedMesh = useSelectedMesh(runtime);
+  const selected = useSelection(runtime);
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">
@@ -99,8 +99,9 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
             </>
           ) : placement?.kind === "snapshot" ? (
             <>
-              놓을 위치를 클릭해 {placement.verb} ·{" "}
-              <RotateHint yaw={placement.yaw} /> ·{" "}
+              놓을 위치를 클릭해{" "}
+              {placement.count > 1 && `메쉬 ${placement.count}개 `}
+              {placement.verb} · <RotateHint yaw={placement.yaw} /> ·{" "}
               <Kbd>{SHORTCUT_LABELS.deselect}</Kbd> / 우클릭 취소
             </>
           ) : (
@@ -121,9 +122,9 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
           </p>
         ) : (
           <ScrollArea className="min-h-0 flex-1 pr-3">
-            <ul className="-mx-1 space-y-0.5">
+            <ul aria-label="씬 메쉬" className="-mx-1 space-y-0.5">
               {meshes.map((mesh) => {
-                const isSelected = mesh === selectedMesh;
+                const isSelected = selected.includes(mesh);
                 return (
                   <li
                     key={mesh.uniqueId}
@@ -137,7 +138,14 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
                       variant="ghost"
                       className="h-full flex-1 justify-start gap-2 px-1.5 font-normal hover:bg-transparent dark:hover:bg-transparent"
                       aria-pressed={isSelected}
-                      onClick={() => runtime?.selection.select(mesh)}
+                      // Shift·⌘/Ctrl+클릭: 선택에 넣고 빼기 (뷰포트와 같음)
+                      onClick={(event) => {
+                        if (event.shiftKey || event.metaKey || event.ctrlKey) {
+                          runtime?.selection.toggle(mesh);
+                        } else {
+                          runtime?.selection.select(mesh);
+                        }
+                      }}
                     >
                       <MeshIcon
                         mesh={mesh}

@@ -31,10 +31,10 @@ describe("clipboard", () => {
   test("원본을 해제해도 붙여넣을 수 있다 (메쉬가 아니라 데이터를 담는다)", () => {
     const clipboard = createClipboard();
     const source = createSource();
-    expect(clipboard.copy(source)).toBe(true);
+    expect(clipboard.copy([source])).toBe(true);
     source.dispose();
 
-    const snapshot = clipboard.get()!;
+    const [snapshot] = clipboard.get()!;
     const pasted = createMeshFromSnapshot(
       scene,
       snapshot,
@@ -60,7 +60,14 @@ describe("clipboard", () => {
   test("에디터 메쉬가 아니면 복사하지 않는다", () => {
     const clipboard = createClipboard();
     const plain = CreateBox("plain", {}, scene);
-    expect(clipboard.copy(plain)).toBe(false);
+    expect(clipboard.copy([plain])).toBe(false);
     expect(clipboard.hasContent()).toBe(false);
+  });
+
+  test("여러 개를 한 번에 담고, 에디터 메쉬가 아닌 것은 건너뛴다", () => {
+    const clipboard = createClipboard();
+    const plain = CreateBox("plain-2", {}, scene);
+    expect(clipboard.copy([createSource(), plain, createSource()])).toBe(true);
+    expect(clipboard.get()).toHaveLength(2);
   });
 });

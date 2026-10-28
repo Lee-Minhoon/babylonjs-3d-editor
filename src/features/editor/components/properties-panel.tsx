@@ -8,7 +8,7 @@ import { NumberField } from "@base-ui/react/number-field";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
-import { useSelectedMesh } from "../hooks/use-editor-state";
+import { useSelection } from "../hooks/use-editor-state";
 import { useMeshTransform } from "../hooks/use-mesh-transform";
 import { getShortcutKey } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
@@ -219,9 +219,35 @@ type PropertiesPanelProps = {
   runtime: EditorRuntime | null;
 };
 
+/** 여러 개 선택: 목록만 보여준다 (함께 편집은 아직 없음, 기즈모로는 함께 움직인다) */
+function MultiSelectionSummary({
+  meshes,
+}: {
+  meshes: readonly AbstractMesh[];
+}) {
+  return (
+    <div className="space-y-3 p-3">
+      <div className="text-sm font-medium">메쉬 {meshes.length}개 선택됨</div>
+      <ul className="space-y-1">
+        {meshes.map((mesh) => (
+          <li key={mesh.uniqueId} className="flex items-center gap-2">
+            <MeshIcon mesh={mesh} className="size-3.5 text-muted-foreground" />
+            <span className="truncate">{mesh.name}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-muted-foreground">
+        기즈모로 함께 이동·회전·크기 조절할 수 있습니다. 값을 직접 입력하려면
+        메쉬 하나만 선택하세요.
+      </p>
+    </div>
+  );
+}
+
 /** 선택된 메쉬의 속성 패널 (변형 · 머티리얼) */
 export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
-  const mesh = useSelectedMesh(runtime);
+  const selected = useSelection(runtime);
+  const mesh = selected.length === 1 ? selected[0] : null;
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-l border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">
@@ -259,6 +285,10 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
               />
             </div>
           </div>
+        </ScrollArea>
+      ) : selected.length > 1 ? (
+        <ScrollArea className="min-h-0 flex-1">
+          <MultiSelectionSummary meshes={selected} />
         </ScrollArea>
       ) : (
         <p className="p-3 text-muted-foreground">

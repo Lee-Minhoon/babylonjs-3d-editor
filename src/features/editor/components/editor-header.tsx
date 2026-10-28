@@ -36,7 +36,7 @@ import {
   useClipboardHasContent,
   useHistoryState,
   useSceneFileState,
-  useSelectedMesh,
+  useSelection,
   useSnap,
 } from "../hooks/use-editor-state";
 import {
@@ -117,7 +117,7 @@ type EditorHeaderProps = {
 /** 상단 헤더: 앱 이름 · 메뉴바(파일/편집/추가/보기) · 실행 취소/다시 실행 · 파일 이름 · 렌더러 표시 */
 export function EditorHeader({ runtime }: EditorHeaderProps) {
   const { undoLabel, redoLabel } = useHistoryState(runtime);
-  const selected = useSelectedMesh(runtime);
+  const hasSelection = useSelection(runtime).length > 0;
   const activePresetId = useActivePresetId(runtime);
   const activeTool = useActiveTool(runtime);
   const snap = useSnap(runtime);
@@ -198,14 +198,14 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
             </MenubarItem>
             <MenubarSeparator />
             <MenubarItem
-              disabled={!selected}
+              disabled={!hasSelection}
               onClick={() => runtime && cutSelected(runtime)}
             >
               잘라내기
               <MenubarShortcut>{SHORTCUT_LABELS.cut}</MenubarShortcut>
             </MenubarItem>
             <MenubarItem
-              disabled={!selected}
+              disabled={!hasSelection}
               onClick={() => runtime && copySelected(runtime)}
             >
               복사
@@ -219,7 +219,7 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
               <MenubarShortcut>{SHORTCUT_LABELS.paste}</MenubarShortcut>
             </MenubarItem>
             <MenubarItem
-              disabled={!selected}
+              disabled={!hasSelection}
               onClick={() => runtime && duplicateSelected(runtime)}
             >
               복제
@@ -227,7 +227,7 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
             </MenubarItem>
             <MenubarItem
               variant="destructive"
-              disabled={!selected}
+              disabled={!hasSelection}
               onClick={() => runtime && deleteSelected(runtime)}
             >
               삭제
@@ -238,7 +238,7 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
               전체 선택
             </PlannedItem>
             <MenubarItem
-              disabled={!selected}
+              disabled={!hasSelection}
               onClick={() => runtime?.selection.select(null)}
             >
               선택 해제

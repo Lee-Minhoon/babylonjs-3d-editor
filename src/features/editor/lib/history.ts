@@ -98,3 +98,27 @@ export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
     },
   };
 }
+
+/**
+ * 여러 Command를 undo 한 번으로 묶는다 (여러 메쉬 삭제·붙여넣기·함께 이동 등).
+ * 실행은 순서대로, 되돌리기는 역순. Command가 하나면 그것을 그대로 돌려준다.
+ */
+export function createMacroCommand(
+  label: string,
+  commands: readonly Command[],
+): Command {
+  if (commands.length === 1) return commands[0];
+  return {
+    label,
+    execute: () => commands.forEach((command) => command.execute()),
+    undo: () => commands.toReversed().forEach((command) => command.undo()),
+    dispose: () => commands.forEach((command) => command.dispose?.()),
+  };
+}
+
+/** 여러 메쉬 동작 라벨: 하나면 그 Command 라벨("Box 1 삭제"), 여럿이면 "메쉬 3개 삭제" */
+export function macroLabel(commands: readonly Command[], verb: string): string {
+  return commands.length === 1
+    ? commands[0].label
+    : `메쉬 ${commands.length}개 ${verb}`;
+}

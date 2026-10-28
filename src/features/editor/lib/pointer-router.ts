@@ -12,7 +12,7 @@ import type { TransformGizmo } from "./transform-gizmo";
  *
  *   1. 기즈모 위 / 드래그 중  → 기즈모가 처리 (여기선 아무것도 안 함)
  *   2. 배치 모드              → 좌클릭 배치, 우클릭 종료, 이동 시 미리보기 갱신
- *   3. 그 외                  → 좌클릭으로 선택 / 빈 곳이면 해제
+ *   3. 그 외                  → 좌클릭으로 선택 / 빈 곳이면 해제. Shift·⌘/Ctrl+클릭은 선택에 넣고 빼기
  *
  * 클릭은 POINTERTAP(거의 움직이지 않은 클릭)만 본다 — 드래그는 카메라 조작이다.
  */
@@ -44,12 +44,15 @@ export function bindPointerRouter(
       info.type === PointerEventTypes.POINTERDOUBLETAP;
     if (!isTap || gizmo.isPointerOver()) return;
 
-    const button = (info.event as PointerEvent).button;
+    const event = info.event as PointerEvent;
+    const button = event.button;
     if (isPlacing) {
       if (button === LEFT_BUTTON) placement.place();
       else if (button === RIGHT_BUTTON) placement.cancel();
     } else if (button === LEFT_BUTTON) {
-      selection.selectAtPointer();
+      selection.selectAtPointer(
+        event.shiftKey || event.metaKey || event.ctrlKey,
+      );
     }
   });
 

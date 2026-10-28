@@ -1,8 +1,10 @@
 import { GizmoManager } from "@babylonjs/core/Gizmos/gizmoManager";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import type { Scene } from "@babylonjs/core/scene";
 
-import type { History } from "./history";
+import { createMacroCommand, type History, macroLabel } from "./history";
 import type { PlacementTool } from "./placement-tool";
 import type { Selection } from "./selection";
 import { type ToolState, type TransformTool } from "./tools";
@@ -16,7 +18,9 @@ import {
 /**
  * 선택된 메쉬에 이동/회전/크기 기즈모를 붙인다.
  * 표시 조건: 선택된 메쉬가 있고, 도구가 move/rotate/scale이고, 배치 모드가 아닐 때.
- * 드래그가 끝날 때마다 변형 Command를 history에 한 번 기록한다.
+ * 여러 개를 선택하면 묶음 중심의 피벗(TransformNode)에 기즈모를 붙이고, 드래그하는 동안만
+ * 메쉬들을 피벗의 자식으로 만들어 함께 움직인다 (setParent는 월드 변형을 유지한다).
+ * 드래그가 끝날 때마다 변형 Command를 history에 한 번 기록한다 (여러 개면 묶어서 하나).
  */
 export type TransformGizmo = {
   /** 커서가 기즈모 위에 있거나 드래그 중이면 true → 뷰포트 클릭을 기즈모가 가져간다 */
@@ -52,7 +56,9 @@ export function createTransformGizmo(
   manager.usePointerToAttachGizmos = false;
   manager.clearGizmoOnEmptyPointerEvent = false;
 
-  let dragStart: { mesh: AbstractMesh; before: TransformSnapshot } | null =
+  /** 여러 개 선택용 피벗. 선택이 바뀔 때마다 묶음 중심으로 옮기고 회전·크기를 초기화한다 */
+  const pivot = new TransformNode("__selection-pivot", scene);
+  let dragStart: { mesh: AbstractMesh; before: TransformSnapshot }[] | null =
     null;
   const observed = new WeakSet<DraggableGizmo>();
 
@@ -64,25 +70,63 @@ export function createTransformGizmo(
     if (!gizmo || observed.has(gizmo)) return;
     observed.add(gizmo);
     gizmo.onDragStartObservable.add(() => {
-      const mesh = selection.getSelected();
-      dragStart = mesh ? { mesh, before: captureTransform(mesh) } : null;
+      const meshes = selection.getMeshes();
+      dragStart = meshes.map((mesh) => ({
+        mesh,
+        before: captureTransform(mesh),
+      }));
+      if (meshes.length > 1) {
+        for (const mesh of meshes) mesh.setParent(pivot);
+      }
     });
     gizmo.onDragEndObservable.add(() => {
       if (!dragStart) return;
-      const { mesh, before } = dragStart;
+      const started = dragStart;
       dragStart = null;
-      const after = captureTransform(mesh);
-      if (isSameTransform(before, after)) return;
-      history.execute(
-        createTransformCommand(mesh, KIND_BY_TOOL[tool], before, after),
-      );
+      if (started.length > 1) {
+        for (const { mesh } of started) mesh.setParent(null);
+      }
+
+      const kind = KIND_BY_TOOL[tool];
+      const commands = started.flatMap(({ mesh, before }) => {
+        const after = captureTransform(mesh);
+        return isSameTransform(before, after)
+          ? []
+          : [createTransformCommand(mesh, kind, before, after)];
+      });
+      if (commands.length > 0) {
+        history.execute(
+          createMacroCommand(macroLabel(commands, kind), commands),
+        );
+      }
+      // 다음 드래그를 위해 피벗을 새 중심으로 (회전·크기는 초기화)
+      if (started.length > 1) sync();
     });
   }
 
+  /** 피벗을 메쉬들의 월드 바운딩 박스 중심에 둔다 */
+  function placePivot(meshes: readonly AbstractMesh[]) {
+    const min = new Vector3(Infinity, Infinity, Infinity);
+    const max = new Vector3(-Infinity, -Infinity, -Infinity);
+    for (const mesh of meshes) {
+      mesh.computeWorldMatrix(true);
+      const box = mesh.getBoundingInfo().boundingBox;
+      min.minimizeInPlace(box.minimumWorld);
+      max.maximizeInPlace(box.maximumWorld);
+    }
+    pivot.position.copyFrom(min.add(max).scale(0.5));
+    pivot.rotationQuaternion = null;
+    pivot.rotation.setAll(0);
+    pivot.scaling.setAll(1);
+  }
+
   function sync() {
+    // 드래그 중에 선택이 바뀌는 일은 없지만, 피벗을 옮기면 자식이 따라가므로 막아 둔다
+    if (dragStart) return;
     const tool = tools.getTool();
-    const mesh = selection.getSelected();
-    const visible = mesh !== null && tool !== "select" && !placement.isActive();
+    const meshes = selection.getMeshes();
+    const visible =
+      meshes.length > 0 && tool !== "select" && !placement.isActive();
 
     manager.positionGizmoEnabled = visible && tool === "move";
     manager.rotationGizmoEnabled = visible && tool === "rotate";
@@ -95,7 +139,14 @@ export function createTransformGizmo(
     observe(manager.gizmos.rotationGizmo, "rotate");
     observe(manager.gizmos.scaleGizmo, "scale");
 
-    manager.attachToMesh(visible ? mesh : null);
+    if (!visible) {
+      manager.attachToNode(null);
+    } else if (meshes.length === 1) {
+      manager.attachToMesh(meshes[0]);
+    } else {
+      placePivot(meshes);
+      manager.attachToNode(pivot);
+    }
   }
 
   const unsubscribers = [
@@ -110,6 +161,7 @@ export function createTransformGizmo(
     dispose() {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
       manager.dispose();
+      pivot.dispose();
     },
   };
 }

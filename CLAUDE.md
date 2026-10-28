@@ -82,20 +82,21 @@ src/
 
 ## 에디터 구조 (`src/features/editor`)
 
-- 뷰포트가 씬과 함께 도구들을 만들어 `EditorRuntime`(`{ scene, history, placement, selection, tools, clipboard, sceneFile, autosave }`)으로 UI에 넘긴다. 도구는 순수 TS 객체(`lib/`)이고, React는 `subscribe`/`getX`를 `useSyncExternalStore`로 구독만 한다. 구독 훅은 `hooks/use-editor-state.ts`(`useHistoryState`, `useSelectedMesh`, `useActivePresetId`, `useActiveTool`, `useSnap`, `useSceneFileState` …). Babylon 객체 값 구독은 `use-mesh-transform.ts`·`use-mesh-material.ts`에 모아 두고, 컴포넌트마다 다시 만들지 않는다.
+- 뷰포트가 씬과 함께 도구들을 만들어 `EditorRuntime`(`{ scene, history, placement, selection, tools, clipboard, sceneFile, autosave }`)으로 UI에 넘긴다. 도구는 순수 TS 객체(`lib/`)이고, React는 `subscribe`/`getX`를 `useSyncExternalStore`로 구독만 한다. 구독 훅은 `hooks/use-editor-state.ts`(`useHistoryState`, `useSelection`, `useActivePresetId`, `useActiveTool`, `useSnap`, `useSceneFileState` …). Babylon 객체 값 구독은 `use-mesh-transform.ts`·`use-mesh-material.ts`에 모아 두고, 컴포넌트마다 다시 만들지 않는다.
 - 레이아웃: 상단 `editor-header`(메뉴바: 파일/편집/추가/보기 + undo/redo), 왼쪽 `mesh-sidebar`, 가운데 뷰포트 + `transform-toolbar`, 오른쪽 `properties-panel`.
 - 단축키 처리기는 입력창과 대화상자(`role=dialog/alertdialog`) 안의 키를 무시한다.
 - 단축키·메뉴·버튼이 공유하는 동작은 `lib/editor-actions.ts`에 둔다 (예: `deleteSelected`). 입력 경로마다 로직을 따로 쓰지 않는다.
 - 메뉴에 아직 없는 기능(예약 키)은 `PlannedItem`으로 비활성 "준비 중" 표시. 기능을 붙일 때 `MenubarItem`으로 바꾸고 단축키를 `editor-shortcuts.ts`에 연결한다.
 - 활성 도구(`tools`): `select | move | rotate | scale` (Q/W/E/R). 배치 모드는 그 위에 잠깐 덮어쓰는 모드다. 기즈모는 선택된 메쉬 + move/rotate/scale + 배치 모드 아님일 때만 보인다.
 - **뷰포트 포인터 입력은 `lib/pointer-router.ts` 한 곳에서만 받는다.** 우선순위: 기즈모 위/드래그 중 → 배치 모드 → 선택. 새 도구가 클릭을 받아야 하면 `scene.onPointerObservable`을 직접 구독하지 말고 라우터에 분기를 추가한다 (기즈모 클릭이 선택 해제로 새는 식의 충돌 방지).
-- 기즈모 드래그는 시작/끝 스냅샷으로 **드래그 한 번 = 변형 Command 하나**를 기록한다 (`transform-command.ts`).
+- 기즈모 드래그는 시작/끝 스냅샷으로 **드래그 한 번 = 변형 Command 하나**를 기록한다 (`transform-command.ts`). 여러 개 선택이면 묶음 중심의 피벗(`TransformNode`)에 기즈모를 붙이고, 드래그 동안만 메쉬들을 피벗 자식으로 만들어(`setParent`) 함께 움직인 뒤 Command 하나로 묶는다.
 - 위치 스냅: `tools.getActiveSnap()` (켜져 있으면 단위, 꺼져 있으면 `null`). 단위는 `SNAP_STEPS`(0.1/0.25/0.5/1, 기본 0.5, `lib/tools.ts`)에서 툴바 드롭다운·보기 메뉴로 고른다. 배치는 X/Z를 절대 격자에 맞추고(`snapValue`), 이동 기즈모는 Babylon `snapDistance`(변화량 단위)를 쓴다. 새 위치 입력 도구도 `getActiveSnap()`을 따른다.
 - 속성 패널 숫자 입력(`@base-ui/react/number-field`)도 같은 원칙: `onValueChange`에서는 메쉬에 바로 적용(미리보기, 기록 없음), `onValueCommitted`에서 편집 시작 전 스냅샷과 비교해 Command 하나. Enter는 blur로 커밋, Esc는 취소. `editor-shortcuts`는 입력창을 건너뛰므로 **입력창 안의 ⌘Z/⌘⇧Z는 필드가 직접 처리**한다 (편집 중이면 취소, 아니면 history undo/redo).
 - 패널 표시값은 Babylon 객체를 직접 구독해서 얻는다 (`hooks/use-mesh-transform.ts`, `onAfterWorldMatrixUpdateObservable`). React state에 복사해 두지 않는다 — 기즈모·undo·입력 어디서 바뀌든 한 경로로 반영된다.
 - **씬을 바꾸는 동작은 반드시 Command로 만들어 `history.execute()`로 실행**한다 (undo/redo 대상). 메쉬를 직접 `dispose()`하지 않는다 — 삭제는 `createRemoveMeshCommand`.
-- 선택(`selection`)은 히스토리에 기록하지 않는다. 선택된 메쉬가 씬에서 빠지면 자동 해제된다.
-- 클립보드(`lib/clipboard.ts`)는 에디터 내부 전용이고, 메쉬 객체가 아니라 **다시 만들 수 있는 데이터(`MeshSnapshot`: 프리셋·변형·머티리얼)**를 담는다 → 잘라낸 원본이 해제돼도 붙여넣을 수 있다. 복사는 히스토리에 기록하지 않고, 잘라내기는 삭제 Command. **붙여넣기·복제는 바로 만들지 않고 배치 모드(`placement.startSnapshot`)로 들어간다** — 원본의 회전·크기를 입힌 미리보기가 커서를 따라다니고, 클릭 한 번에 놓인 뒤(Command, undo 가능) 놓은 메쉬가 선택되며 모드가 끝난다. 프리셋 배치(`toggle`)는 Esc까지 계속 놓는다. 배치 중 R/⇧R로 미리보기를 월드 Y축 90°씩 돌리고(복사본은 원본 회전 위에 더함), 돌릴 때마다 밑면 높이를 다시 잰다. 프리셋을 바꿔도 각도는 유지된다. 새로 메쉬를 만드는 동작은 `createSpawnMeshCommand`를 쓰고, 만든 메쉬는 `getMesh()`로 받는다. 배치 중인지는 `placement.isActive()`로 판단한다 (`getActivePresetId()`는 프리셋 배치일 때만 값이 있다). 메쉬에 새 속성을 추가하면 `MeshSnapshot`에도 넣어야 복사된다.
+- 선택(`selection`)은 **여러 개**다: `getMeshes()`(고른 순서), `getPrimary()`(마지막으로 고른 것 — 속성 패널·단일 기즈모 기준). 클릭은 하나만 선택, **Shift·⌘/Ctrl+클릭은 넣고 빼기** (뷰포트·씬 목록 같음). 속성 패널은 하나일 때만 편집하고, 여러 개면 목록만 보여준다. 선택은 히스토리에 기록하지 않는다. 선택된 메쉬가 씬에서 빠지면 선택에서도 빠진다.
+- **여러 메쉬에 하는 동작은 `createMacroCommand`로 묶어 undo 한 번**이 되게 한다 (`history.ts`, 라벨은 `macroLabel` — 하나면 "Box 1 삭제", 여럿이면 "메쉬 3개 삭제"). 선택을 대상으로 하는 새 동작도 `selection.getMeshes()` 전체에 적용한다.
+- 클립보드(`lib/clipboard.ts`)는 에디터 내부 전용이고 여러 메쉬를 한 번에 담는다. 메쉬 객체가 아니라 **다시 만들 수 있는 데이터(`MeshSnapshot`: 프리셋·변형·머티리얼)**를 담는다 → 잘라낸 원본이 해제돼도 붙여넣을 수 있다. 복사는 히스토리에 기록하지 않고, 잘라내기는 삭제 Command. **붙여넣기·복제는 바로 만들지 않고 배치 모드(`placement.startSnapshot`)로 들어간다** — 원본의 회전·크기를 입힌 미리보기가 커서를 따라다니고(여러 개면 서로의 위치 관계를 유지한 묶음 — 기준점은 첫 메쉬의 X/Z와 묶음 밑면), 클릭 한 번에 놓인 뒤(Command 하나, undo 가능) 놓은 메쉬들이 선택되며 모드가 끝난다. 프리셋 배치(`toggle`)는 Esc까지 계속 놓는다. 배치 중 R/⇧R로 미리보기를 월드 Y축 90°씩 돌리고(복사본은 원본 회전 위에 더함), 돌릴 때마다 밑면 높이를 다시 잰다. 프리셋을 바꿔도 각도는 유지된다. 새로 메쉬를 만드는 동작은 `createSpawnMeshCommand`를 쓰고, 만든 메쉬는 `getMesh()`로 받는다. 배치 중인지는 `placement.isActive()`로 판단한다 (`getActivePresetId()`는 프리셋 배치일 때만 값이 있다). 메쉬에 새 속성을 추가하면 `MeshSnapshot`에도 넣어야 복사된다.
 - 머티리얼은 **PBR(metallic-roughness)만 지원**한다 (`lib/mesh-material.ts`, glTF와 같은 방식). 메쉬마다 `PBRMaterial` 하나 (공유 머티리얼 없음). 값은 `MaterialValues`(`color` sRGB hex · `metallic` · `roughness`)이고 머티리얼엔 선형 공간으로 넣는다. StandardMaterial은 에디터 내부 표시용(배치 미리보기 등)에만 쓴다.
   - 머티리얼 값을 바꾸는 곳(미리보기·Command·파일 열기)은 모두 `applyMaterialValues`를 거친다 → 패널은 `useMeshMaterial`(`onMaterialChange`)로 구독. 머티리얼 속성을 직접 대입하지 않는다.
   - 패널 편집은 변형 입력과 같은 원칙: 고르는 중·드래그 중은 미리보기, 커밋(색상 창 닫기·슬라이더 놓기·hex Enter)에서 `createMaterialCommand` 하나.
