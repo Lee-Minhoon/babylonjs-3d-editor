@@ -89,6 +89,11 @@ function AxisField({
   steps,
 }: AxisFieldProps) {
   const before = useRef<TransformSnapshot | null>(null);
+  /**
+   * Esc로 취소 중. Base UI는 blur 때 입력창 글자를 다시 읽어 onValueChange·onValueCommitted를 부르므로,
+   * 타이핑 직후 바로 Esc를 누르면(아직 onValueChange 전) 취소한 값이 그대로 커밋될 수 있다 → 그동안 무시한다.
+   */
+  const cancelling = useRef(false);
 
   const commit = () => {
     if (!before.current) return;
@@ -120,11 +125,19 @@ function AxisField({
       locale="en-US"
       {...steps}
       onValueChange={(next) => {
+        if (cancelling.current) return;
         if (next === null || !Number.isFinite(next)) return;
         before.current ??= captureTransform(mesh);
         setTransformAxis(mesh, field, axis, next);
       }}
-      onValueCommitted={commit}
+      onValueCommitted={() => {
+        if (cancelling.current) {
+          cancelling.current = false;
+          revert();
+        } else {
+          commit();
+        }
+      }}
       className="min-w-0"
     >
       <NumberField.Group className="flex h-7 items-center rounded-md border border-input bg-input/20 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30 dark:bg-input/30">
@@ -145,8 +158,11 @@ function AxisField({
             if (key === "enter") {
               event.currentTarget.blur();
             } else if (key === "escape") {
+              cancelling.current = true;
               revert();
               event.currentTarget.blur();
+              // blur가 커밋을 부르지 않은 경우(값 변화 없음)에도 다음 편집에 남지 않게
+              cancelling.current = false;
             } else if (mod && (key === "z" || key === "y")) {
               // 입력창 포커스 중에도 에디터 undo/redo가 동작해야 한다 (editor-shortcuts는 입력창을 건너뜀).
               // 편집 중이면 먼저 그 편집만 취소한다.

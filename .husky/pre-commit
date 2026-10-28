@@ -1,4 +1,8 @@
 # 새로 추가/이름 변경된 파일의 파일명·폴더명 kebab-case 규칙 검사 (기준: scripts/check-naming.mjs)
 files=$(git diff --cached --name-only --diff-filter=ACR)
-[ -z "$files" ] && exit 0
-echo "$files" | tr '\n' '\0' | xargs -0 node scripts/check-naming.mjs
+if [ -n "$files" ]; then
+  echo "$files" | tr '\n' '\0' | xargs -0 node scripts/check-naming.mjs || exit 1
+fi
+
+# 단위 테스트 (Node + NullEngine, 수 초). E2E는 느려서 여기서 돌리지 않는다 — pnpm test:e2e
+pnpm -s test

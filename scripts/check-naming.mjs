@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
  * 규칙을 적용할 디렉터리. 이 디렉터리 자체가 아니라 그 아래의 폴더/파일 이름을 검사한다.
  * 루트의 도구 설정 파일(next.config.ts 등)은 이름이 정해져 있어 제외.
  */
-export const SCOPES = ["src/", "scripts/", ".claude/hooks/"];
+export const SCOPES = ["src/", "scripts/", "e2e/", ".claude/hooks/"];
 
 // Next.js 예약 파일명(not-found, global-error 등)은 원래 kebab-case라 별도 예외가 필요 없다.
 const KEBAB = "[a-z0-9]+(?:-[a-z0-9]+)*";

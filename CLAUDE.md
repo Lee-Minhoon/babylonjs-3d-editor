@@ -18,10 +18,21 @@ pnpm lint       # eslint
 pnpm format     # prettier --write .
 pnpm format:check
 pnpm lint:naming  # 파일명·폴더명 kebab-case 검사
+pnpm test       # 단위 테스트 (Vitest, 수 초)
+pnpm test:e2e   # E2E (Playwright, 프로덕션 빌드를 3010 포트에 띄움, 1분 안팎)
 pnpm build      # 프로덕션 빌드
 ```
 
-작업을 마치기 전 `pnpm typecheck && pnpm lint && pnpm format:check && pnpm lint:naming`가 통과해야 한다. (Stop 훅이 typecheck와 이름 규칙 검사를 강제함)
+작업을 마치기 전 `pnpm typecheck && pnpm lint && pnpm format:check && pnpm lint:naming && pnpm test`가 통과해야 한다. (Stop 훅이 typecheck·단위 테스트·이름 규칙 검사를 강제함, pre-commit은 이름 규칙·단위 테스트)
+사용자가 보는 동작(입력·UI·저장/열기 등)을 바꿨으면 `pnpm test:e2e`도 돌린다.
+
+## 테스트
+
+- **단위 테스트(Vitest)**: `src/**/*.test.ts`, 테스트 대상 파일 옆에 둔다 (`history.ts` ↔ `history.test.ts`). Node에서 Babylon `NullEngine`으로 씬을 만든다 (`lib/test-scene.ts`의 `createTestScene`). 렌더링·포인터가 필요 없는 로직 — Command, 히스토리, 파일 형식·변환, 스냅샷, 이름 규칙, 키 판정 — 은 여기서 검사한다.
+- **E2E(Playwright)**: `e2e/*.spec.ts`, 공용 도우미는 `e2e/editor.ts`. 사용자가 보는 것(씬 목록·메뉴·패널·안내 문구)으로 확인하고 Babylon 내부는 들여다보지 않는다. 파일 창은 `mockFileSystem`, 한글 입력은 `pressHangul`로 흉내 낸다. 설치된 Chrome을 쓴다 (`channel: "chrome"`).
+- `lib/` 로직을 바꾸거나 고치면 단위 테스트를 같이 추가·수정한다. 버그를 고칠 땐 그 버그를 재현하는 테스트를 먼저 쓴다. 새 사용자 기능은 E2E 시나리오를 하나 이상 추가한다.
+- 파일 형식(`scene-format.ts`)을 바꾸면 이전 버전 파일 변환 테스트를 반드시 추가한다.
+- E2E가 간헐적으로 실패하면 재시도 횟수를 늘리지 말고 원인을 찾는다 (예: Esc 직후 blur 커밋 버그는 E2E 반복 실행에서 발견됨). 확인은 `pnpm test:e2e --repeat-each=3`.
 
 ## 포맷 / 린트
 
@@ -60,7 +71,7 @@ src/
 - 새 feature는 `src/features/<name>/` 폴더만 만들면 된다. 경계 zone은 폴더 목록으로 자동 생성된다 (`eslint.config.mjs`).
 
 - **파일명·폴더명은 kebab-case**: `babylon-canvas.tsx`, `use-babylon-scene.ts`, `src/lib/babylon/`, `app/editor-settings/`. React 컴포넌트·훅 파일도 kebab-case (export하는 이름은 `BabylonCanvas`, `useBabylonScene` 그대로).
-  - 적용 범위: `src/`, `scripts/`, `.claude/hooks/` 아래의 모든 폴더·파일. 루트 설정 파일(`next.config.ts` 등)은 도구가 이름을 정하므로 제외.
+  - 적용 범위: `src/`, `scripts/`, `e2e/`, `.claude/hooks/` 아래의 모든 폴더·파일. 루트 설정 파일(`next.config.ts` 등)은 도구가 이름을 정하므로 제외.
   - 폴더 예외 (Next.js 라우팅 문법, 괄호/접두사 안쪽 이름은 kebab-case): `_private`, `(group)`, `[id]`, `[...slug]`, `[[...slug]]`, `@modal`, `(.)photo`/`(..)photo`/`(...)photo`.
   - `engine.test.ts`, `types.d.ts`처럼 첫 `.` 뒤의 확장자 부분은 검사하지 않는다.
   - 판정 기준과 예외 목록은 [scripts/check-naming.mjs](scripts/check-naming.mjs) 하나뿐이다. 규칙을 바꿀 땐 이 파일만 고친다.
