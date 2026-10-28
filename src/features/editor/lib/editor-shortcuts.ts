@@ -90,6 +90,17 @@ export const SHORTCUT_LABELS = {
 } as const;
 
 /**
+ * 단축키 판정용 키 이름 (소문자). 글자 키는 event.code(물리 키 위치)로 본다
+ * → 한글 입력 상태에서 Q를 누르면 event.key는 "ㅂ"이지만 여기선 "q".
+ * (⌘/Ctrl·Shift 조합도 마찬가지다. 글자 외의 키 — Escape, Delete … — 는 event.key 그대로)
+ * 입력창 안의 단축키(⌘Z 등)를 직접 처리하는 컴포넌트도 이 함수를 쓴다.
+ */
+export function getShortcutKey(event: { key: string; code: string }): string {
+  const letter = /^Key([A-Z])$/.exec(event.code)?.[1];
+  return letter ? letter.toLowerCase() : event.key.toLowerCase();
+}
+
+/**
  * 입력 필드에 포커스가 있으면 브라우저 기본 동작(텍스트 편집·undo)을 그대로 둔다.
  * 대화상자(변경 사항 확인 등) 안의 키도 에디터로 보내지 않는다.
  */
@@ -115,7 +126,7 @@ export function bindEditorShortcuts({
   const onKeyDown = (event: KeyboardEvent) => {
     if (isTypingTarget(event.target)) return;
 
-    const key = event.key.toLowerCase();
+    const key = getShortcutKey(event);
     const mod = event.metaKey || event.ctrlKey;
 
     if (mod && !event.altKey) {

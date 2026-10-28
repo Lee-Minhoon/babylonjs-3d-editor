@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 
 import { useMeshMaterial } from "../hooks/use-mesh-material";
+import { getShortcutKey } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 import {
   applyMaterialValues,
@@ -88,7 +89,7 @@ export function MaterialSection({
       // 입력창·슬라이더에 포커스가 있으면 editor-shortcuts가 건너뛰므로 undo/redo를 여기서 처리한다.
       // 편집 중이면 먼저 그 편집만 취소한다.
       onKeyDown={(event) => {
-        const key = event.key.toLowerCase();
+        const key = getShortcutKey(event);
         if (!(event.metaKey || event.ctrlKey) || (key !== "z" && key !== "y")) {
           return;
         }

@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 
 import { useSelectedMesh } from "../hooks/use-editor-state";
 import { useMeshTransform } from "../hooks/use-mesh-transform";
+import { getShortcutKey } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 import {
   applyTransform,
@@ -137,7 +138,7 @@ function AxisField({
           aria-label={`${label} ${field}`}
           className="h-full w-full min-w-0 bg-transparent px-1.5 text-right text-xs tabular-nums outline-none"
           onKeyDown={(event) => {
-            const key = event.key.toLowerCase();
+            const key = getShortcutKey(event);
             const mod = event.metaKey || event.ctrlKey;
 
             // Enter: blur → onValueCommitted (Base UI는 Enter만으로는 커밋하지 않는다)
