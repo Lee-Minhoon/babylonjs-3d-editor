@@ -47,12 +47,7 @@ export function createMeshFromSnapshot(
 ): Mesh {
   const preset = findPreset(snapshot.presetId);
   if (!preset) throw new Error(`Unknown preset: ${snapshot.presetId}`);
-  const mesh = addPresetMesh(
-    scene,
-    preset,
-    Vector3.Zero(),
-    snapshot.material ?? undefined,
-  );
+  const mesh = addPresetMesh(scene, preset, snapshot.material ?? undefined);
   applyTransform(mesh, snapshot.transform);
   mesh.position.addInPlace(offset);
   return mesh;

@@ -1,16 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Roboto } from "next/font/google";
+import { Geist_Mono, Roboto } from "next/font/google";
 
 import { cn } from "@/lib/utils";
 
 import "./globals.css";
 
+// globals.css: --font-sans ← Roboto, --font-mono ← Geist Mono
 const roboto = Roboto({ subsets: ["latin"], variable: "--font-sans" });
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -31,7 +27,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         "dark",
         "h-full",
         "antialiased",
-        geistSans.variable,
         geistMono.variable,
         "font-sans",
         roboto.variable,

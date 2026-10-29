@@ -16,13 +16,19 @@ export type SceneReadyHandler = (scene: Scene) => void | (() => void);
  * 캔버스 ref에 엔진/씬을 붙이고, 렌더 루프·리사이즈·정리를 관리한다.
  * 엔진 생성은 비동기(WebGPU 초기화)이므로 onSceneReady는 엔진 준비 후 호출된다.
  * onSceneReady가 함수를 반환하면 씬 dispose 직전에 호출된다.
+ * 엔진을 만들지 못하면(WebGPU·WebGL 모두 불가) onEngineError로 알린다 — 사용자에게 보여줄 책임은 호출하는 쪽.
  */
 export function useBabylonScene(
   onSceneReady: SceneReadyHandler,
   engineOptions?: CreateEngineOptions,
+  onEngineError?: (error: unknown) => void,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handleSceneReady = useEffectEvent(onSceneReady);
+  const handleEngineError = useEffectEvent((error: unknown) => {
+    console.error("[babylon] 엔진 생성 실패", error);
+    onEngineError?.(error);
+  });
   const antialias = engineOptions?.antialias;
   const preserveDrawingBuffer = engineOptions?.preserveDrawingBuffer;
   const preferWebGPU = engineOptions?.preferWebGPU;
@@ -58,8 +64,8 @@ export function useBabylonScene(
           engine.dispose();
         };
       })
-      .catch((error) => {
-        console.error("[babylon] 엔진 생성 실패", error);
+      .catch((error: unknown) => {
+        if (!cancelled) handleEngineError(error);
       });
 
     return () => {

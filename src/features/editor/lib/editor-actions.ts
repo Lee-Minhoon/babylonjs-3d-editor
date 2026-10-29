@@ -50,13 +50,12 @@ export function startRename({
   return true;
 }
 
-/** 선택한 메쉬들을 삭제하는 Command 하나 (여러 개여도 undo 한 번) */
-function removeSelected(
+/** 메쉬들을 삭제하는 Command 하나 (여러 개여도 undo 한 번). 비어 있으면 아무것도 하지 않는다 */
+function removeMeshes(
   history: History,
-  selection: Selection,
+  meshes: readonly AbstractMesh[],
   verb: string,
 ): boolean {
-  const meshes = selection.getMeshes();
   if (meshes.length === 0) return false;
   const commands = meshes.map((mesh) =>
     createRemoveMeshCommand(mesh.getScene(), mesh, verb),
@@ -70,7 +69,15 @@ export function deleteSelected({
   history,
   selection,
 }: Pick<ActionContext, "history" | "selection">): boolean {
-  return removeSelected(history, selection, "삭제");
+  return removeMeshes(history, selection.getMeshes(), "삭제");
+}
+
+/** 메쉬 하나를 삭제한다 (씬 목록의 삭제 버튼 — 선택과 무관) */
+export function deleteMesh(
+  { history }: Pick<ActionContext, "history">,
+  mesh: AbstractMesh,
+): boolean {
+  return removeMeshes(history, [mesh], "삭제");
 }
 
 /** 선택한 메쉬들을 클립보드에 복사 (씬은 그대로, 히스토리 기록 없음) */
@@ -88,7 +95,7 @@ export function cutSelected({
   clipboard,
 }: Pick<ActionContext, "history" | "selection" | "clipboard">): boolean {
   if (!clipboard.copy(selection.getMeshes())) return false;
-  return removeSelected(history, selection, "잘라내기");
+  return removeMeshes(history, selection.getMeshes(), "잘라내기");
 }
 
 /**

@@ -245,7 +245,7 @@ export function createPlacementTool(
             createSpawnMeshCommand(
               scene,
               () => {
-                const mesh = addPresetMesh(scene, preset, Vector3.Zero());
+                const mesh = addPresetMesh(scene, preset);
                 mesh.position.copyFrom(position);
                 mesh.rotation.copyFrom(rotation);
                 return mesh;

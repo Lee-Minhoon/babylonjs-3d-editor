@@ -137,18 +137,19 @@ export function createSceneFile(
   };
 
   const write = async (pickLocation: boolean) => {
-    const saved = await saveTextFile(
-      stringifySceneFile(serializeScene(scene)),
-      {
-        handle: pickLocation ? null : handle,
-        suggestedName: fileName ?? DEFAULT_FILE_NAME,
-        type: SCENE_FILE_TYPE,
-      },
-    );
+    // 파일에 쓴 내용의 시점을 기억한다 — 쓰는 동안(핸들 저장은 모달이 없다) 편집이 이어져도
+    // 그 편집은 파일에 없으므로 "변경 있음"이어야 한다
+    const head = history.peek();
+    const text = stringifySceneFile(serializeScene(scene));
+    const saved = await saveTextFile(text, {
+      handle: pickLocation ? null : handle,
+      suggestedName: fileName ?? DEFAULT_FILE_NAME,
+      type: SCENE_FILE_TYPE,
+    });
     if (!saved) return;
     fileName = saved.name;
     handle = saved.handle;
-    savedHead = history.peek();
+    savedHead = head;
     restored = false;
     emit();
     notify({ type: "success", title: `${saved.name} 저장됨` });

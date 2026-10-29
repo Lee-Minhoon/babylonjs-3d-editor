@@ -10,7 +10,12 @@ import type { HistoryState } from "../lib/history";
 import type { MeshPresetId } from "../lib/mesh-presets";
 import type { PlacementState } from "../lib/placement-tool";
 import type { SceneFileState } from "../lib/scene-file";
-import type { TransformTool } from "../lib/tools";
+import {
+  DEFAULT_SNAP_ENABLED,
+  DEFAULT_SNAP_STEP,
+  DEFAULT_TOOL,
+  type TransformTool,
+} from "../lib/tools";
 
 /*
  * 에디터 도구 상태 구독 훅 모음. runtime이 아직 없으면(씬 준비 전) 기본값을 돌려준다.
@@ -21,9 +26,10 @@ const subscribeNoop = () => () => {};
 const getNull = () => null;
 const EMPTY_HISTORY: HistoryState = { undoLabel: null, redoLabel: null };
 const getEmptyHistory = () => EMPTY_HISTORY;
-const getDefaultTool = (): TransformTool => "move";
+const getDefaultTool = (): TransformTool => DEFAULT_TOOL;
 const getFalse = () => false;
-const getDefaultSnapStep = () => 0.5;
+const getDefaultSnapEnabled = () => DEFAULT_SNAP_ENABLED;
+const getDefaultSnapStep = () => DEFAULT_SNAP_STEP;
 const EMPTY_SCENE_FILE: SceneFileState = {
   fileName: null,
   dirty: false,
@@ -80,8 +86,8 @@ export function useSnap(runtime: Runtime): { enabled: boolean; step: number } {
   const tools = runtime?.tools;
   const enabled = useSyncExternalStore(
     tools?.subscribe ?? subscribeNoop,
-    tools?.isSnapEnabled ?? getFalse,
-    getFalse,
+    tools?.isSnapEnabled ?? getDefaultSnapEnabled,
+    getDefaultSnapEnabled,
   );
   const step = useSyncExternalStore(
     tools?.subscribe ?? subscribeNoop,

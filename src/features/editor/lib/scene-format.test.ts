@@ -1,4 +1,3 @@
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { getMaterialValues } from "./mesh-material";
@@ -22,11 +21,11 @@ afterEach(() => clearEditorMeshes(scene));
 const gold = { color: "#D4AF37", metallic: 1, roughness: 0.15 };
 
 function buildScene() {
-  const box = addPresetMesh(scene, findPreset("box")!, Vector3.Zero(), gold);
+  const box = addPresetMesh(scene, findPreset("box")!, gold);
   box.position.set(1, 0.5, -2);
   box.rotation.set(0, Math.PI / 4, 0);
   box.scaling.set(1, 2, 1);
-  addPresetMesh(scene, findPreset("sphere")!, new Vector3(3, 0, 0));
+  addPresetMesh(scene, findPreset("sphere")!).position.set(3, 0.5, 0);
 }
 
 const file = (meshes: unknown[], version: number = SCENE_FILE_VERSION) =>
@@ -65,6 +64,17 @@ describe("저장 → 열기 왕복", () => {
     expect(text).toContain('"position": [1, 0.5, -2]');
   });
 
+  test("숫자 배열처럼 보이는 이름도 글자 그대로 저장한다", () => {
+    addPresetMesh(scene, findPreset("box")!, gold, "[ 1, 2 ]");
+    addPresetMesh(scene, findPreset("box")!, gold, '"position": [\n 1 ]');
+    const text = stringifySceneFile(serializeScene(scene));
+    expect(text).toContain('"name": "[ 1, 2 ]"');
+    expect(parseSceneFile(text).meshes.map((mesh) => mesh.name)).toEqual([
+      "[ 1, 2 ]",
+      '"position": [\n 1 ]',
+    ]);
+  });
+
   test("회전 기즈모가 만든 쿼터니언도 오일러로 저장한다", () => {
     buildScene();
     const [box] = getEditorMeshes(scene);
@@ -78,8 +88,7 @@ describe("저장 → 열기 왕복", () => {
       scene,
       parseSceneFile(file([{ ...validMesh, name: "Box 7" }])),
     );
-    const next = addPresetMesh(scene, findPreset("box")!, Vector3.Zero());
-    expect(next.name).toBe("Box 8");
+    expect(addPresetMesh(scene, findPreset("box")!).name).toBe("Box 8");
   });
 });
 

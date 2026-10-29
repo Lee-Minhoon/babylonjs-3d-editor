@@ -72,6 +72,13 @@ export function MaterialSection({
     before.current = null;
   };
 
+  /** 미리보기 중이면 그것만 취소하고 true (handleFieldHistoryKey의 cancelEdit) */
+  const cancelPreview = () => {
+    if (!before.current) return false;
+    revert();
+    return true;
+  };
+
   // <input type="color">: React onChange는 고르는 중(input 이벤트)마다 오고,
   // 네이티브 change는 색상 창을 닫아 값이 확정될 때 온다 → 그때 커밋
   useEffect(() => {
@@ -89,11 +96,7 @@ export function MaterialSection({
       // 입력창·슬라이더에 포커스가 있으면 editor-shortcuts가 건너뛰므로 undo/redo를 여기서 처리한다.
       // 편집 중이면 먼저 그 편집만 취소한다.
       onKeyDown={(event) =>
-        handleFieldHistoryKey(event, history, () => {
-          if (!before.current) return false;
-          revert();
-          return true;
-        })
+        handleFieldHistoryKey(event, history, cancelPreview)
       }
     >
       <div>
@@ -117,10 +120,23 @@ export function MaterialSection({
             defaultValue={values.color.toUpperCase()}
             spellCheck={false}
             onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
+              const input = event.currentTarget;
+              const shown = values.color.toUpperCase();
+              if (event.key === "Enter") input.blur();
               else if (event.key === "Escape") {
-                event.currentTarget.value = values.color.toUpperCase();
-                event.currentTarget.blur();
+                input.value = shown;
+                input.blur();
+              } else if (
+                // 입력 중인 글자가 있으면 ⌘Z는 그 글자만 되돌린다 (히스토리 undo가 아니라)
+                handleFieldHistoryKey(event, history, () => {
+                  if (normalizeHex(input.value) !== shown) {
+                    input.value = shown;
+                    return true;
+                  }
+                  return cancelPreview();
+                })
+              ) {
+                event.stopPropagation(); // 바깥 onKeyDown이 한 번 더 undo 하지 않게
               }
             }}
             onBlur={(event) => {

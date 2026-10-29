@@ -1,4 +1,3 @@
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { describe, expect, test } from "vitest";
 
 import { createHistory, createMacroCommand } from "./history";
@@ -23,7 +22,8 @@ function setup() {
     placement,
   });
   const box = (x: number) => {
-    const mesh = addPresetMesh(scene, findPreset("box")!, new Vector3(x, 0, 0));
+    const mesh = addPresetMesh(scene, findPreset("box")!);
+    mesh.position.set(x, 0.5, 0);
     mesh.computeWorldMatrix(true);
     return mesh;
   };

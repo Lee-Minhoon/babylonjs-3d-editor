@@ -120,11 +120,20 @@ export function serializeScene(scene: Scene): SceneFileData {
   return { format: SCENE_FILE_FORMAT, version: SCENE_FILE_VERSION, meshes };
 }
 
+/**
+ * 들여쓰기된 JSON에서 숫자 배열 값을 한 줄로 접는다: `"position": [\n 0,\n 0.5,\n 0\n ]` → `"position": [0, 0.5, 0]`.
+ * 줄 첫머리의 `"키": [` 부터 닫는 `]`까지 줄 단위로만 맞추므로 문자열 값(메쉬 이름) 안의 글자는 건드리지 않는다
+ * — JSON 문자열은 줄바꿈을 담을 수 없고, 값 안의 따옴표는 `\"`로 이스케이프되어 `"키": ` 꼴이 될 수 없다.
+ */
+const NUMBER_ARRAY_VALUE =
+  /^(\s+"[^"\\]*": )\[\n((?:\s+-?[\d.e+-]+,?\n)+)\s+\]/gm;
+
 export function stringifySceneFile(file: SceneFileData): string {
   // [x, y, z] 숫자 배열은 한 줄로 (사람이 읽고 diff 보기 쉽게)
   const text = JSON.stringify(file, null, 2).replace(
-    /\[\s+(-?[\d.e+-]+(?:,\s+-?[\d.e+-]+)*)\s+\]/g,
-    (_, numbers: string) => `[${numbers.split(/,\s+/).join(", ")}]`,
+    NUMBER_ARRAY_VALUE,
+    (_, key: string, numbers: string) =>
+      `${key}[${numbers.trim().split(/,\s+/).join(", ")}]`,
   );
   return `${text}\n`;
 }
@@ -280,7 +289,6 @@ export function loadSceneFile(scene: Scene, file: SceneFileData) {
     const mesh = addPresetMesh(
       scene,
       preset,
-      Vector3.Zero(),
       entry.material ?? undefined,
       entry.name,
     );

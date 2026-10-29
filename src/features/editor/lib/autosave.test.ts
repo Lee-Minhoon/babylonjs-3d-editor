@@ -1,4 +1,3 @@
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
@@ -44,7 +43,7 @@ function setup(initial: AutosaveRecord | null = null) {
     history.execute(
       createSpawnMeshCommand(
         scene,
-        () => addPresetMesh(scene, findPreset("box")!, Vector3.Zero()),
+        () => addPresetMesh(scene, findPreset("box")!),
         "추가",
         "Box",
       ),
@@ -78,6 +77,16 @@ describe("자동 저장", () => {
     history.undo();
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY);
     expect(current()).toBeNull();
+  });
+
+  test("남긴 기록이 없으면 깨끗해져도 저장소를 건드리지 않는다", async () => {
+    const { history, storage, addBox } = setup();
+    await settle();
+    addBox();
+    history.undo(); // delay 안에 되돌림 → 남길 것도 지울 것도 없다
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY);
+    expect(storage.save).not.toHaveBeenCalled();
+    expect(storage.clear).not.toHaveBeenCalled();
   });
 
   test("flush는 기다리지 않고 바로 남긴다 (탭이 숨겨질 때)", async () => {

@@ -41,6 +41,28 @@ test("한글 입력 상태에서 ⌘C/⌘V/⌘Z", async ({ page }) => {
   await expectScene(page, ["Box 1"]);
 });
 
+test("열린 메뉴 안에서 누른 키는 에디터 단축키로 새지 않는다", async ({
+  page,
+}) => {
+  await page.getByRole("menuitem", { name: "편집", exact: true }).click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.keyboard.press("1"); // 메뉴 안에서는 항목 찾기(typeahead)용
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(placementHint(page)).toContainText("메쉬를 고른 뒤");
+});
+
+test("슬라이더를 조절하는 중의 Delete는 메쉬를 지우지 않는다", async ({
+  page,
+}) => {
+  await placePreset(page, "1", -100, 60);
+  await selectMesh(page, "Box 1");
+  // aria-label은 슬라이더 그룹에 붙고, 포커스는 그 안의 thumb(range input)이 받는다
+  await page.getByRole("group", { name: "메탈릭" }).getByRole("slider").focus();
+  await page.keyboard.press("Delete");
+  await expectScene(page, ["Box 1"]);
+});
+
 test("숫자 키를 누르고 있어도(키 반복) 배치 모드가 깜빡이지 않는다", async ({
   page,
 }) => {

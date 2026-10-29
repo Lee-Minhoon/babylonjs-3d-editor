@@ -1,4 +1,3 @@
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { describe, expect, test, vi } from "vitest";
 
 import { addPresetMesh, findPreset } from "./mesh-presets";
@@ -6,7 +5,7 @@ import { createSelection } from "./selection";
 import { createTestScene } from "./test-scene";
 
 const scene = createTestScene();
-const box = () => addPresetMesh(scene, findPreset("box")!, Vector3.Zero());
+const box = () => addPresetMesh(scene, findPreset("box")!);
 
 describe("selection", () => {
   test("select는 하나만, toggle은 넣고 빼기 (고른 순서 유지)", () => {

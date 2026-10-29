@@ -1,4 +1,3 @@
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { describe, expect, test, vi } from "vitest";
 
 import {
@@ -15,7 +14,7 @@ const scene = createTestScene();
 const gold = { color: "#D4AF37", metallic: 1, roughness: 0.15 };
 
 function createBox() {
-  return addPresetMesh(scene, findPreset("box")!, Vector3.Zero(), {
+  return addPresetMesh(scene, findPreset("box")!, {
     color: "#FF0000",
     metallic: 0,
     roughness: 0.5,

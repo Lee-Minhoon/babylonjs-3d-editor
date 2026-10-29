@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { CubeTexture } from "@babylonjs/core/Materials/Textures/cubeTexture";
@@ -71,83 +73,111 @@ type EditorViewportProps = {
 };
 
 export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
-  return (
-    <BabylonCanvas
-      onSceneReady={(scene) => {
-        setupScene(scene);
-        const detachInspector = attachInspectorToggle(scene);
-        const history = createHistory();
-        const tools = createToolState();
-        const placement = createPlacementTool(scene, history, tools);
-        const selection = createSelection(scene);
-        const gizmo = createTransformGizmo(scene, {
-          history,
-          selection,
-          tools,
-          placement,
-        });
-        const unbindPointer = bindPointerRouter(scene, {
-          gizmo,
-          placement,
-          selection,
-        });
-        const clipboard = createClipboard();
-        const sceneFile = createSceneFile(scene, {
-          history,
-          selection,
-          placement,
-          notify: (notice) => toast.add(notice),
-        });
-        const autosave = createAutosave({
-          sceneFile,
-          storage: createBrowserAutosaveStorage(),
-          onError: (title, description) =>
-            toast.add({ type: "error", title, description }),
-        });
-        // 탭이 숨겨지면(닫기·전환) 기다리던 자동 저장을 바로 남긴다
-        const onVisibilityChange = () => {
-          if (document.visibilityState === "hidden") void autosave.flush();
-        };
-        document.addEventListener("visibilitychange", onVisibilityChange);
-        const unbindShortcuts = bindEditorShortcuts({
-          history,
-          placement,
-          selection,
-          tools,
-          clipboard,
-          sceneFile,
-          gizmo,
-        });
-        onRuntimeChange({
-          scene,
-          history,
-          placement,
-          selection,
-          tools,
-          clipboard,
-          sceneFile,
-          autosave,
-        });
+  /** 엔진을 만들지 못한 이유. 콘솔에만 남기면 빈 화면에 비활성 메뉴만 보여서 여기 띄운다 */
+  const [engineError, setEngineError] = useState<string | null>(null);
 
-        return () => {
-          onRuntimeChange(null);
-          unbindShortcuts();
-          // 내용은 동기로 읽어 두므로 씬이 해제되기 전에 남길 수 있다
-          void autosave.flush();
-          autosave.dispose();
-          document.removeEventListener("visibilitychange", onVisibilityChange);
-          sceneFile.dispose();
-          unbindPointer();
-          gizmo.dispose();
-          selection.dispose();
-          placement.dispose();
-          // undo로 씬에서 떼어둔 메쉬는 scene.dispose()가 모르므로 여기서 해제
-          history.dispose();
-          detachInspector();
-        };
-      }}
-      // 우클릭은 배치 취소에 쓰므로 브라우저 컨텍스트 메뉴를 막는다
-      onContextMenu={(event) => event.preventDefault()}
-    />
+  return (
+    <>
+      {engineError && (
+        <div
+          role="alert"
+          className="absolute inset-0 z-10 flex items-center justify-center bg-background p-6 text-center text-sm"
+        >
+          <div className="max-w-sm space-y-2">
+            <p className="font-medium">3D 엔진을 시작하지 못했습니다</p>
+            <p className="text-muted-foreground">
+              이 브라우저에서 WebGPU와 WebGL을 모두 쓸 수 없습니다. 다른
+              브라우저로 열거나 그래픽 가속 설정을 확인하세요.
+            </p>
+            <p className="font-mono text-xs break-all text-muted-foreground">
+              {engineError}
+            </p>
+          </div>
+        </div>
+      )}
+      <BabylonCanvas
+        onEngineError={(error) =>
+          setEngineError(error instanceof Error ? error.message : String(error))
+        }
+        onSceneReady={(scene) => {
+          setupScene(scene);
+          const detachInspector = attachInspectorToggle(scene);
+          const history = createHistory();
+          const tools = createToolState();
+          const placement = createPlacementTool(scene, history, tools);
+          const selection = createSelection(scene);
+          const gizmo = createTransformGizmo(scene, {
+            history,
+            selection,
+            tools,
+            placement,
+          });
+          const unbindPointer = bindPointerRouter(scene, {
+            gizmo,
+            placement,
+            selection,
+          });
+          const clipboard = createClipboard();
+          const sceneFile = createSceneFile(scene, {
+            history,
+            selection,
+            placement,
+            notify: (notice) => toast.add(notice),
+          });
+          const autosave = createAutosave({
+            sceneFile,
+            storage: createBrowserAutosaveStorage(),
+            onError: (title, description) =>
+              toast.add({ type: "error", title, description }),
+          });
+          // 탭이 숨겨지면(닫기·전환) 기다리던 자동 저장을 바로 남긴다
+          const onVisibilityChange = () => {
+            if (document.visibilityState === "hidden") void autosave.flush();
+          };
+          document.addEventListener("visibilitychange", onVisibilityChange);
+          const unbindShortcuts = bindEditorShortcuts({
+            history,
+            placement,
+            selection,
+            tools,
+            clipboard,
+            sceneFile,
+            gizmo,
+          });
+          onRuntimeChange({
+            scene,
+            history,
+            placement,
+            selection,
+            tools,
+            clipboard,
+            sceneFile,
+            autosave,
+          });
+
+          return () => {
+            onRuntimeChange(null);
+            unbindShortcuts();
+            // 내용은 동기로 읽어 두므로 씬이 해제되기 전에 남길 수 있다
+            void autosave.flush();
+            autosave.dispose();
+            document.removeEventListener(
+              "visibilitychange",
+              onVisibilityChange,
+            );
+            sceneFile.dispose();
+            unbindPointer();
+            gizmo.dispose();
+            selection.dispose();
+            placement.dispose();
+            // undo로 씬에서 떼어둔 메쉬는 scene.dispose()가 모르므로 여기서 해제
+            history.dispose();
+            detachInspector();
+          };
+        }}
+        // 우클릭은 배치 취소에 쓰므로 브라우저 컨텍스트 메뉴를 막는다
+        onContextMenu={(event) => event.preventDefault()}
+      />
+    </>
   );
 }

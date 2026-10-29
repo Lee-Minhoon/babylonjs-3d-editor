@@ -4,7 +4,10 @@ export type TransformTool = "select" | "move" | "rotate" | "scale";
 
 /** 고를 수 있는 위치 스냅 단위 (배치 X/Z, 이동 기즈모) */
 export const SNAP_STEPS = [0.1, 0.25, 0.5, 1] as const;
-const DEFAULT_SNAP_STEP = 0.5;
+/** 기본값 — 씬이 준비되기 전 UI도 같은 값을 보여준다 (use-editor-state) */
+export const DEFAULT_TOOL: TransformTool = "move";
+export const DEFAULT_SNAP_ENABLED = true;
+export const DEFAULT_SNAP_STEP = 0.5;
 
 export type ToolState = {
   getTool(): TransformTool;
@@ -18,9 +21,11 @@ export type ToolState = {
   subscribe(onChange: () => void): () => void;
 };
 
-export function createToolState(initial: TransformTool = "move"): ToolState {
+export function createToolState(
+  initial: TransformTool = DEFAULT_TOOL,
+): ToolState {
   let tool = initial;
-  let snapEnabled = true;
+  let snapEnabled = DEFAULT_SNAP_ENABLED;
   let snapStep = DEFAULT_SNAP_STEP;
   const listeners = createListeners();
   const emit = listeners.emit;

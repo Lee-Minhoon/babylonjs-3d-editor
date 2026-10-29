@@ -61,7 +61,9 @@ export function createAutosave({
   let timer: ReturnType<typeof setTimeout> | null = null;
   let unsubscribe: (() => void) | null = null;
   let disposed = false;
-  /** 저장소 오류는 한 번만 알린다 (매 변경마다 토스트가 뜨지 않게) */
+  /** 저장소에 기록이 남아 있는지 (깨끗해졌을 때 한 번만 지우려고 기억한다) */
+  let stored = false;
+  /** 저장소 오류는 다시 성공할 때까지 한 번만 알린다 (매 변경마다 토스트가 뜨지 않게) */
   let reportedError = false;
 
   const listeners = createListeners();
@@ -83,9 +85,12 @@ export function createAutosave({
           fileName,
           savedAt: Date.now(),
         });
-      } else {
+        stored = true;
+      } else if (stored) {
         await storage.clear();
+        stored = false;
       }
+      reportedError = false;
     } catch (error) {
       if (reportedError) return;
       reportedError = true;
@@ -112,6 +117,7 @@ export function createAutosave({
     .load()
     .then((saved) => {
       if (disposed) return;
+      stored = saved !== null;
       if (saved) setPending(saved);
       else startWatching();
     })
@@ -132,12 +138,14 @@ export function createAutosave({
         if (!(error instanceof SceneFileError)) throw error;
         onError("자동 저장 기록을 복구하지 못했습니다", error.message);
         void storage.clear();
+        stored = false;
       }
       setPending(null);
       startWatching();
     },
     discard() {
       void storage.clear();
+      stored = false;
       setPending(null);
       startWatching();
     },

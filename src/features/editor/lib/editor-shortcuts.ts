@@ -134,17 +134,29 @@ export function handleFieldHistoryKey(
 
 /**
  * 입력 필드에 포커스가 있으면 브라우저 기본 동작(텍스트 편집·undo)을 그대로 둔다.
- * 대화상자(변경 사항 확인 등) 안의 키도 에디터로 보내지 않는다.
+ * 대화상자(변경 사항 확인 등)·열린 메뉴·슬라이더 안의 키도 에디터로 보내지 않는다
+ * — 메뉴는 글자 키로 항목을 찾고(typeahead), 슬라이더는 화살표로 값을 바꾸는 중이라
+ * 같은 키가 배치 토글·삭제·도구 전환으로 새면 안 된다.
  */
+const SHORTCUT_FREE_ZONE =
+  '[role="dialog"], [role="alertdialog"], [role="slider"]';
+/** 팝업형 — 열려 있을 때만 (Base UI는 열린 팝업에 data-open을 붙인다) */
+const POPUP_ZONE = '[role="menu"], [role="listbox"]';
+
 function isTypingTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable ||
-      target.tagName === "INPUT" ||
-      target.tagName === "TEXTAREA" ||
-      target.tagName === "SELECT" ||
-      target.closest('[role="dialog"], [role="alertdialog"]') !== null)
-  );
+  if (!(target instanceof HTMLElement)) return false;
+  if (
+    target.isContentEditable ||
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT" ||
+    target.closest(SHORTCUT_FREE_ZONE) !== null
+  ) {
+    return true;
+  }
+  // 닫히는 중인 메뉴(퇴장 애니메이션, data-open 없음)에는 포커스가 잠깐 남는다
+  // — 그때의 키(Esc 직후 ⌘Z 등)는 에디터가 받아야 한다
+  return target.closest(POPUP_ZONE)?.closest("[data-open]") != null;
 }
 
 export function bindEditorShortcuts({

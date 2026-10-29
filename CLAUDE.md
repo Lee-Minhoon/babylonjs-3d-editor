@@ -85,12 +85,14 @@ src/
 - 도구의 변경 알림은 `createListeners()`(`src/lib/listeners.ts`), 메쉬별 알림(이름·머티리얼)은 `createKeyedListeners()`로 만든다.
 - 뷰포트가 씬과 함께 도구들을 만들어 `EditorRuntime`(`{ scene, history, placement, selection, tools, clipboard, sceneFile, autosave }`)으로 UI에 넘긴다. 도구는 순수 TS 객체(`lib/`)이고, React는 `subscribe`/`getX`를 `useSyncExternalStore`로 구독만 한다. 구독 훅은 `hooks/use-editor-state.ts`(`useHistoryState`, `useSelection`, `useActivePresetId`, `useActiveTool`, `useSnap`, `useSceneFileState` …). Babylon 객체 값 구독은 `use-mesh-transform.ts`·`use-mesh-material.ts`에 모아 두고, 컴포넌트마다 다시 만들지 않는다.
 - 레이아웃: 상단 `editor-header`(메뉴바: 파일/편집/추가/보기 + undo/redo), 왼쪽 `mesh-sidebar`, 가운데 뷰포트 + `transform-toolbar`, 오른쪽 `properties-panel`.
-- 단축키 처리기는 입력창과 대화상자(`role=dialog/alertdialog`) 안의 키를 무시한다.
+- 단축키 처리기는 입력창, 대화상자(`role=dialog/alertdialog`), 슬라이더, **열려 있는**(`data-open`) 메뉴·리스트박스 안의 키를 무시한다 (`SHORTCUT_FREE_ZONE`·`POPUP_ZONE`). 닫히는 중인 팝업에는 포커스가 잠깐 남으므로 열림 여부를 꼭 본다 (Esc 직후 ⌘Z가 먹히지 않는 버그). 글자 키로 항목을 찾거나 화살표로 값을 바꾸는 UI를 새로 붙이면 거기에 role을 추가한다.
 - 단축키·메뉴·버튼이 공유하는 동작은 `lib/editor-actions.ts`에 둔다 (예: `deleteSelected`). 입력 경로마다 로직을 따로 쓰지 않는다.
 - 메뉴에 아직 없는 기능(예약 키)은 `PlannedItem`으로 비활성 "준비 중" 표시. 기능을 붙일 때 `MenubarItem`으로 바꾸고 단축키를 `editor-shortcuts.ts`에 연결한다.
 - 활성 도구(`tools`): `select | move | rotate | scale` (Q/W/E/R). 배치 모드는 그 위에 잠깐 덮어쓰는 모드다. 기즈모는 선택된 메쉬 + move/rotate/scale + 배치 모드 아님일 때만 보인다.
 - **뷰포트 포인터 입력은 `lib/pointer-router.ts` 한 곳에서만 받는다.** 우선순위: 기즈모 위/드래그 중 → 배치 모드 → 선택. 새 도구가 클릭을 받아야 하면 `scene.onPointerObservable`을 직접 구독하지 말고 라우터에 분기를 추가한다 (기즈모 클릭이 선택 해제로 새는 식의 충돌 방지).
-- 기즈모 드래그는 시작/끝 스냅샷으로 **드래그 한 번 = 변형 Command 하나**를 기록한다 (`transform-command.ts`). 여러 개 선택이면 묶음 중심의 피벗(`TransformNode`)에 기즈모를 붙이고, 드래그 동안만 메쉬들을 피벗 자식으로 만들어(`setParent`) 함께 움직인 뒤 Command 하나로 묶는다. 피벗은 메쉬를 따라가지 않으므로 선택·히스토리가 바뀔 때마다 다시 놓는다. **드래그 중에는 단축키를 받지 않는다** (`gizmo.isDragging()`) — 자식인 동안 undo·삭제가 끼어들면 변형이 어긋난다.
+- 기즈모 드래그는 시작/끝 스냅샷으로 **드래그 한 번 = 변형 Command 하나**를 기록한다 (`transform-command.ts`). 여러 개 선택이면 묶음 중심의 피벗(`TransformNode`)에 기즈모를 붙이고, 드래그 동안만 메쉬들을 피벗 자식으로 만들어(`setParent`) 함께 움직인 뒤 Command 하나로 묶는다. 피벗은 메쉬를 따라가지 않으므로 선택·히스토리가 바뀔 때마다 다시 놓는다. **드래그 중에는 단축키를 받지 않는다** (`gizmo.isDragging()`) — 자식인 동안 undo·삭제가 끼어들면 변형이 어긋난다. 알려진 한계: 여러 개를 회전·크기 조절할 때 비균일 크기 메쉬는 전단이 생겨 TRS로 근사된다 (이동은 정확).
+- 메쉬 프리셋(`lib/mesh-presets.ts`)은 원점에 만들기만 한다 (`addPresetMesh(scene, preset, material?, name?)`). 바닥에 놓을 높이는 배치 도구가 미리보기의 바운딩 박스로 잰다 — 프리셋에 높이 값을 따로 두지 않는다.
+- 씬 파일 텍스트의 숫자 배열 한 줄 접기(`stringifySceneFile`)는 줄 첫머리의 `"키": [` 꼴만 맞춘다. 문자열 값(이름)까지 바꾸는 정규식은 쓰지 않는다.
 - 위치 스냅: `tools.getActiveSnap()` (켜져 있으면 단위, 꺼져 있으면 `null`). 단위는 `SNAP_STEPS`(0.1/0.25/0.5/1, 기본 0.5, `lib/tools.ts`)에서 툴바 드롭다운·보기 메뉴로 고른다. 배치는 X/Z를 절대 격자에 맞추고(`snapValue`), 이동 기즈모는 Babylon `snapDistance`(변화량 단위)를 쓴다. 새 위치 입력 도구도 `getActiveSnap()`을 따른다.
 - 속성 패널 숫자 입력(`@base-ui/react/number-field`)도 같은 원칙: `onValueChange`에서는 메쉬에 바로 적용(미리보기, 기록 없음), `onValueCommitted`에서 편집 시작 전 스냅샷과 비교해 Command 하나. Enter는 blur로 커밋, Esc는 취소. `editor-shortcuts`는 입력창을 건너뛰므로 **입력창 안의 ⌘Z/⌘⇧Z는 필드가 `handleFieldHistoryKey`로 직접 처리**한다 (편집 중이면 취소, 아니면 history undo/redo).
 - 패널 표시값은 Babylon 객체를 직접 구독해서 얻는다 (`hooks/use-mesh-transform.ts`, `onAfterWorldMatrixUpdateObservable`). React state에 복사해 두지 않는다 — 기즈모·undo·입력 어디서 바뀌든 한 경로로 반영된다.
@@ -121,7 +123,7 @@ src/
 
 ## UI 규칙 (shadcn / Base UI)
 
-- UI는 `@/components/ui`의 shadcn 컴포넌트로 만든다. `src/features`·`src/app`에서 네이티브 `<button>`, `<input>`, `<select>`, `<textarea>`는 ESLint 에러 → `Button`, `Input`, `NativeSelect`, `Textarea`.
+- UI는 `@/components/ui`의 shadcn 컴포넌트로 만든다. `src/features`·`src/app`에서 네이티브 `<button>`, `<input>`, `<select>`, `<textarea>`는 ESLint 에러 → `Button`, `Input`, `NativeSelect`, `Textarea`. **실제로 쓰는 컴포넌트만 둔다** — 없는 것은 필요할 때 `pnpm dlx shadcn@latest add <name>`으로 추가하고, 안 쓰게 되면 파일과 그 전용 의존성을 지운다. (`shadcn` 패키지는 `globals.css`가 `shadcn/tailwind.css`를 import 하므로 남긴다.)
 - **Base UI 기반이다. Radix 문법을 쓰지 않는다.**
   - 다른 요소로 렌더링할 땐 `asChild`가 아니라 **`render` prop**: `<TooltipTrigger render={<Button variant="secondary" />}>내용</TooltipTrigger>` (`asChild`는 ESLint 에러).
   - `radix-ui`, `@radix-ui/*` import 금지 (ESLint 에러). primitive가 필요하면 `@base-ui/react/<component>`.

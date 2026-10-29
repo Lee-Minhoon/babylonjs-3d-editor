@@ -1,4 +1,3 @@
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { createRenameCommand, onMeshNameChange } from "./mesh-name";
@@ -6,7 +5,7 @@ import { addPresetMesh, findPreset, resetMeshNames } from "./mesh-presets";
 import { createTestScene } from "./test-scene";
 
 const scene = createTestScene();
-const addBox = () => addPresetMesh(scene, findPreset("box")!, Vector3.Zero());
+const addBox = () => addPresetMesh(scene, findPreset("box")!);
 afterEach(() => {
   for (const mesh of [...scene.meshes]) mesh.dispose();
   resetMeshNames(scene);

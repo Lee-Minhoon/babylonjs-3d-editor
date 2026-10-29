@@ -17,8 +17,8 @@ import {
   useSelection,
 } from "../hooks/use-editor-state";
 import { useMeshName } from "../hooks/use-mesh-name";
+import { deleteMesh } from "../lib/editor-actions";
 import { getPresetShortcut, SHORTCUT_LABELS } from "../lib/editor-shortcuts";
-import { createRemoveMeshCommand } from "../lib/mesh-commands";
 import { inCreationOrder, MESH_PRESETS } from "../lib/mesh-presets";
 import { isAdditiveClick } from "../lib/selection";
 import type { EditorRuntime } from "./editor-viewport";
@@ -99,11 +99,7 @@ function SceneListItem({
           size="icon-xs"
           className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
           aria-label={`${name} 삭제`}
-          onClick={() =>
-            runtime.history.execute(
-              createRemoveMeshCommand(runtime.scene, mesh),
-            )
-          }
+          onClick={() => deleteMesh(runtime, mesh)}
         >
           <X aria-hidden />
         </Button>

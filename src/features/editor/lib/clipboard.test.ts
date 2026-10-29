@@ -15,12 +15,7 @@ const scene = createTestScene();
 const material = { color: "#3366AA", metallic: 0.2, roughness: 0.8 };
 
 function createSource() {
-  const mesh = addPresetMesh(
-    scene,
-    findPreset("cone")!,
-    Vector3.Zero(),
-    material,
-  );
+  const mesh = addPresetMesh(scene, findPreset("cone")!, material);
   mesh.position.set(1, 0.5, 2);
   mesh.rotation.set(0, Math.PI / 2, 0);
   mesh.scaling.set(1, 2, 1);

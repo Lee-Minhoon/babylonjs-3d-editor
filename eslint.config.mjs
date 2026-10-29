@@ -179,7 +179,7 @@ const eslintConfig = defineConfig([
           selector:
             "JSXOpeningElement[name.name=/^(button|input|select|textarea)$/]",
           message:
-            "네이티브 폼 요소 대신 @/components/ui의 Button / Input / NativeSelect / Textarea를 쓰세요.",
+            "네이티브 폼 요소 대신 @/components/ui의 Button / Input / NativeSelect / Textarea를 쓰세요 (없으면 pnpm dlx shadcn@latest add <name>).",
         },
       ],
     },
