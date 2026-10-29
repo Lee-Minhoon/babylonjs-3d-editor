@@ -1,3 +1,4 @@
+import { createListeners } from "@/lib/listeners";
 /**
  * Undo/Redo 히스토리 (Command 패턴).
  * 씬을 바꾸는 모든 동작은 Command로 만들어 history.execute()로 실행한다.
@@ -41,7 +42,7 @@ const DEFAULT_LIMIT = 100;
 export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
   const undoStack: Command[] = [];
   const redoStack: Command[] = [];
-  const listeners = new Set<() => void>();
+  const listeners = createListeners();
 
   // useSyncExternalStore용으로 변경 시에만 새 객체를 만든다
   let state: HistoryState = { undoLabel: null, redoLabel: null };
@@ -50,7 +51,7 @@ export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
       undoLabel: undoStack.at(-1)?.label ?? null,
       redoLabel: redoStack.at(-1)?.label ?? null,
     };
-    listeners.forEach((listener) => listener());
+    listeners.emit();
   };
 
   const disposeAll = (commands: Command[]) => {
@@ -87,10 +88,7 @@ export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
     },
     getState: () => state,
     peek: () => undoStack.at(-1) ?? null,
-    subscribe(onChange) {
-      listeners.add(onChange);
-      return () => listeners.delete(onChange);
-    },
+    subscribe: listeners.subscribe,
     clear,
     dispose() {
       clear();

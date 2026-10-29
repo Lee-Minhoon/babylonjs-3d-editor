@@ -3,6 +3,8 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
 
+import { createListeners } from "@/lib/listeners";
+
 import { getMaterialValues, type MaterialValues } from "./mesh-material";
 import {
   addPresetMesh,
@@ -77,21 +79,18 @@ export type Clipboard = {
 
 export function createClipboard(): Clipboard {
   let snapshots: readonly MeshSnapshot[] | null = null;
-  const listeners = new Set<() => void>();
+  const listeners = createListeners();
 
   return {
     copy(meshes) {
       const next = captureMeshSnapshots(meshes);
       if (next.length === 0) return false;
       snapshots = next;
-      listeners.forEach((listener) => listener());
+      listeners.emit();
       return true;
     },
     get: () => snapshots,
     hasContent: () => snapshots !== null,
-    subscribe(onChange) {
-      listeners.add(onChange);
-      return () => listeners.delete(onChange);
-    },
+    subscribe: listeners.subscribe,
   };
 }

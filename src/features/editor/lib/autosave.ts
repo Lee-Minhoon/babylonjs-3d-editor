@@ -1,4 +1,5 @@
 import { createKeyValueStore } from "@/lib/kv-store";
+import { createListeners } from "@/lib/listeners";
 
 import type { SceneFile } from "./scene-file";
 import { SceneFileError } from "./scene-format";
@@ -63,13 +64,13 @@ export function createAutosave({
   /** 저장소 오류는 한 번만 알린다 (매 변경마다 토스트가 뜨지 않게) */
   let reportedError = false;
 
-  const listeners = new Set<() => void>();
+  const listeners = createListeners();
   const setPending = (next: AutosaveRecord | null) => {
     record = next;
     state = {
       pending: next && { fileName: next.fileName, savedAt: next.savedAt },
     };
-    listeners.forEach((listener) => listener());
+    listeners.emit();
   };
 
   const write = async () => {
@@ -146,10 +147,7 @@ export function createAutosave({
       await write();
     },
     getState: () => state,
-    subscribe(onChange) {
-      listeners.add(onChange);
-      return () => listeners.delete(onChange);
-    },
+    subscribe: listeners.subscribe,
     dispose() {
       disposed = true;
       if (timer) clearTimeout(timer);

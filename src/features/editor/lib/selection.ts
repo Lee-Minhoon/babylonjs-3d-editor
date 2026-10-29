@@ -6,19 +6,18 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 
+import { createListeners } from "@/lib/listeners";
+
 import { isEditorMesh } from "./mesh-presets";
 
 /**
  * 선택 상태(여러 개) + 외곽선 표시.
- * 마지막으로 고른 메쉬가 primary — 속성 패널·단일 기즈모의 기준이다.
  * 선택은 undo 히스토리에 기록하지 않는다. 선택된 메쉬가 씬에서 빠지면(삭제·추가 undo) 선택에서도 빠진다.
  * 뷰포트 클릭은 pointer-router가 selectAtPointer()를 호출한다.
  */
 export type Selection = {
   /** 선택된 메쉬들 (고른 순서). 바뀔 때만 새 배열이라 useSyncExternalStore에 바로 쓸 수 있다 */
   getMeshes(): readonly AbstractMesh[];
-  /** 마지막으로 고른 메쉬. 없으면 null */
-  getPrimary(): AbstractMesh | null;
   /** 이 메쉬 하나만 선택 (null이면 모두 해제) */
   select(mesh: AbstractMesh | null): void;
   /** 이 메쉬들로 선택을 바꾼다 (붙여넣기 결과 등) */
@@ -34,9 +33,18 @@ export type Selection = {
   dispose(): void;
 };
 
+/** 선택에 넣고 빼는 클릭인지 (Shift·⌘/Ctrl+클릭) — 뷰포트와 씬 목록이 같은 규칙을 쓴다 */
+export function isAdditiveClick(event: {
+  shiftKey: boolean;
+  metaKey: boolean;
+  ctrlKey: boolean;
+}): boolean {
+  return event.shiftKey || event.metaKey || event.ctrlKey;
+}
+
 export function createSelection(scene: Scene): Selection {
   let selected: readonly AbstractMesh[] = [];
-  const listeners = new Set<() => void>();
+  const listeners = createListeners();
 
   const outline = new SelectionOutlineLayer("__selection-outline", scene);
   outline.outlineColor = new Color3(1, 0.6, 0.15);
@@ -53,7 +61,7 @@ export function createSelection(scene: Scene): Selection {
     selected = next;
     outline.clearSelection();
     if (next.length > 0) outline.addSelection([...next]);
-    listeners.forEach((listener) => listener());
+    listeners.emit();
   }
 
   function toggle(mesh: AbstractMesh) {
@@ -70,7 +78,6 @@ export function createSelection(scene: Scene): Selection {
 
   return {
     getMeshes: () => selected,
-    getPrimary: () => selected.at(-1) ?? null,
     select: (mesh) => set(mesh ? [mesh] : []),
     set,
     toggle,
@@ -83,10 +90,7 @@ export function createSelection(scene: Scene): Selection {
         set(mesh ? [mesh] : []);
       }
     },
-    subscribe(onChange) {
-      listeners.add(onChange);
-      return () => listeners.delete(onChange);
-    },
+    subscribe: listeners.subscribe,
     dispose() {
       removedObserver.remove();
       outline.dispose();

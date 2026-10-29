@@ -47,7 +47,7 @@ export function useHistoryState(runtime: Runtime): HistoryState {
 const EMPTY_SELECTION: readonly AbstractMesh[] = [];
 const getEmptySelection = () => EMPTY_SELECTION;
 
-/** 선택된 메쉬들 (고른 순서, 마지막이 primary) */
+/** 선택된 메쉬들 (고른 순서) */
 export function useSelection(runtime: Runtime): readonly AbstractMesh[] {
   const selection = runtime?.selection;
   return useSyncExternalStore(

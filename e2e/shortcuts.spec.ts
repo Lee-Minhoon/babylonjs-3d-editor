@@ -40,3 +40,14 @@ test("한글 입력 상태에서 ⌘C/⌘V/⌘Z", async ({ page }) => {
   await pressHangul(page, "ㅋ", "KeyZ", { metaKey: true });
   await expectScene(page, ["Box 1"]);
 });
+
+test("숫자 키를 누르고 있어도(키 반복) 배치 모드가 깜빡이지 않는다", async ({
+  page,
+}) => {
+  // 같은 키를 떼지 않고 다시 누르면 Playwright는 repeat=true로 보낸다
+  // (반복이 한 번이면 켜짐 → 꺼짐이 되어 버그가 드러난다)
+  await page.keyboard.down("1");
+  await page.keyboard.down("1");
+  await page.keyboard.up("1");
+  await expect(placementHint(page)).toContainText("클릭할 때마다 배치");
+});

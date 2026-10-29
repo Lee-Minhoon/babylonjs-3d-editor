@@ -13,7 +13,7 @@ import {
 import {
   addPresetMesh,
   findPreset,
-  isEditorMesh,
+  inCreationOrder,
   MESH_PRESETS,
   type MeshPresetId,
   resetMeshNames,
@@ -92,9 +92,7 @@ function toVec3(vector: Vector3, scale = 1): Vec3 {
 
 /** 씬 목록에 보이는 에디터 메쉬 (생성 순서) */
 export function getEditorMeshes(scene: Scene): AbstractMesh[] {
-  return scene.meshes
-    .filter(isEditorMesh)
-    .toSorted((a, b) => a.uniqueId - b.uniqueId);
+  return inCreationOrder(scene.meshes);
 }
 
 export function serializeScene(scene: Scene): SceneFileData {

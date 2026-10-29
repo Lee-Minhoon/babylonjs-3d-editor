@@ -9,7 +9,7 @@ const scene = createTestScene();
 const box = () => addPresetMesh(scene, findPreset("box")!, Vector3.Zero());
 
 describe("selection", () => {
-  test("select는 하나만, toggle은 넣고 빼기, 마지막이 primary", () => {
+  test("select는 하나만, toggle은 넣고 빼기 (고른 순서 유지)", () => {
     const selection = createSelection(scene);
     const [a, b, c] = [box(), box(), box()];
 
@@ -17,16 +17,14 @@ describe("selection", () => {
     selection.toggle(b);
     selection.toggle(c);
     expect(selection.getMeshes()).toEqual([a, b, c]);
-    expect(selection.getPrimary()).toBe(c);
 
     selection.toggle(c);
     expect(selection.getMeshes()).toEqual([a, b]);
-    expect(selection.getPrimary()).toBe(b);
 
     selection.select(c);
     expect(selection.getMeshes()).toEqual([c]);
     selection.select(null);
-    expect(selection.getPrimary()).toBeNull();
+    expect(selection.getMeshes()).toEqual([]);
     selection.dispose();
   });
 

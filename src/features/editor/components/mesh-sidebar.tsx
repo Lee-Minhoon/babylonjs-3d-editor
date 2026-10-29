@@ -19,7 +19,8 @@ import {
 import { useMeshName } from "../hooks/use-mesh-name";
 import { getPresetShortcut, SHORTCUT_LABELS } from "../lib/editor-shortcuts";
 import { createRemoveMeshCommand } from "../lib/mesh-commands";
-import { isEditorMesh, MESH_PRESETS } from "../lib/mesh-presets";
+import { inCreationOrder, MESH_PRESETS } from "../lib/mesh-presets";
+import { isAdditiveClick } from "../lib/selection";
 import type { EditorRuntime } from "./editor-viewport";
 import { MeshNameInput } from "./mesh-name-input";
 import { MeshIcon, PRESET_ICONS } from "./preset-icons";
@@ -80,7 +81,7 @@ function SceneListItem({
           className="h-full flex-1 justify-start gap-2 px-1.5 font-normal hover:bg-transparent dark:hover:bg-transparent"
           aria-pressed={isSelected}
           onClick={(event) => {
-            if (event.shiftKey || event.metaKey || event.ctrlKey) {
+            if (isAdditiveClick(event)) {
               runtime.selection.toggle(mesh);
             } else {
               runtime.selection.select(mesh);
@@ -117,10 +118,7 @@ type MeshSidebarProps = {
 
 /** 왼쪽 사이드바: 메쉬 추가(배치 모드) + 씬 목록 */
 export function MeshSidebar({ runtime }: MeshSidebarProps) {
-  const meshes = useSceneMeshes(runtime?.scene ?? null)
-    .filter(isEditorMesh)
-    // undo로 다시 붙은 메쉬는 scene.meshes 끝에 들어가므로 생성 순서(uniqueId)로 정렬
-    .toSorted((a, b) => a.uniqueId - b.uniqueId);
+  const meshes = inCreationOrder(useSceneMeshes(runtime?.scene ?? null));
   const activePresetId = useActivePresetId(runtime);
   const placement = usePlacementState(runtime);
   const selected = useSelection(runtime);

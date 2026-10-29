@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 
 import { useMeshName } from "../hooks/use-mesh-name";
 import { renameMesh } from "../lib/editor-actions";
-import { getShortcutKey } from "../lib/editor-shortcuts";
+import { getShortcutKey, handleFieldHistoryKey } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 
 type MeshNameInputProps = {
@@ -48,14 +48,12 @@ export function MeshNameInput({
         } else if (key === "escape") {
           input.value = name;
           input.blur();
-        } else if (
-          (event.metaKey || event.ctrlKey) &&
-          (key === "z" || key === "y")
-        ) {
-          event.preventDefault();
-          if (input.value !== name) input.value = name;
-          else if (key === "y" || event.shiftKey) history.redo();
-          else history.undo();
+        } else {
+          handleFieldHistoryKey(event, history, () => {
+            if (input.value === name) return false;
+            input.value = name;
+            return true;
+          });
         }
       }}
       onBlur={(event) => {

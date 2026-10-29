@@ -13,6 +13,7 @@ import type { PlacementTool } from "./placement-tool";
 import type { SceneFile } from "./scene-file";
 import type { Selection } from "./selection";
 import type { ToolState, TransformTool } from "./tools";
+import type { TransformGizmo } from "./transform-gizmo";
 
 /*
  * 에디터 키보드 단축키를 한 곳에서 처리한다.
@@ -44,6 +45,7 @@ type EditorShortcutTargets = {
   tools: ToolState;
   clipboard: Clipboard;
   sceneFile: SceneFile;
+  gizmo: TransformGizmo;
 };
 
 const TOOL_KEYS: Record<string, TransformTool> = {
@@ -89,7 +91,6 @@ export const SHORTCUT_LABELS = {
   focus: "F",
   rename: "F2",
   rotatePlacement: "R",
-  rotatePlacementBack: "⇧R",
 } as const;
 
 /**
@@ -101,6 +102,34 @@ export const SHORTCUT_LABELS = {
 export function getShortcutKey(event: { key: string; code: string }): string {
   const letter = /^Key([A-Z])$/.exec(event.code)?.[1];
   return letter ? letter.toLowerCase() : event.key.toLowerCase();
+}
+
+/**
+ * 입력칸 안의 ⌘Z / ⌘⇧Z / Ctrl+Y. editor-shortcuts는 입력칸을 건너뛰므로 각 칸이 onKeyDown에서 부른다.
+ * 편집 중이면(cancelEdit이 편집을 취소하고 true) 그 편집만 되돌리고, 아니면 히스토리 undo/redo.
+ * 처리했으면 true.
+ */
+export function handleFieldHistoryKey(
+  event: {
+    key: string;
+    code: string;
+    metaKey: boolean;
+    ctrlKey: boolean;
+    shiftKey: boolean;
+    preventDefault(): void;
+  },
+  history: History,
+  cancelEdit: () => boolean,
+): boolean {
+  const key = getShortcutKey(event);
+  if (!(event.metaKey || event.ctrlKey) || (key !== "z" && key !== "y")) {
+    return false;
+  }
+  event.preventDefault();
+  if (cancelEdit()) return true;
+  if (key === "y" || event.shiftKey) history.redo();
+  else history.undo();
+  return true;
 }
 
 /**
@@ -125,12 +154,28 @@ export function bindEditorShortcuts({
   tools,
   clipboard,
   sceneFile,
+  gizmo,
 }: EditorShortcutTargets): () => void {
   const onKeyDown = (event: KeyboardEvent) => {
     if (isTypingTarget(event.target)) return;
 
     const key = getShortcutKey(event);
     const mod = event.metaKey || event.ctrlKey;
+
+    // 기즈모를 끄는 중에는 아무 단축키도 받지 않는다 — 여러 개 선택은 드래그 동안 메쉬가 피벗의 자식이라,
+    // 그 사이 undo·삭제가 끼어들면 변형이 어긋난다
+    if (gizmo.isDragging()) {
+      event.preventDefault();
+      return;
+    }
+
+    // 키를 누르고 있을 때의 반복 입력은 undo/redo와 배치 회전(R)만 받는다.
+    // 나머지(프리셋 토글·붙여넣기·저장 …)는 한 번만 — 숫자 키를 누르고 있으면 배치가 켜졌다 꺼졌다 한다
+    const repeatable = (mod && (key === "z" || key === "y")) || key === "r";
+    if (event.repeat && !repeatable) {
+      if (mod) event.preventDefault(); // ⌘S 등의 브라우저 동작은 계속 막는다
+      return;
+    }
 
     if (mod && !event.altKey) {
       const context = { history, selection, clipboard, placement };

@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { useSelection } from "../hooks/use-editor-state";
 import { useMeshName } from "../hooks/use-mesh-name";
 import { useMeshTransform } from "../hooks/use-mesh-transform";
-import { getShortcutKey } from "../lib/editor-shortcuts";
+import { getShortcutKey, handleFieldHistoryKey } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 import { MESH_NAME_INPUT_ID } from "../lib/mesh-name";
 import {
@@ -155,7 +155,6 @@ function AxisField({
           className="h-full w-full min-w-0 bg-transparent px-1.5 text-right text-xs tabular-nums outline-none"
           onKeyDown={(event) => {
             const key = getShortcutKey(event);
-            const mod = event.metaKey || event.ctrlKey;
 
             // Enter: blur → onValueCommitted (Base UI는 Enter만으로는 커밋하지 않는다)
             if (key === "enter") {
@@ -166,13 +165,12 @@ function AxisField({
               event.currentTarget.blur();
               // blur가 커밋을 부르지 않은 경우(값 변화 없음)에도 다음 편집에 남지 않게
               cancelling.current = false;
-            } else if (mod && (key === "z" || key === "y")) {
-              // 입력창 포커스 중에도 에디터 undo/redo가 동작해야 한다 (editor-shortcuts는 입력창을 건너뜀).
-              // 편집 중이면 먼저 그 편집만 취소한다.
-              event.preventDefault();
-              if (before.current) revert();
-              else if (key === "y" || event.shiftKey) history.redo();
-              else history.undo();
+            } else {
+              handleFieldHistoryKey(event, history, () => {
+                if (!before.current) return false;
+                revert();
+                return true;
+              });
             }
           }}
         />

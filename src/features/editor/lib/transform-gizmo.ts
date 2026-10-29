@@ -25,6 +25,10 @@ import {
 export type TransformGizmo = {
   /** 커서가 기즈모 위에 있거나 드래그 중이면 true → 뷰포트 클릭을 기즈모가 가져간다 */
   isPointerOver(): boolean;
+  /** 기즈모를 끄는 중이면 true → 그동안 단축키(undo·삭제 등)를 받지 않는다 */
+  isDragging(): boolean;
+  /** 기즈모가 붙은 대상 (메쉬 하나 또는 여러 개 선택의 피벗). 숨겨져 있으면 null */
+  getTarget(): TransformNode | null;
   dispose(): void;
 };
 
@@ -151,6 +155,8 @@ export function createTransformGizmo(
 
   const unsubscribers = [
     selection.subscribe(sync),
+    // 여러 개 선택 피벗은 메쉬를 따라가지 않으므로, undo/redo 등으로 메쉬가 움직이면 다시 놓는다
+    history.subscribe(sync),
     tools.subscribe(sync),
     placement.subscribe(sync),
   ];
@@ -158,6 +164,11 @@ export function createTransformGizmo(
 
   return {
     isPointerOver: () => manager.isHovered || manager.isDragging,
+    isDragging: () => dragStart !== null,
+    getTarget: () => {
+      const target = manager.attachedMesh ?? manager.attachedNode;
+      return target instanceof TransformNode ? target : null;
+    },
     dispose() {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
       manager.dispose();

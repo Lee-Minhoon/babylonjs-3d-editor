@@ -119,6 +119,18 @@ export function isEditorMesh(mesh: AbstractMesh): boolean {
   return Boolean(getEditorMetadata(mesh));
 }
 
+/**
+ * 에디터 메쉬만 생성 순서(uniqueId)로. 씬 목록·파일 저장이 같은 순서를 쓴다.
+ * undo로 다시 붙은 메쉬는 scene.meshes 끝에 들어가므로 배열 순서를 믿으면 안 된다.
+ */
+export function inCreationOrder(
+  meshes: readonly AbstractMesh[],
+): AbstractMesh[] {
+  return meshes
+    .filter(isEditorMesh)
+    .toSorted((a, b) => a.uniqueId - b.uniqueId);
+}
+
 /** 에디터에서 추가한 메쉬의 프리셋 id. 에디터 메쉬가 아니면 null */
 export function getPresetId(mesh: AbstractMesh): MeshPresetId | null {
   return getEditorMetadata(mesh)?.presetId ?? null;

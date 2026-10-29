@@ -1,3 +1,4 @@
+import { createListeners } from "@/lib/listeners";
 /** 뷰포트 기본 도구. 배치 모드(placement)는 이 위에 잠깐 덮어쓰는 모드다. */
 export type TransformTool = "select" | "move" | "rotate" | "scale";
 
@@ -21,8 +22,8 @@ export function createToolState(initial: TransformTool = "move"): ToolState {
   let tool = initial;
   let snapEnabled = true;
   let snapStep = DEFAULT_SNAP_STEP;
-  const listeners = new Set<() => void>();
-  const emit = () => listeners.forEach((listener) => listener());
+  const listeners = createListeners();
+  const emit = listeners.emit;
 
   return {
     getTool: () => tool,
@@ -44,10 +45,7 @@ export function createToolState(initial: TransformTool = "move"): ToolState {
       emit();
     },
     getActiveSnap: () => (snapEnabled ? snapStep : null),
-    subscribe(onChange) {
-      listeners.add(onChange);
-      return () => listeners.delete(onChange);
-    },
+    subscribe: listeners.subscribe,
   };
 }
 

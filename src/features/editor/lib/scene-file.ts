@@ -1,6 +1,7 @@
 import type { Scene } from "@babylonjs/core/scene";
 
 import { openTextFile, saveTextFile } from "@/lib/file-access";
+import { createListeners } from "@/lib/listeners";
 
 import type { Command, History } from "./history";
 import type { PlacementTool } from "./placement-tool";
@@ -81,7 +82,7 @@ export function createSceneFile(
   /** 피커·저장이 진행 중이면 다음 요청을 무시한다 (단축키 연타) */
   let busy = false;
 
-  const listeners = new Set<() => void>();
+  const listeners = createListeners();
   let state: SceneFileState = {
     fileName,
     dirty: false,
@@ -93,7 +94,7 @@ export function createSceneFile(
       dirty: restored || history.peek() !== savedHead,
       confirmPending: pendingConfirm !== null,
     };
-    listeners.forEach((listener) => listener());
+    listeners.emit();
   };
   const unsubscribeHistory = history.subscribe(emit);
 
@@ -219,10 +220,7 @@ export function createSceneFile(
       resolve?.(discard);
     },
     getState: () => state,
-    subscribe(onChange) {
-      listeners.add(onChange);
-      return () => listeners.delete(onChange);
-    },
+    subscribe: listeners.subscribe,
     dispose() {
       pendingConfirm?.(false);
       pendingConfirm = null;

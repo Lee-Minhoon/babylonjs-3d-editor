@@ -33,22 +33,24 @@ export function createKeyValueStore(dbName: string): KeyValueStore {
     return db;
   };
 
-  const transact = async <T>(
-    mode: IDBTransactionMode,
-    run: (store: IDBObjectStore) => IDBRequest<T>,
-  ) => {
-    const database = await open();
-    return request(run(database.transaction(STORE, mode).objectStore(STORE)));
+  const store = async (mode: IDBTransactionMode) =>
+    (await open()).transaction(STORE, mode).objectStore(STORE);
+
+  /** 쓰기는 요청 성공이 아니라 트랜잭션이 커밋돼야 끝난 것 (직후에 탭이 닫혀도 남도록) */
+  const write = async (run: (target: IDBObjectStore) => IDBRequest) => {
+    const target = await store("readwrite");
+    run(target);
+    await new Promise<void>((resolve, reject) => {
+      target.transaction.oncomplete = () => resolve();
+      target.transaction.onerror = () => reject(target.transaction.error);
+      target.transaction.onabort = () => reject(target.transaction.error);
+    });
   };
 
   return {
-    get: <T>(key: string) =>
-      transact("readonly", (store) => store.get(key)) as Promise<T | undefined>,
-    set: async (key, value) => {
-      await transact("readwrite", (store) => store.put(value, key));
-    },
-    delete: async (key) => {
-      await transact("readwrite", (store) => store.delete(key));
-    },
+    get: async <T>(key: string) =>
+      (await request((await store("readonly")).get(key))) as T | undefined,
+    set: (key, value) => write((target) => target.put(value, key)),
+    delete: (key) => write((target) => target.delete(key)),
   };
 }

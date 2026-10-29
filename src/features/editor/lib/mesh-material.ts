@@ -3,6 +3,8 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 
+import { createKeyedListeners } from "@/lib/listeners";
+
 import type { Command } from "./history";
 
 /*
@@ -40,7 +42,7 @@ export function randomMaterialValues(): MaterialValues {
  * 머티리얼에서 다시 계산하지 않고 적용한 값을 그대로 기억한다.
  */
 const appliedValues = new WeakMap<PBRMaterial, MaterialValues>();
-const listeners = new Map<AbstractMesh, Set<() => void>>();
+const materialChanged = createKeyedListeners<AbstractMesh>();
 
 function getPBRMaterial(mesh: AbstractMesh): PBRMaterial | null {
   return mesh.material instanceof PBRMaterial ? mesh.material : null;
@@ -77,22 +79,11 @@ export function applyMaterialValues(
   const material = getPBRMaterial(mesh);
   if (!material) return;
   setValues(material, values);
-  listeners.get(mesh)?.forEach((listener) => listener());
+  materialChanged.emit(mesh);
 }
 
 /** 이 메쉬의 머티리얼 값이 바뀌면 호출된다 */
-export function onMaterialChange(
-  mesh: AbstractMesh,
-  listener: () => void,
-): () => void {
-  let set = listeners.get(mesh);
-  if (!set) listeners.set(mesh, (set = new Set()));
-  set.add(listener);
-  return () => {
-    set.delete(listener);
-    if (set.size === 0) listeners.delete(mesh);
-  };
-}
+export const onMaterialChange = materialChanged.subscribe;
 
 export function isSameMaterial(a: MaterialValues, b: MaterialValues): boolean {
   return (

@@ -116,6 +116,7 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           tools,
           clipboard,
           sceneFile,
+          gizmo,
         });
         onRuntimeChange({
           scene,

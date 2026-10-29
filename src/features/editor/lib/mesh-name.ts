@@ -1,5 +1,7 @@
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
+import { createKeyedListeners } from "@/lib/listeners";
+
 import type { Command } from "./history";
 import { findPreset, getPresetId, reserveName } from "./mesh-presets";
 
@@ -12,7 +14,7 @@ import { findPreset, getPresetId, reserveName } from "./mesh-presets";
 /** 속성 패널의 이름 입력칸 id (F2·메뉴 "이름 바꾸기"가 여기로 포커스를 옮긴다) */
 export const MESH_NAME_INPUT_ID = "mesh-name-input";
 
-const listeners = new Map<AbstractMesh, Set<() => void>>();
+const nameChanged = createKeyedListeners<AbstractMesh>();
 
 /** 입력값을 이름으로: 앞뒤 공백 제거, 비면 null */
 export function normalizeMeshName(text: string): string | null {
@@ -26,22 +28,11 @@ export function setMeshName(mesh: AbstractMesh, name: string) {
   const presetId = getPresetId(mesh);
   const preset = presetId && findPreset(presetId);
   if (preset) reserveName(mesh.getScene(), preset, name);
-  listeners.get(mesh)?.forEach((listener) => listener());
+  nameChanged.emit(mesh);
 }
 
 /** 이 메쉬의 이름이 바뀌면 호출된다 */
-export function onMeshNameChange(
-  mesh: AbstractMesh,
-  listener: () => void,
-): () => void {
-  let set = listeners.get(mesh);
-  if (!set) listeners.set(mesh, (set = new Set()));
-  set.add(listener);
-  return () => {
-    set.delete(listener);
-    if (set.size === 0) listeners.delete(mesh);
-  };
-}
+export const onMeshNameChange = nameChanged.subscribe;
 
 /** 이름 바꾸기 Command ("Box 1 이름 변경"). 이름이 그대로거나 비었으면 null */
 export function createRenameCommand(

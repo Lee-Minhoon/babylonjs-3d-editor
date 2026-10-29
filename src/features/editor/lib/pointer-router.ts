@@ -2,7 +2,7 @@ import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
 import type { Scene } from "@babylonjs/core/scene";
 
 import type { PlacementTool } from "./placement-tool";
-import type { Selection } from "./selection";
+import { isAdditiveClick, type Selection } from "./selection";
 import type { TransformGizmo } from "./transform-gizmo";
 
 /*
@@ -50,9 +50,7 @@ export function bindPointerRouter(
       if (button === LEFT_BUTTON) placement.place();
       else if (button === RIGHT_BUTTON) placement.cancel();
     } else if (button === LEFT_BUTTON) {
-      selection.selectAtPointer(
-        event.shiftKey || event.metaKey || event.ctrlKey,
-      );
+      selection.selectAtPointer(isAdditiveClick(event));
     }
   });
 

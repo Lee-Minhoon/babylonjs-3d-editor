@@ -9,6 +9,8 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
 
+import { createListeners } from "@/lib/listeners";
+
 import { createMeshFromSnapshot, type MeshSnapshot } from "./clipboard";
 import { createMacroCommand, type History, macroLabel } from "./history";
 import { createSpawnMeshCommand, type SpawnMeshCommand } from "./mesh-commands";
@@ -100,8 +102,8 @@ export function createPlacementTool(
   tools: ToolState,
 ): PlacementTool {
   let active: ActivePlacement | null = null;
-  const listeners = new Set<() => void>();
-  const emit = () => listeners.forEach((listener) => listener());
+  const listeners = createListeners();
+  const emit = listeners.emit;
 
   const previewMaterial = new StandardMaterial("__placement-preview", scene);
   previewMaterial.diffuseColor = new Color3(0.45, 0.7, 1);
@@ -357,10 +359,7 @@ export function createPlacementTool(
       active?.state.kind === "preset" ? active.state.presetId : null,
     // state 객체는 begin·rotate 때만 새로 만들어지므로 useSyncExternalStore 스냅샷으로 안전하다
     getState: () => active?.state ?? null,
-    subscribe(onChange) {
-      listeners.add(onChange);
-      return () => listeners.delete(onChange);
-    },
+    subscribe: listeners.subscribe,
     dispose() {
       stop();
       previewMaterial.dispose();
