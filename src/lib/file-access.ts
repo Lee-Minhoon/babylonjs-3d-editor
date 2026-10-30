@@ -90,7 +90,8 @@ function download(name: string, text: string, mimeType: string) {
   link.href = url;
   link.download = name;
   link.click();
-  URL.revokeObjectURL(url);
+  // 클릭 직후 바로 해제하면 일부 브라우저(Safari 등)에서 다운로드가 시작되기 전에 끊긴다
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 /**

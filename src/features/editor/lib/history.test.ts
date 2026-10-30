@@ -73,16 +73,39 @@ describe("createHistory", () => {
     expect(commands[0].calls.undo).toBe(0);
   });
 
-  test("peek: undo로 같은 지점에 돌아오면 같은 Command (저장 여부 판단용)", () => {
+  test("mark: undo로 같은 지점에 돌아오면 같은 값 (저장 여부 판단용)", () => {
     const history = createHistory();
     const a = trackedCommand("A");
     const b = trackedCommand("B");
+    const empty = history.mark();
     history.execute(a.command);
-    const saved = history.peek();
+    const saved = history.mark();
+    expect(saved).not.toBe(empty);
     history.execute(b.command);
-    expect(history.peek()).not.toBe(saved);
+    expect(history.mark()).not.toBe(saved);
     history.undo();
-    expect(history.peek()).toBe(saved);
+    expect(history.mark()).toBe(saved);
+    history.undo();
+    expect(history.mark()).toBe(empty);
+  });
+
+  test("mark: 최대 개수를 넘어 빠진 Command가 있으면 끝까지 undo 해도 처음 지점이 아니다", () => {
+    const history = createHistory({ limit: 2 });
+    const start = history.mark();
+    for (const label of ["1", "2", "3"]) {
+      history.execute(trackedCommand(label).command);
+    }
+    history.undo();
+    history.undo();
+    // "1"은 되돌릴 수 없어 씬에 남아 있다 → 처음(빈) 상태와 같다고 보면 안 된다
+    expect(history.mark()).not.toBe(start);
+  });
+
+  test("mark: clear 하면 이전의 어떤 지점과도 다르다", () => {
+    const history = createHistory();
+    const start = history.mark();
+    history.clear();
+    expect(history.mark()).not.toBe(start);
   });
 
   test("clear는 모두 dispose 하고 구독은 유지한다, dispose는 구독도 끊는다", () => {

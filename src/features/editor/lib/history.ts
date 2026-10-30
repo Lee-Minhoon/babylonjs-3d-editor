@@ -26,10 +26,10 @@ export type History = {
   redo(): void;
   getState(): HistoryState;
   /**
-   * 가장 최근에 실행된(undo 스택 맨 위) Command. 저장 시점과 비교해 변경 여부를 판단한다.
-   * undo로 저장 시점까지 되돌아가면 다시 같은 Command가 된다.
+   * 지금 히스토리 위치를 나타내는 값. 저장 시점의 값과 비교해(===) 변경 여부를 판단한다.
+   * undo로 저장 시점까지 되돌아가면 다시 같은 값이 된다.
    */
-  peek(): Command | null;
+  mark(): HistoryMark;
   subscribe(onChange: () => void): () => void;
   /** 모든 기록을 버린다 (새 씬·열기). 구독은 유지된다. */
   clear(): void;
@@ -37,12 +37,20 @@ export type History = {
   dispose(): void;
 };
 
+/**
+ * 히스토리 위치 표식: undo 스택 맨 위 Command, 스택이 비었으면 그 바닥(base).
+ * 바닥은 오래된 Command가 빠지거나(최대 개수 초과) clear 될 때마다 새로 만든다
+ * — 되돌릴 수 없는 변경이 씬에 남았으므로 이전의 빈 스택과 같은 위치가 아니다.
+ */
+export type HistoryMark = Command | { readonly base: true };
+
 const DEFAULT_LIMIT = 100;
 
 export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
   const undoStack: Command[] = [];
   const redoStack: Command[] = [];
   const listeners = createListeners();
+  let base: HistoryMark = { base: true };
 
   // useSyncExternalStore용으로 변경 시에만 새 객체를 만든다
   let state: HistoryState = { undoLabel: null, redoLabel: null };
@@ -61,6 +69,7 @@ export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
   const clear = () => {
     disposeAll(undoStack);
     disposeAll(redoStack);
+    base = { base: true };
     emit();
   };
 
@@ -69,7 +78,10 @@ export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
       command.execute();
       undoStack.push(command);
       disposeAll(redoStack);
-      if (undoStack.length > limit) undoStack.shift()?.dispose?.();
+      if (undoStack.length > limit) {
+        undoStack.shift()?.dispose?.();
+        base = { base: true };
+      }
       emit();
     },
     undo() {
@@ -87,7 +99,7 @@ export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
       emit();
     },
     getState: () => state,
-    peek: () => undoStack.at(-1) ?? null,
+    mark: () => undoStack.at(-1) ?? base,
     subscribe: listeners.subscribe,
     clear,
     dispose() {

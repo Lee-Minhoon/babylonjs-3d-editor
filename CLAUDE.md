@@ -108,7 +108,7 @@ src/
   - shadcn `Slider`에는 `value={[n]}`처럼 배열로 넘긴다 (숫자 하나면 thumb이 두 개 그려진다).
 - 씬 파일: 형식은 `lib/scene-format.ts`(에디터 전용 JSON — 프리셋·이름·위치·회전(도)·크기·색만, `format`/`version` 필드), 문서 상태(파일 이름·핸들·저장 안 된 변경·새 씬/열기/저장)는 `lib/scene-file.ts`. 브라우저 파일 입출력은 공용 `src/lib/file-access.ts`(File System Access API, 없으면 input/다운로드 폴백).
   - **새 씬·열기는 히스토리를 비운다** (undo 대상 아님, Command 예외). 이때만 에디터 메쉬를 직접 해제한다 (`clearEditorMeshes`, 반드시 `history.clear()` 뒤).
-  - 변경 여부는 저장 시점의 `history.peek()`와 비교한다 (undo로 저장 시점에 돌아오면 깨끗한 상태). 변경이 있으면 `DiscardChangesDialog`로 묻는다 (`confirmPending` → `resolveConfirm`).
+  - 변경 여부는 저장 시점의 `history.mark()`와 비교한다 (undo로 저장 시점에 돌아오면 깨끗한 상태. 최대 개수 초과로 빠진 Command가 있으면 끝까지 undo 해도 처음과 다른 값). 변경이 있으면 `DiscardChangesDialog`로 묻는다 (`confirmPending` → `resolveConfirm`).
   - 열기는 파싱·검증(`parseSceneFile`)이 성공한 뒤에만 씬을 바꾼다. 실패 메시지(`SceneFileError`)는 토스트로 보여준다.
   - 자동 저장(`lib/autosave.ts`): 파일로 저장 안 된 변경이 있으면 1초 뒤(탭이 숨겨지면 즉시) IndexedDB(`src/lib/kv-store.ts`)에 씬 텍스트를 남기고, 깨끗해지면 지운다. 시작할 때 기록이 있으면 `RecoveryDialog`로 복구/버리기를 묻고, **답을 받기 전에는 아무것도 쓰지 않는다** (빈 씬이 기록을 지우지 않게). 복구는 `sceneFile.restore` — 히스토리는 비우고, 파일로 저장할 때까지 "변경 있음"으로 둔다. 파일 핸들은 복구하지 않는다(첫 저장 때 위치를 다시 묻는다). 저장소는 하나라 여러 탭에서 동시에 편집하면 마지막 탭 내용만 남는다.
   - 형식을 바꾸면 `SCENE_FILE_VERSION`을 올리고 이전 버전 변환을 `parseSceneFile`에 넣는다. 메쉬에 새 속성을 추가하면 `MeshSnapshot`과 씬 파일 둘 다에 넣는다.

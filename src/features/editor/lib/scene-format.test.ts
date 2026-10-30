@@ -119,6 +119,8 @@ describe("잘못된 파일은 SceneFileError (씬을 바꾸기 전에 거른다)
     ["JSON이 아님", "{not json", "JSON 형식이 아닙니다"],
     ["다른 형식", JSON.stringify({ format: "other" }), "씬 파일이 아닙니다"],
     ["더 새로운 버전", file([], SCENE_FILE_VERSION + 1), "더 새로운 버전"],
+    ["버전 0", file([], 0), "version"],
+    ["음수 버전", file([], -1), "version"],
     [
       "meshes 없음",
       JSON.stringify({ format: SCENE_FILE_FORMAT, version: 2 }),

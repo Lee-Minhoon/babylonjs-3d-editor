@@ -254,6 +254,9 @@ export function parseSceneFile(text: string): SceneFileData {
   if (typeof data.version !== "number" || !Number.isInteger(data.version)) {
     throw new SceneFileError("version이 없습니다.");
   }
+  if (data.version < 1) {
+    throw new SceneFileError(`잘못된 version(${data.version})입니다.`);
+  }
   if (data.version > SCENE_FILE_VERSION) {
     throw new SceneFileError(
       `더 새로운 버전(v${data.version})의 파일입니다. 에디터를 업데이트하세요.`,

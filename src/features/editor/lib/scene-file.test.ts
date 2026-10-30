@@ -19,8 +19,8 @@ vi.mock("@/lib/file-access", () => ({
 
 const scene = createTestScene();
 
-function setup() {
-  const history = createHistory();
+function setup({ historyLimit }: { historyLimit?: number } = {}) {
+  const history = createHistory({ limit: historyLimit });
   const notify = vi.fn<(notice: SceneFileNotice) => void>();
   const sceneFile = createSceneFile(scene, {
     history,
@@ -69,6 +69,17 @@ describe("저장", () => {
     expect(sceneFile.getState().dirty).toBe(true);
     history.redo();
     expect(sceneFile.getState().dirty).toBe(false);
+  });
+
+  test("히스토리 최대 개수를 넘긴 뒤 끝까지 undo 해도 되돌릴 수 없는 편집이 남아 변경 있음", () => {
+    const { history, sceneFile, addBox } = setup({ historyLimit: 2 });
+    addBox();
+    addBox();
+    addBox(); // 첫 번째 추가는 히스토리에서 빠져 되돌릴 수 없다
+    history.undo();
+    history.undo();
+    expect(getEditorMeshes(scene)).toHaveLength(1);
+    expect(sceneFile.getState().dirty).toBe(true);
   });
 
   test("쓰는 동안 한 편집은 파일에 없으므로 변경 있음으로 남는다", async () => {

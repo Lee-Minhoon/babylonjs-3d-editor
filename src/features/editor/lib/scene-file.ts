@@ -3,7 +3,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import { openTextFile, saveTextFile } from "@/lib/file-access";
 import { createListeners } from "@/lib/listeners";
 
-import type { Command, History } from "./history";
+import type { History, HistoryMark } from "./history";
 import type { PlacementTool } from "./placement-tool";
 import {
   clearEditorMeshes,
@@ -74,8 +74,8 @@ export function createSceneFile(
 ): SceneFile {
   let fileName: string | null = null;
   let handle: FileSystemFileHandle | null = null;
-  /** 저장(또는 열기) 시점의 history.peek(). 지금 값과 다르면 변경이 있는 것 */
-  let savedHead: Command | null = null;
+  /** 저장(또는 열기) 시점의 history.mark(). 지금 값과 다르면 변경이 있는 것 */
+  let savedMark: HistoryMark = history.mark();
   /** 자동 저장에서 복구한 직후: 히스토리는 비었지만 파일로는 저장되지 않은 상태 */
   let restored = false;
   let pendingConfirm: ((discard: boolean) => void) | null = null;
@@ -91,7 +91,7 @@ export function createSceneFile(
   const emit = () => {
     state = {
       fileName,
-      dirty: restored || history.peek() !== savedHead,
+      dirty: restored || history.mark() !== savedMark,
       confirmPending: pendingConfirm !== null,
     };
     listeners.emit();
@@ -114,7 +114,7 @@ export function createSceneFile(
     history.clear();
     clearEditorMeshes(scene);
     load?.(scene);
-    savedHead = history.peek();
+    savedMark = history.mark();
     restored = false;
   };
 
@@ -139,7 +139,7 @@ export function createSceneFile(
   const write = async (pickLocation: boolean) => {
     // 파일에 쓴 내용의 시점을 기억한다 — 쓰는 동안(핸들 저장은 모달이 없다) 편집이 이어져도
     // 그 편집은 파일에 없으므로 "변경 있음"이어야 한다
-    const head = history.peek();
+    const mark = history.mark();
     const text = stringifySceneFile(serializeScene(scene));
     const saved = await saveTextFile(text, {
       handle: pickLocation ? null : handle,
@@ -149,7 +149,7 @@ export function createSceneFile(
     if (!saved) return;
     fileName = saved.name;
     handle = saved.handle;
-    savedHead = head;
+    savedMark = mark;
     restored = false;
     emit();
     notify({ type: "success", title: `${saved.name} 저장됨` });
