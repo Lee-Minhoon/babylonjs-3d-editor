@@ -39,6 +39,19 @@ test("입력창 Esc는 편집을 취소하고 기록하지 않는다", async ({ 
   expect(await undoMenuText(page)).toContain("Sphere 1 추가");
 });
 
+test("입력창 ⌘Z는 편집을 취소하고, 그 뒤 포커스가 떠나도 취소한 값이 다시 적용되지 않는다", async ({
+  page,
+}) => {
+  const x = axisInput(page, "X", "position");
+  const before = await x.inputValue();
+  await x.fill("5");
+  await expect(x).toHaveValue("5");
+  await x.press("Meta+z");
+  await page.keyboard.press("Tab");
+  await expect(x).toHaveValue(before);
+  expect(await undoMenuText(page)).toContain("Sphere 1 추가");
+});
+
 test("머티리얼: hex·슬라이더 편집이 각각 Command 하나", async ({ page }) => {
   const hex = page.getByLabel("기본색 hex");
   await hex.fill("d4af37");

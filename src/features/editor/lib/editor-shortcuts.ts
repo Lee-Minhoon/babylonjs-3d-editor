@@ -214,6 +214,9 @@ export function bindEditorShortcuts({
       } else if (key === "o" && !event.shiftKey) {
         event.preventDefault();
         void sceneFile.open();
+      } else if (key === "a" && !event.shiftKey) {
+        // 전체 선택은 아직 없다 — 브라우저가 화면 글자를 전부 하이라이트하는 것만 막는다
+        event.preventDefault();
       }
       return;
     }

@@ -9,6 +9,7 @@ import type { PlacementTool } from "./placement-tool";
 import type { Selection } from "./selection";
 import { type ToolState, type TransformTool } from "./tools";
 import {
+  applyTransform,
   captureTransform,
   createTransformCommand,
   isSameTransform,
@@ -98,9 +99,12 @@ export function createTransformGizmo(
       const kind = KIND_BY_TOOL[tool];
       const commands = started.flatMap(({ mesh, before }) => {
         const after = captureTransform(mesh);
-        return isSameTransform(before, after)
-          ? []
-          : [createTransformCommand(mesh, kind, before, after)];
+        if (isSameTransform(before, after)) {
+          // 움직이지 않은 드래그(클릭). setParent 왕복이 남긴 미세한 오차·다른 오일러 표현을 원래대로
+          applyTransform(mesh, before);
+          return [];
+        }
+        return [createTransformCommand(mesh, kind, before, after)];
       });
       if (commands.length > 0) {
         history.execute(

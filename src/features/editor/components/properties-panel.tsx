@@ -121,6 +121,18 @@ function AxisField({
     before.current = null;
   };
 
+  /**
+   * 취소는 반드시 blur까지 한다 (Esc·⌘Z 공통). Base UI는 타이핑한 글자를 value prop과 동기화하지 않고
+   * 들고 있다가 blur 때 다시 파싱하므로, 되돌리기만 하고 포커스를 두면 다음 blur에서 취소한 값이 다시 적용된다.
+   */
+  const cancelEdit = (input: HTMLInputElement) => {
+    cancelling.current = true;
+    revert();
+    input.blur();
+    // blur가 커밋을 부르지 않은 경우(값 변화 없음)에도 다음 편집에 남지 않게
+    cancelling.current = false;
+  };
+
   return (
     <NumberField.Root
       value={value}
@@ -160,15 +172,12 @@ function AxisField({
             if (key === "enter") {
               event.currentTarget.blur();
             } else if (key === "escape") {
-              cancelling.current = true;
-              revert();
-              event.currentTarget.blur();
-              // blur가 커밋을 부르지 않은 경우(값 변화 없음)에도 다음 편집에 남지 않게
-              cancelling.current = false;
+              cancelEdit(event.currentTarget);
             } else {
+              const input = event.currentTarget;
               handleFieldHistoryKey(event, history, () => {
                 if (!before.current) return false;
-                revert();
+                cancelEdit(input);
                 return true;
               });
             }

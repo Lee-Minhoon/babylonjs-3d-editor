@@ -63,6 +63,14 @@ test("슬라이더를 조절하는 중의 Delete는 메쉬를 지우지 않는�
   await expectScene(page, ["Box 1"]);
 });
 
+test("예약 키 ⌘A는 페이지 글자를 전체 선택하지 않는다", async ({ page }) => {
+  await page.keyboard.press("Meta+a");
+  const selected = await page.evaluate(
+    () => String(window.getSelection()).length,
+  );
+  expect(selected).toBe(0);
+});
+
 test("숫자 키를 누르고 있어도(키 반복) 배치 모드가 깜빡이지 않는다", async ({
   page,
 }) => {
