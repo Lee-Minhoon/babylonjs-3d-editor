@@ -4,6 +4,7 @@ import {
   cutSelected,
   deleteSelected,
   duplicateSelected,
+  focusSelected,
   paste,
   startRename,
 } from "./editor-actions";
@@ -22,6 +23,7 @@ import type { TransformGizmo } from "./transform-gizmo";
  *   Esc               배치 모드 종료 → (배치 중이 아니면) 선택 해제
  *   R / Shift+R       (배치 중일 때만) 미리보기 90° 회전 / 반대로. 배치 중이 아니면 R은 크기 도구
  *   Delete/Backspace  선택한 메쉬 삭제 (undo 가능)
+ *   F                 선택한 메쉬로 카메라 포커스
  *   F2                이름 바꾸기 (하나만 선택했을 때 속성 패널 이름 칸으로)
  *   Q / W / E / R     선택 / 이동 / 회전 / 크기 도구
  *   1 ~ 8             메쉬 프리셋 배치 모드 토글 (MESH_PRESETS 순서, 상단 숫자열만)
@@ -29,13 +31,13 @@ import type { TransformGizmo } from "./transform-gizmo";
  *   ⌘/Ctrl+Shift+Z    redo  (Ctrl+Y도 redo)
  *   ⌘/Ctrl+C / X / V  복사 / 잘라내기 / 붙여넣기 (에디터 내부 클립보드)
  *   ⌘/Ctrl+D          복제
+ *   ⌘/Ctrl+A          전체 선택
  *   ⌘/Ctrl+S          저장 (⌘/Ctrl+Shift+S 다른 이름으로 저장)
  *   ⌘/Ctrl+O          열기
  *   (새 씬은 단축키 없음 — ⌘N은 브라우저가 가로채 막을 수 없다)
  *
  * 예약 (나중 기능용 — 다른 동작에 쓰지 말 것):
- *   ⌘/Ctrl+A 전체 선택
- *   F 선택 메쉬로 카메라 포커스 · 숫자패드 카메라 시점
+ *   숫자패드 카메라 시점
  */
 
 type EditorShortcutTargets = {
@@ -73,7 +75,6 @@ export function getToolShortcut(tool: TransformTool): string {
 
 /**
  * UI(메뉴·툴팁) 표시용 단축키 라벨. 실제 처리는 아래 onKeyDown이 기준이며 여기와 맞춰야 한다.
- * selectAll·focus: 아직 기능이 없는 예약 키 (메뉴에 비활성으로 표시).
  */
 export const SHORTCUT_LABELS = {
   undo: "⌘Z",
@@ -207,6 +208,10 @@ export function bindEditorShortcuts({
         // 브라우저 북마크(⌘D)는 에디터 안에서 항상 막는다
         event.preventDefault();
         duplicateSelected(context);
+      } else if (key === "a" && !event.shiftKey) {
+        // 페이지 글자 전체 선택 대신
+        event.preventDefault();
+        selection.selectAll();
       } else if (key === "s") {
         // 브라우저 "페이지 저장" 대화상자 대신
         event.preventDefault();
@@ -214,9 +219,6 @@ export function bindEditorShortcuts({
       } else if (key === "o" && !event.shiftKey) {
         event.preventDefault();
         void sceneFile.open();
-      } else if (key === "a" && !event.shiftKey) {
-        // 전체 선택은 아직 없다 — 브라우저가 화면 글자를 전부 하이라이트하는 것만 막는다
-        event.preventDefault();
       }
       return;
     }
@@ -243,6 +245,11 @@ export function bindEditorShortcuts({
     const preset = digit ? MESH_PRESETS[Number(digit) - 1] : undefined;
     if (preset) {
       placement.toggle(preset);
+      return;
+    }
+
+    if (key === "f") {
+      if (focusSelected({ selection })) event.preventDefault();
       return;
     }
 

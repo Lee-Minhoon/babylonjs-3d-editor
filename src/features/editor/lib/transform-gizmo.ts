@@ -7,7 +7,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import { createMacroCommand, type History, macroLabel } from "./history";
 import type { PlacementTool } from "./placement-tool";
 import type { Selection } from "./selection";
-import { type ToolState, type TransformTool } from "./tools";
+import { type GizmoSpace, type ToolState, type TransformTool } from "./tools";
 import {
   applyTransform,
   captureTransform,
@@ -111,13 +111,16 @@ export function createTransformGizmo(
           createMacroCommand(macroLabel(commands, kind), commands),
         );
       }
-      // 다음 드래그를 위해 피벗을 새 중심으로 (회전·크기는 초기화)
+      // 다음 드래그를 위해 피벗을 새 중심으로 (크기는 초기화, 회전은 축 방향 설정대로)
       if (started.length > 1) sync();
     });
   }
 
-  /** 피벗을 메쉬들의 월드 바운딩 박스 중심에 둔다 */
-  function placePivot(meshes: readonly AbstractMesh[]) {
+  /**
+   * 피벗을 메쉬들의 월드 바운딩 박스 중심에 둔다. 크기는 초기화한다.
+   * 회전: 로컬 모드면 처음 고른 메쉬의 회전(축이 그 메쉬를 따른다), 월드 모드면 없음.
+   */
+  function placePivot(meshes: readonly AbstractMesh[], space: GizmoSpace) {
     const min = new Vector3(Infinity, Infinity, Infinity);
     const max = new Vector3(-Infinity, -Infinity, -Infinity);
     for (const mesh of meshes) {
@@ -127,8 +130,9 @@ export function createTransformGizmo(
       max.maximizeInPlace(box.maximumWorld);
     }
     pivot.position.copyFrom(min.add(max).scale(0.5));
-    pivot.rotationQuaternion = null;
     pivot.rotation.setAll(0);
+    pivot.rotationQuaternion =
+      space === "local" ? meshes[0].absoluteRotationQuaternion.clone() : null;
     pivot.scaling.setAll(1);
   }
 
@@ -137,26 +141,41 @@ export function createTransformGizmo(
     if (dragStart) return;
     const tool = tools.getTool();
     const meshes = selection.getMeshes();
+    const space = tools.getGizmoSpace();
     const visible =
       meshes.length > 0 && tool !== "select" && !placement.isActive();
 
     manager.positionGizmoEnabled = visible && tool === "move";
     manager.rotationGizmoEnabled = visible && tool === "rotate";
     manager.scaleGizmoEnabled = visible && tool === "scale";
-    observe(manager.gizmos.positionGizmo, "move");
+    const { positionGizmo, rotationGizmo, scaleGizmo } = manager.gizmos;
+    observe(positionGizmo, "move");
+    observe(rotationGizmo, "rotate");
+    observe(scaleGizmo, "scale");
     // 드래그 변화량을 스냅 단위로 끊는다 (배치도 스냅되므로 격자 위에서 시작해 격자 위에 머문다)
-    if (manager.gizmos.positionGizmo) {
-      manager.gizmos.positionGizmo.snapDistance = tools.getActiveSnap() ?? 0;
+    if (positionGizmo) {
+      positionGizmo.snapDistance = tools.getActiveSnap("move") ?? 0;
+      positionGizmo.updateGizmoRotationToMatchAttachedMesh = space === "local";
     }
-    observe(manager.gizmos.rotationGizmo, "rotate");
-    observe(manager.gizmos.scaleGizmo, "scale");
+    if (rotationGizmo) {
+      // 회전 스냅 단위는 도, Babylon은 라디안
+      rotationGizmo.snapDistance =
+        ((tools.getActiveSnap("rotate") ?? 0) * Math.PI) / 180;
+      rotationGizmo.updateGizmoRotationToMatchAttachedMesh = space === "local";
+    }
+    // 크기 기즈모는 항상 메쉬 축 (Babylon이 월드 축 크기 조절을 지원하지 않는다).
+    // incrementalSnap: 0.1 단위면 1 → 1.1 → 1.2 (곱하기가 아니라 더하기)
+    if (scaleGizmo) {
+      scaleGizmo.snapDistance = tools.getActiveSnap("scale") ?? 0;
+      scaleGizmo.incrementalSnap = true;
+    }
 
     if (!visible) {
       manager.attachToNode(null);
     } else if (meshes.length === 1) {
       manager.attachToMesh(meshes[0]);
     } else {
-      placePivot(meshes);
+      placePivot(meshes, space);
       manager.attachToNode(pivot);
     }
   }

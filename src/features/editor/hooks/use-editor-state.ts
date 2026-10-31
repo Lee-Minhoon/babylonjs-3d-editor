@@ -11,9 +11,12 @@ import type { MeshPresetId } from "../lib/mesh-presets";
 import type { PlacementState } from "../lib/placement-tool";
 import type { SceneFileState } from "../lib/scene-file";
 import {
+  DEFAULT_GIZMO_SPACE,
   DEFAULT_SNAP_ENABLED,
-  DEFAULT_SNAP_STEP,
+  DEFAULT_SNAP_STEPS,
   DEFAULT_TOOL,
+  type GizmoSpace,
+  type SnapKind,
   type TransformTool,
 } from "../lib/tools";
 
@@ -29,7 +32,7 @@ const getEmptyHistory = () => EMPTY_HISTORY;
 const getDefaultTool = (): TransformTool => DEFAULT_TOOL;
 const getFalse = () => false;
 const getDefaultSnapEnabled = () => DEFAULT_SNAP_ENABLED;
-const getDefaultSnapStep = () => DEFAULT_SNAP_STEP;
+const getDefaultGizmoSpace = (): GizmoSpace => DEFAULT_GIZMO_SPACE;
 const EMPTY_SCENE_FILE: SceneFileState = {
   fileName: null,
   dirty: false,
@@ -82,19 +85,34 @@ export function useActiveTool(runtime: Runtime): TransformTool {
   );
 }
 
-export function useSnap(runtime: Runtime): { enabled: boolean; step: number } {
+/** 스냅 켜짐 여부와 이 종류(위치·회전·크기)의 단위 */
+export function useSnap(
+  runtime: Runtime,
+  kind: SnapKind,
+): { enabled: boolean; step: number } {
   const tools = runtime?.tools;
   const enabled = useSyncExternalStore(
     tools?.subscribe ?? subscribeNoop,
     tools?.isSnapEnabled ?? getDefaultSnapEnabled,
     getDefaultSnapEnabled,
   );
+  const getDefaultStep = () => DEFAULT_SNAP_STEPS[kind];
   const step = useSyncExternalStore(
     tools?.subscribe ?? subscribeNoop,
-    tools?.getSnapStep ?? getDefaultSnapStep,
-    getDefaultSnapStep,
+    tools ? () => tools.getSnapStep(kind) : getDefaultStep,
+    getDefaultStep,
   );
   return { enabled, step };
+}
+
+/** 기즈모 축 방향 (로컬/월드) */
+export function useGizmoSpace(runtime: Runtime): GizmoSpace {
+  const tools = runtime?.tools;
+  return useSyncExternalStore(
+    tools?.subscribe ?? subscribeNoop,
+    tools?.getGizmoSpace ?? getDefaultGizmoSpace,
+    getDefaultGizmoSpace,
+  );
 }
 
 /** 클립보드에 붙여넣을 내용이 있는지 */

@@ -148,7 +148,7 @@ export function createPlacementTool(
     if (!active) return;
     const hit = findSurfacePoint();
     // X/Z만 스냅 (Y는 바닥·윗면 높이 그대로)
-    const snap = tools.getActiveSnap();
+    const snap = tools.getActiveSnap("move");
     active.anchor = hit
       ? new Vector3(snapValue(hit.x, snap), hit.y, snapValue(hit.z, snap))
       : null;

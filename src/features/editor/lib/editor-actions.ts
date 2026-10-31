@@ -1,5 +1,7 @@
+import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
+import { focusCamera } from "./camera-focus";
 import { captureMeshSnapshots, type Clipboard } from "./clipboard";
 import { createMacroCommand, type History, macroLabel } from "./history";
 import { createRemoveMeshCommand } from "./mesh-commands";
@@ -48,6 +50,16 @@ export function startRename({
     input.select();
   });
   return true;
+}
+
+/** 선택한 메쉬들로 카메라 포커스 (F·메뉴). 선택이 없으면 아무것도 하지 않는다 */
+export function focusSelected({
+  selection,
+}: Pick<ActionContext, "selection">): boolean {
+  const meshes = selection.getMeshes();
+  const camera = meshes[0]?.getScene().activeCamera;
+  if (!(camera instanceof ArcRotateCamera)) return false;
+  return focusCamera(camera, meshes);
 }
 
 /** 메쉬들을 삭제하는 Command 하나 (여러 개여도 undo 한 번). 비어 있으면 아무것도 하지 않는다 */

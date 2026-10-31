@@ -34,6 +34,7 @@ import {
   useActivePresetId,
   useActiveTool,
   useClipboardHasContent,
+  useGizmoSpace,
   useHistoryState,
   useSceneFileState,
   useSelection,
@@ -44,6 +45,7 @@ import {
   cutSelected,
   deleteSelected,
   duplicateSelected,
+  focusSelected,
   paste,
   startRename,
 } from "../lib/editor-actions";
@@ -53,10 +55,57 @@ import {
   SHORTCUT_LABELS,
 } from "../lib/editor-shortcuts";
 import { MESH_PRESETS } from "../lib/mesh-presets";
-import { SNAP_STEPS, type TransformTool } from "../lib/tools";
+import {
+  formatSnapStep,
+  type GizmoSpace,
+  SNAP_STEPS,
+  type SnapKind,
+  type TransformTool,
+} from "../lib/tools";
 import type { EditorRuntime } from "./editor-viewport";
 import { PRESET_ICONS } from "./preset-icons";
-import { TOOL_ITEMS } from "./transform-toolbar";
+import { GIZMO_SPACE_LABELS, TOOL_ITEMS } from "./transform-toolbar";
+
+const SNAP_MENU_LABELS: Record<SnapKind, string> = {
+  move: "이동 스냅 단위",
+  rotate: "회전 스냅 단위",
+  scale: "크기 스냅 단위",
+};
+
+/** 보기 메뉴의 스냅 단위 하위 메뉴 (이동·회전·크기 각각) */
+function SnapStepSubmenu({
+  runtime,
+  kind,
+}: {
+  runtime: EditorRuntime | null;
+  kind: SnapKind;
+}) {
+  const snap = useSnap(runtime, kind);
+  return (
+    <MenubarSub>
+      <MenubarSubTrigger disabled={!runtime || !snap.enabled}>
+        {SNAP_MENU_LABELS[kind]}
+        <span className="ml-auto text-muted-foreground tabular-nums">
+          {formatSnapStep(kind, snap.step)}
+        </span>
+      </MenubarSubTrigger>
+      <MenubarSubContent>
+        <MenubarRadioGroup
+          value={snap.step}
+          onValueChange={(step: number) =>
+            runtime?.tools.setSnapStep(kind, step)
+          }
+        >
+          {SNAP_STEPS[kind].map((step) => (
+            <MenubarRadioItem key={step} value={step} closeOnClick>
+              {formatSnapStep(kind, step)}
+            </MenubarRadioItem>
+          ))}
+        </MenubarRadioGroup>
+      </MenubarSubContent>
+    </MenubarSub>
+  );
+}
 
 /** 아직 기능이 없는 예약 항목 (단축키 자리는 비워두되 메뉴엔 보여준다) */
 function PlannedItem({
@@ -122,7 +171,8 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
   const hasSelection = selectionCount > 0;
   const activePresetId = useActivePresetId(runtime);
   const activeTool = useActiveTool(runtime);
-  const snap = useSnap(runtime);
+  const snapEnabled = useSnap(runtime, "move").enabled;
+  const gizmoSpace = useGizmoSpace(runtime);
   const canPaste = useClipboardHasContent(runtime);
   const file = useSceneFileState(runtime);
   const isWebGPU = runtime?.scene.getEngine().isWebGPU;
@@ -243,9 +293,13 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
               <MenubarShortcut>{SHORTCUT_LABELS.delete}</MenubarShortcut>
             </MenubarItem>
             <MenubarSeparator />
-            <PlannedItem shortcut={SHORTCUT_LABELS.selectAll}>
+            <MenubarItem
+              disabled={!runtime}
+              onClick={() => runtime?.selection.selectAll()}
+            >
               전체 선택
-            </PlannedItem>
+              <MenubarShortcut>{SHORTCUT_LABELS.selectAll}</MenubarShortcut>
+            </MenubarItem>
             <MenubarItem
               disabled={!hasSelection}
               onClick={() => runtime?.selection.select(null)}
@@ -311,9 +365,30 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
               </MenubarRadioGroup>
             </MenubarGroup>
             <MenubarSeparator />
+            <MenubarGroup>
+              <MenubarLabel>기즈모 축</MenubarLabel>
+              <MenubarRadioGroup
+                value={gizmoSpace}
+                onValueChange={(space: GizmoSpace) =>
+                  runtime?.tools.setGizmoSpace(space)
+                }
+              >
+                {(["local", "world"] as const).map((space) => (
+                  <MenubarRadioItem
+                    key={space}
+                    value={space}
+                    disabled={!runtime}
+                    closeOnClick
+                  >
+                    {GIZMO_SPACE_LABELS[space]}
+                  </MenubarRadioItem>
+                ))}
+              </MenubarRadioGroup>
+            </MenubarGroup>
+            <MenubarSeparator />
             <MenubarCheckboxItem
               closeOnClick
-              checked={snap.enabled}
+              checked={snapEnabled}
               disabled={!runtime}
               onCheckedChange={(checked) =>
                 runtime?.tools.setSnapEnabled(checked)
@@ -321,32 +396,17 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
             >
               스냅
             </MenubarCheckboxItem>
-            <MenubarSub>
-              <MenubarSubTrigger disabled={!runtime || !snap.enabled}>
-                스냅 단위
-                <span className="ml-auto text-muted-foreground tabular-nums">
-                  {snap.step}
-                </span>
-              </MenubarSubTrigger>
-              <MenubarSubContent>
-                <MenubarRadioGroup
-                  value={snap.step}
-                  onValueChange={(step: number) =>
-                    runtime?.tools.setSnapStep(step)
-                  }
-                >
-                  {SNAP_STEPS.map((step) => (
-                    <MenubarRadioItem key={step} value={step} closeOnClick>
-                      {step} 유닛
-                    </MenubarRadioItem>
-                  ))}
-                </MenubarRadioGroup>
-              </MenubarSubContent>
-            </MenubarSub>
+            <SnapStepSubmenu runtime={runtime} kind="move" />
+            <SnapStepSubmenu runtime={runtime} kind="rotate" />
+            <SnapStepSubmenu runtime={runtime} kind="scale" />
             <MenubarSeparator />
-            <PlannedItem shortcut={SHORTCUT_LABELS.focus}>
-              선택 항목으로 이동
-            </PlannedItem>
+            <MenubarItem
+              disabled={!hasSelection}
+              onClick={() => runtime && focusSelected(runtime)}
+            >
+              선택 항목에 맞춰 보기
+              <MenubarShortcut>{SHORTCUT_LABELS.focus}</MenubarShortcut>
+            </MenubarItem>
           </MenubarContent>
         </MenubarMenu>
       </Menubar>

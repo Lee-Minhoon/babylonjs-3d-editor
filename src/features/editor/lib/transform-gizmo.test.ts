@@ -76,4 +76,17 @@ describe("transform gizmo", () => {
     tools.setTool("select");
     expect(gizmo.getTarget()).toBeNull();
   });
+
+  test("여러 개 선택 피벗 축: 로컬이면 처음 고른 메쉬 회전, 월드면 회전 없음", () => {
+    const { tools, selection, gizmo, box } = setup();
+    const [a, b] = [box(0), box(4)];
+    a.rotation.y = Math.PI / 2;
+    selection.set([a, b]);
+    const yaw = () =>
+      gizmo.getTarget()?.rotationQuaternion?.toEulerAngles().y ?? 0;
+    expect(yaw()).toBeCloseTo(Math.PI / 2);
+
+    tools.setGizmoSpace("world");
+    expect(yaw()).toBeCloseTo(0);
+  });
 });

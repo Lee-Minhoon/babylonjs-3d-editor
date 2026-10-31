@@ -8,7 +8,7 @@ import type { Scene } from "@babylonjs/core/scene";
 
 import { createListeners } from "@/lib/listeners";
 
-import { isEditorMesh } from "./mesh-presets";
+import { inCreationOrder, isEditorMesh } from "./mesh-presets";
 
 /**
  * 선택 상태(여러 개) + 외곽선 표시.
@@ -22,6 +22,8 @@ export type Selection = {
   select(mesh: AbstractMesh | null): void;
   /** 이 메쉬들로 선택을 바꾼다 (붙여넣기 결과 등) */
   set(meshes: readonly AbstractMesh[]): void;
+  /** 씬의 에디터 메쉬 전부 (만든 순서) */
+  selectAll(): void;
   /** 선택에 넣거나 빼기 (Shift/⌘ 클릭) */
   toggle(mesh: AbstractMesh): void;
   /**
@@ -80,6 +82,7 @@ export function createSelection(scene: Scene): Selection {
     getMeshes: () => selected,
     select: (mesh) => set(mesh ? [mesh] : []),
     set,
+    selectAll: () => set(inCreationOrder(scene.meshes)),
     toggle,
     selectAtPointer(additive) {
       const hit = scene.pick(scene.pointerX, scene.pointerY, isEditorMesh);

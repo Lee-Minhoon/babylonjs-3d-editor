@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { addPresetMesh, findPreset } from "./mesh-presets";
+import { addPresetMesh, findPreset, inCreationOrder } from "./mesh-presets";
 import { createSelection } from "./selection";
 import { createTestScene } from "./test-scene";
 
@@ -49,5 +49,15 @@ describe("selection", () => {
     expect(listener).not.toHaveBeenCalled();
     expect(selection.getMeshes()).toBe(meshes);
     selection.dispose();
+  });
+
+  test("selectAll은 에디터 메쉬 전부를 만든 순서로", () => {
+    const selection = createSelection(scene);
+    const [a, b] = [box(), box()];
+    selection.select(b);
+    selection.selectAll();
+    const selected = selection.getMeshes();
+    expect(selected).toEqual(inCreationOrder(scene.meshes));
+    expect(selected.indexOf(a)).toBeLessThan(selected.indexOf(b));
   });
 });

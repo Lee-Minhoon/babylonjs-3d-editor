@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  Box,
   ChevronDown,
+  Globe,
   type LucideIcon,
   Magnet,
   MousePointer2,
@@ -30,9 +32,20 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-import { useActiveTool, useSnap } from "../hooks/use-editor-state";
+import {
+  useActiveTool,
+  useGizmoSpace,
+  useSnap,
+} from "../hooks/use-editor-state";
 import { getToolShortcut } from "../lib/editor-shortcuts";
-import { SNAP_STEPS, type TransformTool } from "../lib/tools";
+import {
+  formatSnapStep,
+  type GizmoSpace,
+  SNAP_STEPS,
+  type SnapKind,
+  snapKindForTool,
+  type TransformTool,
+} from "../lib/tools";
 import type { EditorRuntime } from "./editor-viewport";
 
 export const TOOL_ITEMS: {
@@ -46,6 +59,17 @@ export const TOOL_ITEMS: {
   { id: "scale", label: "크기", icon: Scale3d },
 ];
 
+export const GIZMO_SPACE_LABELS: Record<GizmoSpace, string> = {
+  local: "로컬 축",
+  world: "월드 축",
+};
+
+const SNAP_KIND_LABELS: Record<SnapKind, string> = {
+  move: "이동",
+  rotate: "회전",
+  scale: "크기",
+};
+
 const PRESSED_CLASS =
   "size-7 data-pressed:bg-primary data-pressed:text-primary-foreground";
 
@@ -53,11 +77,17 @@ type TransformToolbarProps = {
   runtime: EditorRuntime;
 };
 
-/** 뷰포트 위에 띄우는 도구 바: 변형 도구(Q/W/E/R) + 스냅 토글·단위 */
+/**
+ * 뷰포트 위에 띄우는 도구 바: 변형 도구(Q/W/E/R) · 기즈모 축(로컬/월드) · 스냅 토글·단위.
+ * 스냅 단위 드롭다운은 지금 도구의 종류(이동·회전·크기)를 보여준다 — 선택 도구는 배치용 이동 단위.
+ */
 export function TransformToolbar({ runtime }: TransformToolbarProps) {
   const { tools } = runtime;
   const active = useActiveTool(runtime);
-  const snap = useSnap(runtime);
+  const snapKind = snapKindForTool(active);
+  const snap = useSnap(runtime, snapKind);
+  const space = useGizmoSpace(runtime);
+  const SpaceIcon = space === "local" ? Box : Globe;
 
   return (
     <div className="flex items-center gap-1 rounded-lg border border-border bg-background/80 p-1 shadow-sm backdrop-blur">
@@ -95,6 +125,28 @@ export function TransformToolbar({ runtime }: TransformToolbarProps) {
       <Tooltip>
         <TooltipTrigger
           render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="size-7"
+              aria-label={`기즈모 축: ${GIZMO_SPACE_LABELS[space]}`}
+              onClick={() =>
+                tools.setGizmoSpace(space === "local" ? "world" : "local")
+              }
+            />
+          }
+        >
+          <SpaceIcon aria-hidden />
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {GIZMO_SPACE_LABELS[space]} (누르면{" "}
+          {GIZMO_SPACE_LABELS[space === "local" ? "world" : "local"]})
+        </TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger
+          render={
             <Toggle
               pressed={snap.enabled}
               onPressedChange={tools.setSnapEnabled}
@@ -121,22 +173,26 @@ export function TransformToolbar({ runtime }: TransformToolbarProps) {
                     variant="ghost"
                     size="sm"
                     className="gap-0.5 px-1.5 tabular-nums"
-                    aria-label="스냅 단위"
+                    aria-label={`${SNAP_KIND_LABELS[snapKind]} 스냅 단위`}
                     disabled={!snap.enabled}
                   />
                 }
               />
             }
           >
-            {snap.step}
+            {formatSnapStep(snapKind, snap.step)}
             <ChevronDown className="size-3 opacity-60" aria-hidden />
           </TooltipTrigger>
-          <TooltipContent side="bottom">스냅 단위</TooltipContent>
+          <TooltipContent side="bottom">
+            {SNAP_KIND_LABELS[snapKind]} 스냅 단위
+          </TooltipContent>
         </Tooltip>
         <DropdownMenuContent className="min-w-32">
           <DropdownMenuGroup>
-            <DropdownMenuLabel>스냅 단위</DropdownMenuLabel>
-            <SnapStepRadioItems runtime={runtime} />
+            <DropdownMenuLabel>
+              {SNAP_KIND_LABELS[snapKind]} 스냅 단위
+            </DropdownMenuLabel>
+            <SnapStepRadioItems runtime={runtime} kind={snapKind} />
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -145,16 +201,23 @@ export function TransformToolbar({ runtime }: TransformToolbarProps) {
 }
 
 /** 스냅 단위 라디오 항목 (툴바 드롭다운용) */
-function SnapStepRadioItems({ runtime }: { runtime: EditorRuntime }) {
-  const { step } = useSnap(runtime);
+function SnapStepRadioItems({
+  runtime,
+  kind,
+}: {
+  runtime: EditorRuntime;
+  kind: SnapKind;
+}) {
+  const { step } = useSnap(runtime, kind);
   return (
     <DropdownMenuRadioGroup
       value={step}
-      onValueChange={(value: number) => runtime.tools.setSnapStep(value)}
+      onValueChange={(value: number) => runtime.tools.setSnapStep(kind, value)}
     >
-      {SNAP_STEPS.map((value) => (
+      {SNAP_STEPS[kind].map((value) => (
         <DropdownMenuRadioItem key={value} value={value} closeOnClick>
-          {value} 유닛
+          {formatSnapStep(kind, value)}
+          {kind === "move" && " 유닛"}
         </DropdownMenuRadioItem>
       ))}
     </DropdownMenuRadioGroup>
