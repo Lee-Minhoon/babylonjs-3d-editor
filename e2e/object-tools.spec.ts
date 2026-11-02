@@ -112,6 +112,14 @@ test("End는 띄운 메쉬를 바닥에 붙인다 (undo 가능)", async ({ page 
   expect(await undoMenuText(page)).toContain("Box 1 바닥에 붙이기");
   await page.keyboard.press("Meta+z");
   await expect(y).toHaveValue("3");
+
+  // 메뉴를 쓴 뒤엔 포커스가 메뉴바에 남는다 — 메뉴바가 End를 가져가지 않아야 한다
+  await page.getByRole("menuitem", { name: "편집", exact: true }).click();
+  await page.getByRole("menuitem", { name: /전체 선택/ }).click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await page.keyboard.press("End");
+  await expect(y).toHaveValue(floorY);
+  await expect(page.getByRole("menu")).toHaveCount(0);
 });
 
 test("정렬은 2개, 분배는 3개 이상에서 켜지고 Command 하나로 기록된다", async ({

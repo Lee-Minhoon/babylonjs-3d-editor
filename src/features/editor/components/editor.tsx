@@ -11,6 +11,7 @@ import { type EditorRuntime, EditorViewport } from "./editor-viewport";
 import { MeshSidebar } from "./mesh-sidebar";
 import { PropertiesPanel } from "./properties-panel";
 import { RecoveryDialog } from "./recovery-dialog";
+import { SelectionBox } from "./selection-box";
 import { TransformToolbar } from "./transform-toolbar";
 
 /**
@@ -31,6 +32,7 @@ export function Editor() {
             <MeshSidebar runtime={runtime} />
             <div className="relative min-w-0 flex-1">
               <EditorViewport onRuntimeChange={setRuntime} />
+              <SelectionBox runtime={runtime} />
               {runtime && (
                 <div className="absolute top-3 left-3">
                   <TransformToolbar runtime={runtime} />

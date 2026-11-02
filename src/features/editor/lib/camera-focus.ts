@@ -51,53 +51,104 @@ function prefersReducedMotion(): boolean {
   );
 }
 
-/**
- * 카메라를 메쉬들로 옮긴다 (짧은 ease-out 애니메이션, 모션 줄이기 설정이면 바로).
- * 거리는 카메라의 줌 한계 안으로 맞춘다. 메쉬가 없으면 false.
- */
-export function focusCamera(
-  camera: ArcRotateCamera,
-  meshes: readonly AbstractMesh[],
-  duration = prefersReducedMotion() ? 0 : DURATION_MS,
-): boolean {
-  if (meshes.length === 0) return false;
-  const scene = camera.getScene();
-  const focus = computeFocus(meshes, {
-    fov: camera.fov,
-    aspect: scene.getEngine().getAspectRatio(camera),
-  });
-  const toRadius = Math.min(
-    Math.max(focus.radius, camera.lowerRadiusLimit ?? 0),
-    camera.upperRadiusLimit ?? Infinity,
-  );
+/** 지금 설정에 맞는 카메라 애니메이션 길이 (모션 줄이기면 0) */
+export function defaultCameraDuration(): number {
+  return prefersReducedMotion() ? 0 : DURATION_MS;
+}
 
+/** 옮길 값. 빠진 값은 그대로 둔다 */
+export type CameraPose = {
+  target?: Vector3;
+  radius?: number;
+  alpha?: number;
+  beta?: number;
+};
+
+/** from에서 to 각도로 가장 짧게 도는 값 (alpha는 계속 돌면 2π를 넘어 쌓인다) */
+function nearestAngle(from: number, to: number): number {
+  const turn = Math.PI * 2;
+  const delta = ((((to - from) % turn) + turn * 1.5) % turn) - Math.PI;
+  return from + delta;
+}
+
+/**
+ * 카메라를 pose로 옮긴다 (짧은 ease-out, duration이 0이면 바로).
+ * 새 애니메이션은 진행 중인 것을 멈추고 지금 자리에서 시작한다 (포커스·시점 공용).
+ */
+export function animateCamera(
+  camera: ArcRotateCamera,
+  pose: CameraPose,
+  duration = defaultCameraDuration(),
+) {
   running.get(camera)?.remove();
   running.delete(camera);
+
+  const from = {
+    target: camera.target.clone(),
+    radius: camera.radius,
+    alpha: camera.alpha,
+    beta: camera.beta,
+  };
+  const to = {
+    target: pose.target ?? from.target,
+    radius: pose.radius ?? from.radius,
+    alpha:
+      pose.alpha === undefined
+        ? from.alpha
+        : nearestAngle(from.alpha, pose.alpha),
+    beta: pose.beta ?? from.beta,
+  };
   // target 세터는 setTarget을 불러 각도·거리를 다시 계산하므로 벡터 값만 바꾼다
-  const apply = (target: Vector3, radius: number) => {
-    camera.target.copyFrom(target);
-    camera.radius = radius;
+  const apply = (k: number) => {
+    if (k === 1) {
+      // 끝은 정확히 목표값 (보간의 부동소수 오차로 beta 한계를 살짝 넘지 않게)
+      camera.target.copyFrom(to.target);
+      camera.radius = to.radius;
+      camera.alpha = to.alpha;
+      camera.beta = to.beta;
+      return;
+    }
+    camera.target.copyFrom(Vector3.Lerp(from.target, to.target, k));
+    camera.radius = from.radius + (to.radius - from.radius) * k;
+    camera.alpha = from.alpha + (to.alpha - from.alpha) * k;
+    camera.beta = from.beta + (to.beta - from.beta) * k;
   };
   if (duration <= 0) {
-    apply(focus.target, toRadius);
-    return true;
+    apply(1);
+    return;
   }
 
-  const fromTarget = camera.target.clone();
-  const fromRadius = camera.radius;
+  const scene = camera.getScene();
   const start = performance.now();
   const observer = scene.onBeforeRenderObservable.add(() => {
     const t = Math.min((performance.now() - start) / duration, 1);
-    const k = 1 - (1 - t) ** 3;
-    apply(
-      Vector3.Lerp(fromTarget, focus.target, k),
-      fromRadius + (toRadius - fromRadius) * k,
-    );
+    apply(1 - (1 - t) ** 3);
     if (t === 1) {
       observer.remove();
       running.delete(camera);
     }
   });
   running.set(camera, observer);
+}
+
+/**
+ * 카메라를 메쉬들로 옮긴다 (방향은 그대로, 회전 중심과 거리만).
+ * 거리는 카메라의 줌 한계 안으로 맞춘다. 메쉬가 없으면 false.
+ */
+export function focusCamera(
+  camera: ArcRotateCamera,
+  meshes: readonly AbstractMesh[],
+  duration = defaultCameraDuration(),
+): boolean {
+  if (meshes.length === 0) return false;
+  const focus = computeFocus(meshes, {
+    fov: camera.fov,
+    aspect: camera.getScene().getEngine().getAspectRatio(camera),
+  });
+  const radius = Math.min(
+    Math.max(focus.radius, camera.lowerRadiusLimit ?? 0),
+    camera.upperRadiusLimit ?? Infinity,
+  );
+  animateCamera(camera, { target: focus.target, radius }, duration);
   return true;
 }

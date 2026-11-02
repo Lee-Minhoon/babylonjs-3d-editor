@@ -6,6 +6,7 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
 import type { EditorRuntime } from "../components/editor-viewport";
 import type { AutosaveState } from "../lib/autosave";
+import type { ScreenRect } from "../lib/box-select";
 import type { HistoryState } from "../lib/history";
 import type { MeshPresetId } from "../lib/mesh-presets";
 import type { PlacementState } from "../lib/placement-tool";
@@ -152,5 +153,25 @@ export function useAutosaveState(runtime: Runtime): AutosaveState {
     autosave?.subscribe ?? subscribeNoop,
     autosave?.getState ?? getEmptyAutosave,
     getEmptyAutosave,
+  );
+}
+
+/** 직교 투영인지 (숫자패드 5·보기 메뉴) */
+export function useOrthographic(runtime: Runtime): boolean {
+  const cameraView = runtime?.cameraView;
+  return useSyncExternalStore(
+    cameraView?.subscribe ?? subscribeNoop,
+    cameraView?.isOrthographic ?? getFalse,
+    getFalse,
+  );
+}
+
+/** 드래그 중인 박스 선택 사각형 (캔버스 기준 CSS 픽셀). 없으면 null */
+export function useBoxSelectRect(runtime: Runtime): ScreenRect | null {
+  const boxSelect = runtime?.boxSelect;
+  return useSyncExternalStore(
+    boxSelect?.subscribe ?? subscribeNoop,
+    boxSelect?.getRect ?? getNull,
+    getNull,
   );
 }

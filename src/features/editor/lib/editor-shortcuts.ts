@@ -1,5 +1,6 @@
 import type { Scene } from "@babylonjs/core/scene";
 
+import type { CameraView, ViewName } from "./camera-views";
 import type { Clipboard } from "./clipboard";
 import {
   copySelected,
@@ -43,12 +44,13 @@ import type { TransformGizmo } from "./transform-gizmo";
  *   ⌘/Ctrl+O          열기
  *   (새 씬은 단축키 없음 — ⌘N은 브라우저가 가로채 막을 수 없다)
  *
- * 예약 (나중 기능용 — 다른 동작에 쓰지 말 것):
- *   숫자패드 카메라 시점
+ *   숫자패드 1 / 3 / 7  정면 / 오른쪽 / 위 시점 (⌃와 함께: 뒤 / 왼쪽 / 아래) — Blender 방식
+ *   숫자패드 5          원근 ↔ 직교
  */
 
 type EditorShortcutTargets = {
   scene: Scene;
+  cameraView: CameraView;
   history: History;
   placement: PlacementTool;
   selection: Selection;
@@ -63,6 +65,23 @@ const TOOL_KEYS: Record<string, TransformTool> = {
   w: "move",
   e: "rotate",
   r: "scale",
+};
+
+/** 숫자패드 시점: [그냥, ⌃와 함께] */
+const NUMPAD_VIEWS: Record<string, [ViewName, ViewName]> = {
+  "1": ["front", "back"],
+  "3": ["right", "left"],
+  "7": ["top", "bottom"],
+};
+
+/** UI 표시용 시점 단축키 */
+export const VIEW_SHORTCUTS: Record<ViewName, string> = {
+  front: "Num1",
+  back: "⌃Num1",
+  right: "Num3",
+  left: "⌃Num3",
+  top: "Num7",
+  bottom: "⌃Num7",
 };
 
 /** 프리셋 단축키: MESH_PRESETS 순서대로 1, 2, 3 … (최대 9개) */
@@ -101,6 +120,7 @@ export const SHORTCUT_LABELS = {
   hide: "H",
   showAll: "⌥H",
   dropToFloor: "End",
+  orthographic: "Num5",
   rename: "F2",
   rotatePlacement: "R",
 } as const;
@@ -173,6 +193,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 
 export function bindEditorShortcuts({
   scene,
+  cameraView,
   history,
   placement,
   selection,
@@ -199,6 +220,22 @@ export function bindEditorShortcuts({
     const repeatable = (mod && (key === "z" || key === "y")) || key === "r";
     if (event.repeat && !repeatable) {
       if (mod) event.preventDefault(); // ⌘S 등의 브라우저 동작은 계속 막는다
+      return;
+    }
+
+    // 숫자패드는 물리 키(event.code)로 본다 — Num Lock이 꺼진 Windows에선 event.key가 "End"·"Home"이라
+    // 바닥에 붙이기(End) 등으로 새지 않게 다른 키보다 먼저 처리한다
+    const numpad = /^Numpad(\d)$/.exec(event.code)?.[1];
+    if (numpad !== undefined) {
+      if (event.shiftKey || event.altKey || event.metaKey) return;
+      const views = NUMPAD_VIEWS[numpad];
+      if (views) {
+        event.preventDefault();
+        cameraView.setView(views[event.ctrlKey ? 1 : 0]);
+      } else if (numpad === "5" && !event.ctrlKey) {
+        event.preventDefault();
+        cameraView.setOrthographic(!cameraView.isOrthographic());
+      }
       return;
     }
 

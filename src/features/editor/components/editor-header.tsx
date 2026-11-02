@@ -1,7 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 
+import type { BaseUIEvent } from "@base-ui/react/types";
 import { Box as BoxIcon, type LucideIcon, Redo2, Undo2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -37,11 +38,13 @@ import {
   useClipboardHasContent,
   useGizmoSpace,
   useHistoryState,
+  useOrthographic,
   useSceneFileState,
   useSelection,
   useSnap,
 } from "../hooks/use-editor-state";
 import { useMeshFlagCount } from "../hooks/use-mesh-flags";
+import type { ViewName } from "../lib/camera-views";
 import {
   alignSelected,
   copySelected,
@@ -61,6 +64,7 @@ import {
   getPresetShortcut,
   getToolShortcut,
   SHORTCUT_LABELS,
+  VIEW_SHORTCUTS,
 } from "../lib/editor-shortcuts";
 import type { AlignAxis, AlignEdge } from "../lib/mesh-align";
 import { inCreationOrder, MESH_PRESETS } from "../lib/mesh-presets";
@@ -115,6 +119,33 @@ function SnapStepSubmenu({
     </MenubarSub>
   );
 }
+
+/**
+ * 메뉴를 쓰고 나면 포커스가 메뉴바 트리거에 남는데, Base UI 메뉴바는 Home/End를 자기 이동 키로 쓴다.
+ * 에디터 단축키인 End(바닥에 붙이기)와 숫자패드(시점 — Num Lock이 꺼지면 key가 "Home"·"End")는 에디터로 넘긴다.
+ * 열린 메뉴 안의 키는 editor-shortcuts가 무시하므로 메뉴 탐색은 그대로다.
+ */
+function passEditorKeys(event: BaseUIEvent<KeyboardEvent<HTMLElement>>) {
+  if (event.key === "End" || event.code.startsWith("Numpad")) {
+    event.preventBaseUIHandler();
+  }
+}
+
+/** 보기 메뉴의 시점 (숫자패드가 없는 키보드용) — 짝(정면·뒤 …)끼리 묶는다 */
+const VIEW_ITEMS: readonly (readonly { view: ViewName; label: string }[])[] = [
+  [
+    { view: "front", label: "정면" },
+    { view: "back", label: "뒤" },
+  ],
+  [
+    { view: "right", label: "오른쪽" },
+    { view: "left", label: "왼쪽" },
+  ],
+  [
+    { view: "top", label: "위" },
+    { view: "bottom", label: "아래" },
+  ],
+];
 
 const ALIGN_AXES: readonly AlignAxis[] = ["x", "y", "z"];
 const ALIGN_EDGES: readonly { edge: AlignEdge; label: string }[] = [
@@ -279,6 +310,7 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
   const activeTool = useActiveTool(runtime);
   const snapEnabled = useSnap(runtime, "move").enabled;
   const gizmoSpace = useGizmoSpace(runtime);
+  const orthographic = useOrthographic(runtime);
   const canPaste = useClipboardHasContent(runtime);
   const file = useSceneFileState(runtime);
   const isWebGPU = runtime?.scene.getEngine().isWebGPU;
@@ -290,7 +322,10 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
         Babylon Editor
       </div>
 
-      <Menubar className="h-7 border-none bg-transparent p-0 shadow-none">
+      <Menubar
+        className="h-7 border-none bg-transparent p-0 shadow-none"
+        onKeyDown={passEditorKeys}
+      >
         <MenubarMenu>
           <MenubarTrigger>파일</MenubarTrigger>
           <MenubarContent>
@@ -515,6 +550,38 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
               선택 항목에 맞춰 보기
               <MenubarShortcut>{SHORTCUT_LABELS.focus}</MenubarShortcut>
             </MenubarItem>
+            <MenubarSub>
+              <MenubarSubTrigger disabled={!runtime}>시점</MenubarSubTrigger>
+              <MenubarSubContent>
+                {VIEW_ITEMS.map((pair, index) => (
+                  <MenubarGroup key={pair[0].view}>
+                    {index > 0 && <MenubarSeparator />}
+                    {pair.map(({ view, label }) => (
+                      <MenubarItem
+                        key={view}
+                        onClick={() => runtime?.cameraView.setView(view)}
+                      >
+                        {label}
+                        <MenubarShortcut>
+                          {VIEW_SHORTCUTS[view]}
+                        </MenubarShortcut>
+                      </MenubarItem>
+                    ))}
+                  </MenubarGroup>
+                ))}
+              </MenubarSubContent>
+            </MenubarSub>
+            <MenubarCheckboxItem
+              closeOnClick
+              checked={orthographic}
+              disabled={!runtime}
+              onCheckedChange={(checked) =>
+                runtime?.cameraView.setOrthographic(checked)
+              }
+            >
+              직교 투영
+              <MenubarShortcut>{SHORTCUT_LABELS.orthographic}</MenubarShortcut>
+            </MenubarCheckboxItem>
           </MenubarContent>
         </MenubarMenu>
       </Menubar>

@@ -1,8 +1,11 @@
 import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
 import type { Scene } from "@babylonjs/core/scene";
 
+import type { BoxSelect } from "./box-select";
+import { isBoxSelectDrag, leftDragSelects } from "./camera-controls";
 import type { PlacementTool } from "./placement-tool";
 import { isAdditiveClick, type Selection } from "./selection";
+import type { ToolState } from "./tools";
 import type { TransformGizmo } from "./transform-gizmo";
 
 /*
@@ -12,9 +15,11 @@ import type { TransformGizmo } from "./transform-gizmo";
  *
  *   1. 기즈모 위 / 드래그 중  → 기즈모가 처리 (여기선 아무것도 안 함)
  *   2. 배치 모드              → 좌클릭 배치, 우클릭 종료, 이동 시 미리보기 갱신
- *   3. 그 외                  → 좌클릭으로 선택 / 빈 곳이면 해제. Shift·⌘/Ctrl+클릭은 선택에 넣고 빼기
+ *   3. 박스 선택 드래그        → 선택 도구의 왼쪽 드래그 · 모든 도구의 Shift+드래그 (camera-controls가 규칙을 정한다)
+ *   4. 그 외                  → 좌클릭으로 선택 / 빈 곳이면 해제. Shift·⌘/Ctrl+클릭은 선택에 넣고 빼기
  *
- * 클릭은 POINTERTAP(거의 움직이지 않은 클릭)만 본다 — 드래그는 카메라 조작이다.
+ * 클릭은 POINTERTAP(거의 움직이지 않은 클릭)만 본다 — 그 외 드래그는 카메라 조작이다.
+ * 박스 선택은 탭 판정 거리를 넘게 움직여야 시작되므로 같은 누름이 탭과 박스로 두 번 처리되지 않는다.
  */
 
 const LEFT_BUTTON = 0;
@@ -24,17 +29,40 @@ type Targets = {
   gizmo: TransformGizmo;
   placement: PlacementTool;
   selection: Selection;
+  tools: ToolState;
+  boxSelect: BoxSelect;
 };
 
 export function bindPointerRouter(
   scene: Scene,
-  { gizmo, placement, selection }: Targets,
+  { gizmo, placement, selection, tools, boxSelect }: Targets,
 ): () => void {
   const observer = scene.onPointerObservable.add((info) => {
     const isPlacing = placement.isActive();
 
     if (info.type === PointerEventTypes.POINTERMOVE) {
       if (isPlacing) placement.updatePointer();
+      if (boxSelect.isPending())
+        boxSelect.update(scene.pointerX, scene.pointerY);
+      return;
+    }
+
+    if (info.type === PointerEventTypes.POINTERDOWN) {
+      const event = info.event as PointerEvent;
+      const startsBox =
+        !gizmo.isPointerOver() &&
+        isBoxSelectDrag(event, {
+          selects: leftDragSelects(tools, placement),
+          placing: isPlacing,
+        });
+      if (startsBox) {
+        boxSelect.begin(scene.pointerX, scene.pointerY, event.shiftKey);
+      }
+      return;
+    }
+
+    if (info.type === PointerEventTypes.POINTERUP) {
+      if (boxSelect.isPending()) boxSelect.end();
       return;
     }
 

@@ -18,6 +18,9 @@ import {
   createAutosave,
   createBrowserAutosaveStorage,
 } from "../lib/autosave";
+import { type BoxSelect, createBoxSelect } from "../lib/box-select";
+import { bindCameraControls } from "../lib/camera-controls";
+import { type CameraView, createCameraView } from "../lib/camera-views";
 import { type Clipboard, createClipboard } from "../lib/clipboard";
 import { bindEditorShortcuts } from "../lib/editor-shortcuts";
 import { createGroundGrid } from "../lib/ground-grid";
@@ -29,7 +32,7 @@ import { createSelection, type Selection } from "../lib/selection";
 import { createToolState, type ToolState } from "../lib/tools";
 import { createTransformGizmo } from "../lib/transform-gizmo";
 
-function setupScene(scene: Scene) {
+function setupScene(scene: Scene): ArcRotateCamera {
   scene.clearColor = new Color4(0.1, 0.1, 0.12, 1);
 
   const camera = new ArcRotateCamera(
@@ -53,11 +56,14 @@ function setupScene(scene: Scene) {
   );
 
   createGroundGrid(scene);
+  return camera;
 }
 
 /** 뷰포트가 만들어 에디터 UI에 넘겨주는 씬과 씬에 붙은 도구들 */
 export type EditorRuntime = {
   scene: Scene;
+  cameraView: CameraView;
+  boxSelect: BoxSelect;
   history: History;
   placement: PlacementTool;
   selection: Selection;
@@ -100,7 +106,7 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           setEngineError(error instanceof Error ? error.message : String(error))
         }
         onSceneReady={(scene) => {
-          setupScene(scene);
+          const camera = setupScene(scene);
           const detachInspector = attachInspectorToggle(scene);
           const history = createHistory();
           const tools = createToolState();
@@ -112,10 +118,15 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
             tools,
             placement,
           });
+          const cameraView = createCameraView(camera);
+          const unbindCamera = bindCameraControls(camera, { tools, placement });
+          const boxSelect = createBoxSelect(scene, selection);
           const unbindPointer = bindPointerRouter(scene, {
             gizmo,
             placement,
             selection,
+            tools,
+            boxSelect,
           });
           const clipboard = createClipboard();
           const sceneFile = createSceneFile(scene, {
@@ -137,6 +148,7 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           document.addEventListener("visibilitychange", onVisibilityChange);
           const unbindShortcuts = bindEditorShortcuts({
             scene,
+            cameraView,
             history,
             placement,
             selection,
@@ -147,6 +159,8 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           });
           onRuntimeChange({
             scene,
+            cameraView,
+            boxSelect,
             history,
             placement,
             selection,
@@ -168,6 +182,9 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
             );
             sceneFile.dispose();
             unbindPointer();
+            boxSelect.dispose();
+            unbindCamera();
+            cameraView.dispose();
             gizmo.dispose();
             selection.dispose();
             placement.dispose();

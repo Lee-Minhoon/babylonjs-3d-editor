@@ -83,13 +83,13 @@ src/
 ## 에디터 구조 (`src/features/editor`)
 
 - 도구의 변경 알림은 `createListeners()`(`src/lib/listeners.ts`), 메쉬별 알림(이름·머티리얼)은 `createKeyedListeners()`로 만든다.
-- 뷰포트가 씬과 함께 도구들을 만들어 `EditorRuntime`(`{ scene, history, placement, selection, tools, clipboard, sceneFile, autosave }`)으로 UI에 넘긴다. 도구는 순수 TS 객체(`lib/`)이고, React는 `subscribe`/`getX`를 `useSyncExternalStore`로 구독만 한다. 구독 훅은 `hooks/use-editor-state.ts`(`useHistoryState`, `useSelection`, `useActivePresetId`, `useActiveTool`, `useSnap`, `useSceneFileState` …). Babylon 객체 값 구독은 `use-mesh-transform.ts`·`use-mesh-material.ts`에 모아 두고, 컴포넌트마다 다시 만들지 않는다.
+- 뷰포트가 씬과 함께 도구들을 만들어 `EditorRuntime`(`{ scene, cameraView, boxSelect, history, placement, selection, tools, clipboard, sceneFile, autosave }`)으로 UI에 넘긴다. 도구는 순수 TS 객체(`lib/`)이고, React는 `subscribe`/`getX`를 `useSyncExternalStore`로 구독만 한다. 구독 훅은 `hooks/use-editor-state.ts`(`useHistoryState`, `useSelection`, `useActivePresetId`, `useActiveTool`, `useSnap`, `useSceneFileState` …). Babylon 객체 값 구독은 `use-mesh-transform.ts`·`use-mesh-material.ts`에 모아 두고, 컴포넌트마다 다시 만들지 않는다.
 - 레이아웃: 상단 `editor-header`(메뉴바: 파일/편집/추가/객체/보기 + undo/redo), 왼쪽 `mesh-sidebar`, 가운데 뷰포트 + `transform-toolbar`, 오른쪽 `properties-panel`.
 - 단축키 처리기는 입력창, 대화상자(`role=dialog/alertdialog`), 슬라이더, **열려 있는**(`data-open`) 메뉴·리스트박스 안의 키를 무시한다 (`SHORTCUT_FREE_ZONE`·`POPUP_ZONE`). 닫히는 중인 팝업에는 포커스가 잠깐 남으므로 열림 여부를 꼭 본다 (Esc 직후 ⌘Z가 먹히지 않는 버그). 글자 키로 항목을 찾거나 화살표로 값을 바꾸는 UI를 새로 붙이면 거기에 role을 추가한다.
 - 단축키·메뉴·버튼이 공유하는 동작은 `lib/editor-actions.ts`에 둔다 (예: `deleteSelected`). 입력 경로마다 로직을 따로 쓰지 않는다.
 - 메뉴에 아직 없는 기능(예약 키)은 `PlannedItem`으로 비활성 "준비 중" 표시. 기능을 붙일 때 `MenubarItem`으로 바꾸고 단축키를 `editor-shortcuts.ts`에 연결한다.
 - 활성 도구(`tools`): `select | move | rotate | scale` (Q/W/E/R). 배치 모드는 그 위에 잠깐 덮어쓰는 모드다. 기즈모는 선택된 메쉬 + move/rotate/scale + 배치 모드 아님일 때만 보인다.
-- **뷰포트 포인터 입력은 `lib/pointer-router.ts` 한 곳에서만 받는다.** 우선순위: 기즈모 위/드래그 중 → 배치 모드 → 선택. 새 도구가 클릭을 받아야 하면 `scene.onPointerObservable`을 직접 구독하지 말고 라우터에 분기를 추가한다 (기즈모 클릭이 선택 해제로 새는 식의 충돌 방지).
+- **뷰포트 포인터 입력은 `lib/pointer-router.ts` 한 곳에서만 받는다.** 우선순위: 기즈모 위/드래그 중 → 배치 모드 → 박스 선택 드래그 → 선택. 새 도구가 클릭을 받아야 하면 `scene.onPointerObservable`을 직접 구독하지 말고 라우터에 분기를 추가한다 (기즈모 클릭이 선택 해제로 새는 식의 충돌 방지).
 - 기즈모 드래그는 시작/끝 스냅샷으로 **드래그 한 번 = 변형 Command 하나**를 기록한다 (`transform-command.ts`). 여러 개 선택이면 묶음 중심의 피벗(`TransformNode`)에 기즈모를 붙이고, 드래그 동안만 메쉬들을 피벗 자식으로 만들어(`setParent`) 함께 움직인 뒤 Command 하나로 묶는다. 피벗은 메쉬를 따라가지 않으므로 선택·히스토리가 바뀔 때마다 다시 놓는다. **드래그 중에는 단축키를 받지 않는다** (`gizmo.isDragging()`) — 자식인 동안 undo·삭제가 끼어들면 변형이 어긋난다. 알려진 한계: 여러 개를 회전·크기 조절할 때 비균일 크기 메쉬는 전단이 생겨 TRS로 근사된다 (이동은 정확). 변형 비교(`isSameTransform`)는 숫자가 아니라 "같은 자세"(epsilon·쿼터니언)로 하고, 움직이지 않은 드래그는 기록하지 않고 시작 값을 복원한다 — `setParent` 왕복은 값을 비트 단위로 보존하지 않는다. `captureTransform`은 부모가 있으면 월드 값을 담는다 (드래그 중 자동 저장 대비).
 - 메쉬 프리셋(`lib/mesh-presets.ts`)은 원점에 만들기만 한다 (`addPresetMesh(scene, preset, material?, name?)`). 바닥에 놓을 높이는 배치 도구가 미리보기의 바운딩 박스로 잰다 — 프리셋에 높이 값을 따로 두지 않는다.
 - 씬 파일 텍스트의 숫자 배열 한 줄 접기(`stringifySceneFile`)는 줄 첫머리의 `"키": [` 꼴만 맞춘다. 문자열 값(이름)까지 바꾸는 정규식은 쓰지 않는다.
@@ -101,6 +101,10 @@ src/
   - 복사·복제본에는 따라가지 않는다 (`MeshSnapshot`에 넣지 않음 — 새 메쉬는 늘 보이고 풀려 있다).
   - 씬 목록 토글 버튼엔 `aria-pressed`를 쓰지 않고 상태별 라벨("Box 1 숨기기"/"Box 1 보이기")을 쓴다. 목록의 `aria-pressed`는 "선택됨"이다.
 - 바닥에 붙이기(End)·정렬·분배(`lib/mesh-align.ts`, 객체 메뉴): 위치만 옮기는 변형 Command를 묶는다. 기준은 월드 AABB. 바닥에 붙이기는 박스 가운데 높이에서 아래로 광선 5개를 쏴 맞은 윗면(법선 y ≥ 0.7) 중 가장 높은 곳, 없으면 y=0에 밑면을 맞춘다. 함께 고른 메쉬는 낮은 것부터 차례로 붙인다(옮긴 뒤 `computeWorldMatrix(true)` — 피킹은 캐시된 행렬을 쓴다). 정렬은 선택 전체 박스의 최소·가운데·최대(2개 이상), 분배는 양 끝을 두고 중심을 같은 간격으로(3개 이상). 움직이지 않는 메쉬는 기록에서 빠진다.
+- 마우스 배치(`lib/camera-controls.ts`): 왼쪽 드래그 회전(선택 도구에선 박스 선택, ⌥+드래그가 회전) · Shift+왼쪽 드래그 박스 선택(모든 도구, 선택에 더함) · ⌃+왼쪽/오른쪽/가운데 드래그 팬 · 휠·핀치 줌. 카메라는 Babylon 9 `camera.movement.input.inputMap`의 포인터 규칙을 도구·배치 상태에 따라 바꿔 정하고(맞는 규칙이 없으면 카메라가 안 움직임), 박스 선택 시작 판정 `isBoxSelectDrag`도 같은 파일에 둔다 — 둘이 어긋나면 한 드래그가 카메라도 돌리고 박스도 그린다. 카메라 포인터 입력을 직접 붙이거나 떼지 말고 이 규칙을 고친다.
+- 박스 선택(`lib/box-select.ts`, 화면은 `selection-box.tsx`): 좌표는 캔버스 기준 CSS 픽셀(`scene.pointerX/Y`). Babylon 탭 판정 거리(`InputManager.DragMovementThreshold`)를 넘게 움직여야 박스가 된다 — 한 누름이 탭(클릭 선택)과 박스로 두 번 처리되지 않게. 판정(`meshesInRect`)은 바운딩 박스로 거르고 → 정점이 사각형 안에 있는지 → 없으면 사각형 가운데 피킹. 숨기거나 잠근 메쉬는 고르지 않는다. 행렬은 `getTransformationMatrix()`(마지막 렌더 값) 대신 지금 view×projection으로 만든다.
+- 시점·직교(`lib/camera-views.ts`): 숫자패드 1/3/7 정면/오른쪽/위(⌃: 뒤/왼쪽/아래), 5 원근↔직교, 보기 메뉴 "시점"·"직교 투영"(숫자패드 없는 키보드용). 시점은 alpha·beta만 바꾸고(가장 짧은 쪽으로 돈다), 위·아래는 카메라 beta 한계까지. 직교 범위는 매 프레임 `radius·tan(fov/2)`로 맞춰 원근과 같은 크기로 보이고 휠 줌이 그대로 된다. 포커스·시점 애니메이션은 `animateCamera`(`camera-focus.ts`) 하나를 쓴다 (새 애니메이션이 진행 중인 것을 멈춤). 숫자패드는 `event.code`로 보고 다른 키보다 먼저 처리한다 — Num Lock이 꺼지면 `event.key`가 "End"·"Home"이다.
+- 메뉴를 쓰고 나면 포커스가 메뉴바 트리거에 남는다. Base UI 메뉴바는 Home/End를 자기 이동 키로 쓰므로 End·숫자패드는 `passEditorKeys`(`editor-header.tsx`, `preventBaseUIHandler`)로 에디터에 넘긴다. 새 단축키가 메뉴바 키(화살표·Home·End·Enter·Space)와 겹치면 여기도 고친다.
 - 카메라 포커스(F·보기 메뉴, `lib/camera-focus.ts`): 방향(alpha·beta)은 두고 target·radius만 옮긴다 (줌 한계 안, 0.25초 애니메이션, 모션 줄이기 설정이면 즉시). ArcRotateCamera의 `target` 세터는 각도를 다시 계산하므로 `camera.target.copyFrom()`을 쓴다. 히스토리에 기록하지 않는다.
 - 속성 패널 숫자 입력(`@base-ui/react/number-field`)도 같은 원칙: `onValueChange`에서는 메쉬에 바로 적용(미리보기, 기록 없음), `onValueCommitted`에서 편집 시작 전 스냅샷과 비교해 Command 하나. Enter는 blur로 커밋, Esc는 취소. `editor-shortcuts`는 입력창을 건너뛰므로 **입력창 안의 ⌘Z/⌘⇧Z는 필드가 `handleFieldHistoryKey`로 직접 처리**한다 (편집 중이면 취소, 아니면 history undo/redo).
 - 패널 표시값은 Babylon 객체를 직접 구독해서 얻는다 (`hooks/use-mesh-transform.ts`, `onAfterWorldMatrixUpdateObservable`). React state에 복사해 두지 않는다 — 기즈모·undo·입력 어디서 바뀌든 한 경로로 반영된다.
@@ -122,11 +126,10 @@ src/
   - 현재 v3: 메쉬마다 `hidden`·`locked` (v2 이하는 false로 변환).
   - 형식을 바꾸면 `SCENE_FILE_VERSION`을 올리고 이전 버전 변환을 `parseSceneFile`에 넣는다. 메쉬에 새 속성을 추가하면 `MeshSnapshot`과 씬 파일 둘 다에 넣는다.
 - **키보드 단축키는 `lib/editor-shortcuts.ts` 한 곳에서만 등록**한다. 도구에서 `window.addEventListener("keydown")`을 직접 달지 않는다 (같은 키의 우선순위가 등록 순서에 묶이기 때문). 현재 키 목록은 그 파일 상단 주석이 기준이다.
-  - 사용 중: Esc · Delete/Backspace · Q/W/E/R(도구) · R/⇧R(배치 중일 때만 미리보기 90° 회전 — 크기 도구보다 우선, `placement.rotate`) · 1~8(메쉬 프리셋, `MESH_PRESETS` 순서, 상단 숫자열만) · ⌘Z/⌘⇧Z/Ctrl+Y · ⌘C/⌘X/⌘V(복사/잘라내기/붙여넣기) · ⌘D(복제, 브라우저 북마크는 항상 막음) · F(선택 메쉬로 카메라 포커스) · ⌘A(전체 선택, 숨기거나 잠근 메쉬 제외) · H/⌥H(숨기기/모두 보이기) · End(바닥에 붙이기) · F2(이름 바꾸기) · ⌘S/⌘⇧S(저장/다른 이름으로 저장) · ⌘O(열기). 새 씬은 단축키 없음(⌘N은 브라우저가 가로챔).
-  - **예약 — 다른 기능에 쓰지 않는다:** 숫자패드(카메라 시점).
+  - 사용 중: Esc · Delete/Backspace · Q/W/E/R(도구) · R/⇧R(배치 중일 때만 미리보기 90° 회전 — 크기 도구보다 우선, `placement.rotate`) · 1~8(메쉬 프리셋, `MESH_PRESETS` 순서, 상단 숫자열만) · ⌘Z/⌘⇧Z/Ctrl+Y · ⌘C/⌘X/⌘V(복사/잘라내기/붙여넣기) · ⌘D(복제, 브라우저 북마크는 항상 막음) · F(선택 메쉬로 카메라 포커스) · ⌘A(전체 선택, 숨기거나 잠근 메쉬 제외) · H/⌥H(숨기기/모두 보이기) · End(바닥에 붙이기) · 숫자패드 1/3/7(⌃와 함께 반대편)·5(시점·직교) · F2(이름 바꾸기) · ⌘S/⌘⇧S(저장/다른 이름으로 저장) · ⌘O(열기). 새 씬은 단축키 없음(⌘N은 브라우저가 가로챔).
   - 키를 누르고 있을 때의 반복 입력(`event.repeat`)은 undo/redo와 배치 회전(R)만 받는다 (숫자 키를 누르고 있으면 배치가 켜졌다 꺼지는 것을 막는다). 누르고 있는 동안 반복돼야 하는 새 단축키는 `repeatable`에 추가한다.
   - **키 판정은 `getShortcutKey(event)`로 한다** (`event.key` 직접 비교 금지). 글자 키를 `event.code`(물리 키 위치)로 봐서 한글 입력 상태(Q → "ㅂ")에서도 같은 단축키가 동작한다. 입력창 안에서 ⌘Z 등을 직접 처리하는 컴포넌트도 같은 함수를 쓴다.
-  - 단축키를 UI에 보여줄 땐 하드코딩하지 말고 `editor-shortcuts.ts`에서 가져온다: `getPresetShortcut`, `getToolShortcut`, `SHORTCUT_LABELS`(undo/redo/delete/save/open/selectAll/focus/hide/dropToFloor 등).
+  - 단축키를 UI에 보여줄 땐 하드코딩하지 말고 `editor-shortcuts.ts`에서 가져온다: `getPresetShortcut`, `getToolShortcut`, `SHORTCUT_LABELS`(undo/redo/delete/save/open/selectAll/focus/hide/dropToFloor/orthographic 등), 시점은 `VIEW_SHORTCUTS`.
   - 메뉴의 라디오·체크박스 항목엔 `closeOnClick`을 준다 (Base UI 기본값은 안 닫힘 → 다음 키 입력이 메뉴로 빨려 들어간다).
 - 뷰포트 클릭은 `POINTERTAP`으로 처리한다 (드래그 = 카메라 조작·기즈모 드래그와 구분).
 
