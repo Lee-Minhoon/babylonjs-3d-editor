@@ -110,7 +110,10 @@ export function createPlacementTool(
   previewMaterial.emissiveColor = new Color3(0.1, 0.2, 0.35);
   previewMaterial.alpha = 0.45;
 
-  /** 커서 아래 표면 점: 메쉬 윗면 → 없으면 바닥 평면(y=0). 미리보기는 pickable이 아니라 맞지 않는다 */
+  /**
+   * 커서 아래 표면 점: 메쉬 윗면 → 없으면 바닥 평면(y=0). 미리보기는 pickable이 아니라 맞지 않는다.
+   * 숨긴 메쉬는 건너뛰고, 잠근 메쉬 위에는 놓을 수 있다 (mesh-flags)
+   */
   function findSurfacePoint(): Vector3 | null {
     const ray = scene.createPickingRay(
       scene.pointerX,
@@ -121,7 +124,7 @@ export function createPlacementTool(
 
     const hit = scene.pickWithRay(
       ray,
-      (mesh) => mesh.isPickable && mesh.isEnabled(),
+      (mesh) => mesh.isPickable && mesh.isEnabled() && mesh.isVisible,
     );
     const normal = hit?.hit ? hit.getNormal(true) : null;
     if (hit?.pickedPoint && normal && normal.y >= TOP_FACE_MIN_NORMAL_Y) {

@@ -8,11 +8,17 @@ import type { Scene } from "@babylonjs/core/scene";
 
 import { createListeners } from "@/lib/listeners";
 
-import { inCreationOrder, isEditorMesh } from "./mesh-presets";
+import {
+  getMeshFlag,
+  isPickableInViewport,
+  onAnyMeshFlagChange,
+} from "./mesh-flags";
+import { inCreationOrder } from "./mesh-presets";
 
 /**
  * 선택 상태(여러 개) + 외곽선 표시.
  * 선택은 undo 히스토리에 기록하지 않는다. 선택된 메쉬가 씬에서 빠지면(삭제·추가 undo) 선택에서도 빠진다.
+ * 숨긴 메쉬는 선택할 수 없다 (숨기면 빠진다). 잠근 메쉬는 뷰포트 클릭·전체 선택으로는 못 고르고 씬 목록으로만 고른다.
  * 뷰포트 클릭은 pointer-router가 selectAtPointer()를 호출한다.
  */
 export type Selection = {
@@ -22,7 +28,7 @@ export type Selection = {
   select(mesh: AbstractMesh | null): void;
   /** 이 메쉬들로 선택을 바꾼다 (붙여넣기 결과 등) */
   set(meshes: readonly AbstractMesh[]): void;
-  /** 씬의 에디터 메쉬 전부 (만든 순서) */
+  /** 씬의 에디터 메쉬 전부 (만든 순서, 숨기거나 잠근 메쉬 제외) */
   selectAll(): void;
   /** 선택에 넣거나 빼기 (Shift/⌘ 클릭) */
   toggle(mesh: AbstractMesh): void;
@@ -53,7 +59,9 @@ export function createSelection(scene: Scene): Selection {
   outline.outlineThickness = 2;
 
   function set(meshes: readonly AbstractMesh[]) {
-    const next = [...new Set(meshes)];
+    const next = [...new Set(meshes)].filter(
+      (mesh) => !getMeshFlag(mesh, "hidden"),
+    );
     if (
       next.length === selected.length &&
       next.every((mesh, index) => mesh === selected[index])
@@ -77,15 +85,22 @@ export function createSelection(scene: Scene): Selection {
   const removedObserver = scene.onMeshRemovedObservable.add((mesh) => {
     if (selected.includes(mesh)) set(selected.filter((item) => item !== mesh));
   });
+  // 숨긴 메쉬를 선택에서 뺀다 (set이 걸러낸다)
+  const unsubscribeFlags = onAnyMeshFlagChange(() => set(selected));
 
   return {
     getMeshes: () => selected,
     select: (mesh) => set(mesh ? [mesh] : []),
     set,
-    selectAll: () => set(inCreationOrder(scene.meshes)),
+    selectAll: () =>
+      set(inCreationOrder(scene.meshes).filter(isPickableInViewport)),
     toggle,
     selectAtPointer(additive) {
-      const hit = scene.pick(scene.pointerX, scene.pointerY, isEditorMesh);
+      const hit = scene.pick(
+        scene.pointerX,
+        scene.pointerY,
+        isPickableInViewport,
+      );
       const mesh = hit?.pickedMesh ?? null;
       if (additive) {
         if (mesh) toggle(mesh);
@@ -96,6 +111,7 @@ export function createSelection(scene: Scene): Selection {
     subscribe: listeners.subscribe,
     dispose() {
       removedObserver.remove();
+      unsubscribeFlags();
       outline.dispose();
       listeners.clear();
     },

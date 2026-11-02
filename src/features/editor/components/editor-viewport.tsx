@@ -136,6 +136,7 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           };
           document.addEventListener("visibilitychange", onVisibilityChange);
           const unbindShortcuts = bindEditorShortcuts({
+            scene,
             history,
             placement,
             selection,

@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
+import { setMeshFlag } from "./mesh-flags";
 import { addPresetMesh, findPreset, inCreationOrder } from "./mesh-presets";
 import { createSelection } from "./selection";
 import { createTestScene } from "./test-scene";
@@ -59,5 +60,38 @@ describe("selection", () => {
     const selected = selection.getMeshes();
     expect(selected).toEqual(inCreationOrder(scene.meshes));
     expect(selected.indexOf(a)).toBeLessThan(selected.indexOf(b));
+  });
+
+  test("숨긴 메쉬는 선택에서 빠지고 다시 고를 수 없다", () => {
+    const own = createTestScene();
+    const selection = createSelection(own);
+    const [a, b] = [0, 1].map(() => addPresetMesh(own, findPreset("box")!));
+    selection.set([a, b]);
+    setMeshFlag(a, "hidden", true);
+    expect(selection.getMeshes()).toEqual([b]);
+
+    selection.select(a);
+    expect(selection.getMeshes()).toEqual([]);
+    setMeshFlag(a, "hidden", false);
+    selection.select(a);
+    expect(selection.getMeshes()).toEqual([a]);
+    selection.dispose();
+    own.dispose();
+  });
+
+  test("잠근 메쉬는 직접 고를 순 있지만 selectAll에서는 빠진다", () => {
+    const own = createTestScene();
+    const selection = createSelection(own);
+    const [a, b, c] = [0, 1, 2].map(() =>
+      addPresetMesh(own, findPreset("box")!),
+    );
+    setMeshFlag(b, "locked", true);
+    setMeshFlag(c, "hidden", true);
+    selection.selectAll();
+    expect(selection.getMeshes()).toEqual([a]);
+    selection.select(b);
+    expect(selection.getMeshes()).toEqual([b]);
+    selection.dispose();
+    own.dispose();
   });
 });

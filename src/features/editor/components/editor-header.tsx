@@ -29,6 +29,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useSceneMeshes } from "@/hooks/use-scene-meshes";
 
 import {
   useActivePresetId,
@@ -40,13 +41,20 @@ import {
   useSelection,
   useSnap,
 } from "../hooks/use-editor-state";
+import { useMeshFlagCount } from "../hooks/use-mesh-flags";
 import {
+  alignSelected,
   copySelected,
   cutSelected,
   deleteSelected,
+  distributeSelected,
+  dropSelectedToFloor,
   duplicateSelected,
   focusSelected,
+  hideSelected,
   paste,
+  setSelectedLocked,
+  showAllHidden,
   startRename,
 } from "../lib/editor-actions";
 import {
@@ -54,7 +62,8 @@ import {
   getToolShortcut,
   SHORTCUT_LABELS,
 } from "../lib/editor-shortcuts";
-import { MESH_PRESETS } from "../lib/mesh-presets";
+import type { AlignAxis, AlignEdge } from "../lib/mesh-align";
+import { inCreationOrder, MESH_PRESETS } from "../lib/mesh-presets";
 import {
   formatSnapStep,
   type GizmoSpace,
@@ -104,6 +113,103 @@ function SnapStepSubmenu({
         </MenubarRadioGroup>
       </MenubarSubContent>
     </MenubarSub>
+  );
+}
+
+const ALIGN_AXES: readonly AlignAxis[] = ["x", "y", "z"];
+const ALIGN_EDGES: readonly { edge: AlignEdge; label: string }[] = [
+  { edge: "min", label: "최소" },
+  { edge: "center", label: "가운데" },
+  { edge: "max", label: "최대" },
+];
+
+/**
+ * 객체 메뉴: 숨기기·잠금 · 바닥에 붙이기 · 정렬(2개 이상) · 분배(3개 이상).
+ * 정렬 기준은 선택 전체의 바운딩 박스 (mesh-align)
+ */
+function ObjectMenu({ runtime }: { runtime: EditorRuntime | null }) {
+  const selected = useSelection(runtime);
+  const sceneMeshes = inCreationOrder(useSceneMeshes(runtime?.scene ?? null));
+  const hiddenCount = useMeshFlagCount(sceneMeshes, "hidden");
+  const lockedCount = useMeshFlagCount(selected, "locked");
+  const count = selected.length;
+
+  return (
+    <MenubarMenu>
+      <MenubarTrigger>객체</MenubarTrigger>
+      <MenubarContent className="min-w-52">
+        <MenubarItem
+          disabled={count === 0}
+          onClick={() => runtime && hideSelected(runtime)}
+        >
+          숨기기
+          <MenubarShortcut>{SHORTCUT_LABELS.hide}</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem
+          disabled={hiddenCount === 0}
+          onClick={() => runtime && showAllHidden(runtime)}
+        >
+          숨긴 메쉬 모두 보이기
+          <MenubarShortcut>{SHORTCUT_LABELS.showAll}</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem
+          disabled={lockedCount === count}
+          onClick={() => runtime && setSelectedLocked(runtime, true)}
+        >
+          잠그기
+        </MenubarItem>
+        <MenubarItem
+          disabled={lockedCount === 0}
+          onClick={() => runtime && setSelectedLocked(runtime, false)}
+        >
+          잠금 풀기
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem
+          disabled={count === 0}
+          onClick={() => runtime && dropSelectedToFloor(runtime)}
+        >
+          바닥에 붙이기
+          <MenubarShortcut>{SHORTCUT_LABELS.dropToFloor}</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSub>
+          <MenubarSubTrigger disabled={count < 2}>정렬</MenubarSubTrigger>
+          <MenubarSubContent>
+            {ALIGN_AXES.map((axis, index) => (
+              <MenubarGroup key={axis}>
+                {index > 0 && <MenubarSeparator />}
+                {ALIGN_EDGES.map(({ edge, label }) => (
+                  <MenubarItem
+                    key={edge}
+                    onClick={() =>
+                      runtime && alignSelected(runtime, axis, edge)
+                    }
+                  >
+                    {axis.toUpperCase()} {label}
+                  </MenubarItem>
+                ))}
+              </MenubarGroup>
+            ))}
+          </MenubarSubContent>
+        </MenubarSub>
+        <MenubarSub>
+          <MenubarSubTrigger disabled={count < 3}>
+            같은 간격으로 분배
+          </MenubarSubTrigger>
+          <MenubarSubContent>
+            {ALIGN_AXES.map((axis) => (
+              <MenubarItem
+                key={axis}
+                onClick={() => runtime && distributeSelected(runtime, axis)}
+              >
+                {axis.toUpperCase()}축
+              </MenubarItem>
+            ))}
+          </MenubarSubContent>
+        </MenubarSub>
+      </MenubarContent>
+    </MenubarMenu>
   );
 }
 
@@ -164,7 +270,7 @@ type EditorHeaderProps = {
   runtime: EditorRuntime | null;
 };
 
-/** 상단 헤더: 앱 이름 · 메뉴바(파일/편집/추가/보기) · 실행 취소/다시 실행 · 파일 이름 · 렌더러 표시 */
+/** 상단 헤더: 앱 이름 · 메뉴바(파일/편집/추가/객체/보기) · 실행 취소/다시 실행 · 파일 이름 · 렌더러 표시 */
 export function EditorHeader({ runtime }: EditorHeaderProps) {
   const { undoLabel, redoLabel } = useHistoryState(runtime);
   const selectionCount = useSelection(runtime).length;
@@ -338,6 +444,8 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
             </MenubarGroup>
           </MenubarContent>
         </MenubarMenu>
+
+        <ObjectMenu runtime={runtime} />
 
         <MenubarMenu>
           <MenubarTrigger>보기</MenubarTrigger>

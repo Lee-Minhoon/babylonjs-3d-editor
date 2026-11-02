@@ -77,9 +77,11 @@ export function isSameTransform(
   );
 }
 
-type TransformKind = "이동" | "회전" | "크기";
+type TransformKind =
+  "이동" | "회전" | "크기" | "바닥에 붙이기" | "정렬" | "분배";
 
 /**
+ * 변형 Command (기즈모 드래그·패널 입력·바닥에 붙이기·정렬).
  * 기즈모 드래그 한 번 = Command 하나.
  * 드래그 중에는 기즈모가 메쉬를 직접 움직이고, 드래그가 끝나면 before/after로 기록한다.
  * (첫 execute는 이미 적용된 after를 다시 적용할 뿐이라 무해하다)

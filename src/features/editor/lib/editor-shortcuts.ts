@@ -1,11 +1,16 @@
+import type { Scene } from "@babylonjs/core/scene";
+
 import type { Clipboard } from "./clipboard";
 import {
   copySelected,
   cutSelected,
   deleteSelected,
+  dropSelectedToFloor,
   duplicateSelected,
   focusSelected,
+  hideSelected,
   paste,
+  showAllHidden,
   startRename,
 } from "./editor-actions";
 import type { History } from "./history";
@@ -24,6 +29,8 @@ import type { TransformGizmo } from "./transform-gizmo";
  *   R / Shift+R       (배치 중일 때만) 미리보기 90° 회전 / 반대로. 배치 중이 아니면 R은 크기 도구
  *   Delete/Backspace  선택한 메쉬 삭제 (undo 가능)
  *   F                 선택한 메쉬로 카메라 포커스
+ *   H / ⌥H            선택한 메쉬 숨기기 / 숨긴 메쉬 모두 보이기
+ *   End               선택한 메쉬를 바로 아래 표면에 붙이기
  *   F2                이름 바꾸기 (하나만 선택했을 때 속성 패널 이름 칸으로)
  *   Q / W / E / R     선택 / 이동 / 회전 / 크기 도구
  *   1 ~ 8             메쉬 프리셋 배치 모드 토글 (MESH_PRESETS 순서, 상단 숫자열만)
@@ -31,7 +38,7 @@ import type { TransformGizmo } from "./transform-gizmo";
  *   ⌘/Ctrl+Shift+Z    redo  (Ctrl+Y도 redo)
  *   ⌘/Ctrl+C / X / V  복사 / 잘라내기 / 붙여넣기 (에디터 내부 클립보드)
  *   ⌘/Ctrl+D          복제
- *   ⌘/Ctrl+A          전체 선택
+ *   ⌘/Ctrl+A          전체 선택 (숨기거나 잠근 메쉬 제외)
  *   ⌘/Ctrl+S          저장 (⌘/Ctrl+Shift+S 다른 이름으로 저장)
  *   ⌘/Ctrl+O          열기
  *   (새 씬은 단축키 없음 — ⌘N은 브라우저가 가로채 막을 수 없다)
@@ -41,6 +48,7 @@ import type { TransformGizmo } from "./transform-gizmo";
  */
 
 type EditorShortcutTargets = {
+  scene: Scene;
   history: History;
   placement: PlacementTool;
   selection: Selection;
@@ -90,6 +98,9 @@ export const SHORTCUT_LABELS = {
   duplicate: "⌘D",
   selectAll: "⌘A",
   focus: "F",
+  hide: "H",
+  showAll: "⌥H",
+  dropToFloor: "End",
   rename: "F2",
   rotatePlacement: "R",
 } as const;
@@ -161,6 +172,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export function bindEditorShortcuts({
+  scene,
   history,
   placement,
   selection,
@@ -232,6 +244,12 @@ export function bindEditorShortcuts({
       return;
     }
 
+    // ⌥H: 맥에서는 event.key가 "˙"지만 getShortcutKey는 물리 키(KeyH)로 본다
+    if (key === "h" && event.altKey && !event.shiftKey) {
+      if (showAllHidden({ scene, history })) event.preventDefault();
+      return;
+    }
+
     if (event.shiftKey || event.altKey) return;
 
     const tool = TOOL_KEYS[key];
@@ -250,6 +268,16 @@ export function bindEditorShortcuts({
 
     if (key === "f") {
       if (focusSelected({ selection })) event.preventDefault();
+      return;
+    }
+
+    if (key === "h") {
+      hideSelected({ history, selection });
+      return;
+    }
+
+    if (key === "end") {
+      if (dropSelectedToFloor({ history, selection })) event.preventDefault();
       return;
     }
 

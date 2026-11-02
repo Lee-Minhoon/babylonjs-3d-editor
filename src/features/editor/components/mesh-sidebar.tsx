@@ -3,7 +3,7 @@
 import { type ReactNode, useState } from "react";
 
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
-import { X } from "lucide-react";
+import { Eye, EyeOff, Lock, LockOpen, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -16,8 +16,9 @@ import {
   usePlacementState,
   useSelection,
 } from "../hooks/use-editor-state";
+import { useMeshFlag } from "../hooks/use-mesh-flags";
 import { useMeshName } from "../hooks/use-mesh-name";
-import { deleteMesh } from "../lib/editor-actions";
+import { deleteMesh, toggleMeshFlag } from "../lib/editor-actions";
 import { getPresetShortcut, SHORTCUT_LABELS } from "../lib/editor-shortcuts";
 import { inCreationOrder, MESH_PRESETS } from "../lib/mesh-presets";
 import { isAdditiveClick } from "../lib/selection";
@@ -43,7 +44,14 @@ function RotateHint({ yaw }: { yaw: number }) {
   );
 }
 
-/** 씬 목록 한 줄: 클릭 선택(Shift·⌘/Ctrl은 넣고 빼기), 더블클릭 이름 바꾸기, 삭제 버튼 */
+/** 행 끝의 아이콘 버튼: 켜져 있으면(숨김·잠금) 늘 보이고, 아니면 행에 올렸을 때만 */
+const ROW_ACTION_CLASS =
+  "opacity-0 group-hover:opacity-100 focus-visible:opacity-100";
+
+/**
+ * 씬 목록 한 줄: 클릭 선택(Shift·⌘/Ctrl은 넣고 빼기), 더블클릭 이름 바꾸기,
+ * 잠금·숨기기 토글(undo 가능), 삭제 버튼. 숨긴 메쉬는 흐리게 보이고 선택할 수 없다.
+ */
 function SceneListItem({
   mesh,
   runtime,
@@ -54,6 +62,8 @@ function SceneListItem({
   isSelected: boolean;
 }) {
   const name = useMeshName(mesh);
+  const hidden = useMeshFlag(mesh, "hidden");
+  const locked = useMeshFlag(mesh, "locked");
   const [editing, setEditing] = useState(false);
 
   return (
@@ -90,8 +100,33 @@ function SceneListItem({
           onDoubleClick={() => setEditing(true)}
         >
           <MeshIcon mesh={mesh} className="size-3.5 text-muted-foreground" />
-          <span className="truncate">{name}</span>
+          <span className={`truncate ${hidden ? "opacity-50" : ""}`}>
+            {name}
+          </span>
         </Button>
+      )}
+      {!editing && (
+        <>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={locked ? "" : ROW_ACTION_CLASS}
+            // aria-pressed는 쓰지 않는다 — 목록의 aria-pressed는 "선택됨"을 뜻한다
+            aria-label={`${name} ${locked ? "잠금 풀기" : "잠그기"}`}
+            onClick={() => toggleMeshFlag(runtime, mesh, "locked")}
+          >
+            {locked ? <Lock aria-hidden /> : <LockOpen aria-hidden />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={hidden ? "" : ROW_ACTION_CLASS}
+            aria-label={`${name} ${hidden ? "보이기" : "숨기기"}`}
+            onClick={() => toggleMeshFlag(runtime, mesh, "hidden")}
+          >
+            {hidden ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
+          </Button>
+        </>
       )}
       {!editing && (
         <Button

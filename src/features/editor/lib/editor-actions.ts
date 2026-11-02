@@ -1,11 +1,30 @@
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import type { Scene } from "@babylonjs/core/scene";
 
 import { focusCamera } from "./camera-focus";
 import { captureMeshSnapshots, type Clipboard } from "./clipboard";
-import { createMacroCommand, type History, macroLabel } from "./history";
+import {
+  type Command,
+  createMacroCommand,
+  type History,
+  macroLabel,
+} from "./history";
+import {
+  type AlignAxis,
+  type AlignEdge,
+  createAlignCommand,
+  createDistributeCommand,
+  createDropToFloorCommand,
+} from "./mesh-align";
 import { createRemoveMeshCommand } from "./mesh-commands";
+import {
+  createMeshFlagCommand,
+  getMeshFlag,
+  type MeshFlag,
+} from "./mesh-flags";
 import { createRenameCommand, MESH_NAME_INPUT_ID } from "./mesh-name";
+import { inCreationOrder } from "./mesh-presets";
 import type { PlacementTool } from "./placement-tool";
 import type { Selection } from "./selection";
 
@@ -17,6 +36,7 @@ import type { Selection } from "./selection";
  */
 
 type ActionContext = {
+  scene: Scene;
   history: History;
   selection: Selection;
   clipboard: Clipboard;
@@ -136,4 +156,81 @@ export function duplicateSelected({
   if (snapshots.length === 0) return false;
   placement.startSnapshot(snapshots, "복제", (meshes) => selection.set(meshes));
   return true;
+}
+
+/** Command가 있으면 실행하고 true (바뀔 것이 없으면 null → false) */
+function run(history: History, command: Command | null): boolean {
+  if (!command) return false;
+  history.execute(command);
+  return true;
+}
+
+/** 메쉬 하나의 숨김·잠금을 뒤집는다 (씬 목록의 눈·자물쇠 — 선택과 무관, undo 가능) */
+export function toggleMeshFlag(
+  { history }: Pick<ActionContext, "history">,
+  mesh: AbstractMesh,
+  flag: MeshFlag,
+): boolean {
+  return run(
+    history,
+    createMeshFlagCommand([mesh], flag, !getMeshFlag(mesh, flag)),
+  );
+}
+
+/** 선택한 메쉬들을 숨긴다 (H). 숨긴 메쉬는 선택에서 빠진다 */
+export function hideSelected({
+  history,
+  selection,
+}: Pick<ActionContext, "history" | "selection">): boolean {
+  return run(
+    history,
+    createMeshFlagCommand(selection.getMeshes(), "hidden", true),
+  );
+}
+
+/** 숨긴 메쉬를 모두 보인다 (⌥H) */
+export function showAllHidden({
+  scene,
+  history,
+}: Pick<ActionContext, "scene" | "history">): boolean {
+  return run(
+    history,
+    createMeshFlagCommand(inCreationOrder(scene.meshes), "hidden", false),
+  );
+}
+
+/** 선택한 메쉬들을 잠그거나(true) 푼다(false) */
+export function setSelectedLocked(
+  { history, selection }: Pick<ActionContext, "history" | "selection">,
+  locked: boolean,
+): boolean {
+  return run(
+    history,
+    createMeshFlagCommand(selection.getMeshes(), "locked", locked),
+  );
+}
+
+/** 선택한 메쉬들을 바로 아래 표면에 붙인다 (End) */
+export function dropSelectedToFloor({
+  history,
+  selection,
+}: Pick<ActionContext, "history" | "selection">): boolean {
+  return run(history, createDropToFloorCommand(selection.getMeshes()));
+}
+
+/** 선택한 메쉬들을 축 방향으로 정렬 (2개 이상) */
+export function alignSelected(
+  { history, selection }: Pick<ActionContext, "history" | "selection">,
+  axis: AlignAxis,
+  edge: AlignEdge,
+): boolean {
+  return run(history, createAlignCommand(selection.getMeshes(), axis, edge));
+}
+
+/** 선택한 메쉬들을 축 방향으로 같은 간격 분배 (3개 이상) */
+export function distributeSelected(
+  { history, selection }: Pick<ActionContext, "history" | "selection">,
+  axis: AlignAxis,
+): boolean {
+  return run(history, createDistributeCommand(selection.getMeshes(), axis));
 }

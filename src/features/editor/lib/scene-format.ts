@@ -5,6 +5,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import type { FileTypeOptions } from "@/lib/file-access";
 
 import { captureMeshSnapshot } from "./clipboard";
+import { getMeshFlag, setMeshFlag } from "./mesh-flags";
 import {
   DEFAULT_METALLIC,
   DEFAULT_ROUGHNESS,
@@ -25,26 +26,29 @@ import {
  *
  *   {
  *     "format": "babylonjs-3d-editor/scene",
- *     "version": 2,
+ *     "version": 3,
  *     "meshes": [
  *       { "presetId": "box", "name": "Box 1", "position": [0, 0.5, 0],
  *         "rotation": [0, 45, 0], "scaling": [1, 1, 1],
- *         "material": { "color": "#4F8EF7", "metallic": 0, "roughness": 0.5 } }
+ *         "material": { "color": "#4F8EF7", "metallic": 0, "roughness": 0.5 },
+ *         "hidden": false, "locked": false }
  *     ]
  *   }
  *
  * rotation은 도(°) 단위 오일러 각 (속성 패널과 같음).
  * material은 PBR metallic-roughness (color는 sRGB), 없으면 null (열 때 랜덤 색).
+ * hidden·locked는 숨기기·잠금 (mesh-flags). 없으면 false.
  *
  * 버전 기록:
  *   v1  "color": "#RRGGBB" | null (StandardMaterial diffuse) → v2에서 material.color로 옮기고
  *       metallic·roughness는 기본값
+ *   v2  hidden·locked 없음 → v3에서 false
  * 형식을 바꿀 땐 SCENE_FILE_VERSION을 올리고 parseSceneFile에서 이전 버전을 변환한다.
  * 메쉬에 새 속성을 추가하면 MeshSnapshot과 함께 여기도 넣어야 저장된다.
  */
 
 export const SCENE_FILE_FORMAT = "babylonjs-3d-editor/scene";
-export const SCENE_FILE_VERSION = 2;
+export const SCENE_FILE_VERSION = 3;
 
 export const SCENE_FILE_TYPE: FileTypeOptions = {
   description: "씬 파일",
@@ -61,6 +65,8 @@ export type SceneFileMesh = {
   rotation: Vec3;
   scaling: Vec3;
   material: MaterialValues | null;
+  hidden: boolean;
+  locked: boolean;
 };
 
 export type SceneFileData = {
@@ -114,6 +120,8 @@ export function serializeScene(scene: Scene): SceneFileData {
           ...snapshot.material,
           color: snapshot.material.color.toUpperCase(),
         },
+        hidden: getMeshFlag(mesh, "hidden"),
+        locked: getMeshFlag(mesh, "locked"),
       },
     ];
   });
@@ -228,6 +236,18 @@ function parseMesh(
     version === 1
       ? parseV1Color(value.color, where)
       : parseMaterial(value.material ?? null, where);
+  // v2 이하에는 없다. v3도 빠져 있으면 false (손으로 고친 파일 대비)
+  const flags = {
+    hidden: value.hidden ?? false,
+    locked: value.locked ?? false,
+  };
+  for (const [key, flag] of Object.entries(flags)) {
+    if (typeof flag !== "boolean") {
+      throw new SceneFileError(
+        `${where}: ${key}는 true 또는 false여야 합니다.`,
+      );
+    }
+  }
 
   return {
     presetId: presetId as MeshPresetId,
@@ -236,6 +256,8 @@ function parseMesh(
     rotation: rotation as Vec3,
     scaling: scaling as Vec3,
     material,
+    hidden: flags.hidden as boolean,
+    locked: flags.locked as boolean,
   };
 }
 
@@ -299,5 +321,7 @@ export function loadSceneFile(scene: Scene, file: SceneFileData) {
     mesh.rotationQuaternion = null;
     mesh.rotation = Vector3.FromArray(entry.rotation).scaleInPlace(1 / DEGREES);
     mesh.scaling = Vector3.FromArray(entry.scaling);
+    setMeshFlag(mesh, "hidden", entry.hidden);
+    setMeshFlag(mesh, "locked", entry.locked);
   }
 }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest";
 
+import { getMeshFlag, setMeshFlag } from "./mesh-flags";
 import { getMaterialValues } from "./mesh-material";
 import { addPresetMesh, findPreset } from "./mesh-presets";
 import {
@@ -83,6 +84,22 @@ describe("저장 → 열기 왕복", () => {
     expect(saved.rotation[1]).toBeCloseTo(45);
   });
 
+  test("숨김·잠금이 그대로 돌아온다", () => {
+    buildScene();
+    const [box, sphere] = getEditorMeshes(scene);
+    setMeshFlag(box, "hidden", true);
+    setMeshFlag(sphere, "locked", true);
+    const text = stringifySceneFile(serializeScene(scene));
+    clearEditorMeshes(scene);
+
+    loadSceneFile(scene, parseSceneFile(text));
+    const [loadedBox, loadedSphere] = getEditorMeshes(scene);
+    expect(getMeshFlag(loadedBox, "hidden")).toBe(true);
+    expect(getMeshFlag(loadedBox, "locked")).toBe(false);
+    expect(getMeshFlag(loadedSphere, "hidden")).toBe(false);
+    expect(getMeshFlag(loadedSphere, "locked")).toBe(true);
+  });
+
   test("연 뒤 새로 만드는 메쉬는 파일 속 번호 다음부터", () => {
     loadSceneFile(
       scene,
@@ -114,6 +131,19 @@ describe("v1 파일 변환", () => {
   });
 });
 
+describe("v2 파일 변환", () => {
+  test("hidden·locked가 없으면 보이고 풀린 상태로 연다", () => {
+    const parsed = parseSceneFile(file([validMesh], 2));
+    expect(parsed.version).toBe(SCENE_FILE_VERSION);
+    expect(parsed.meshes[0]).toMatchObject({ hidden: false, locked: false });
+
+    loadSceneFile(scene, parsed);
+    const [box] = getEditorMeshes(scene);
+    expect(box.isVisible).toBe(true);
+    expect(getMeshFlag(box, "locked")).toBe(false);
+  });
+});
+
 describe("잘못된 파일은 SceneFileError (씬을 바꾸기 전에 거른다)", () => {
   test.each([
     ["JSON이 아님", "{not json", "JSON 형식이 아닙니다"],
@@ -139,6 +169,7 @@ describe("잘못된 파일은 SceneFileError (씬을 바꾸기 전에 거른다)
       file([{ ...validMesh, material: { ...gold, metallic: 2 } }]),
       "metallic",
     ],
+    ["숨김 값", file([{ ...validMesh, hidden: "yes" }]), "hidden"],
     [
       "색 형식",
       file([{ ...validMesh, material: { ...gold, color: "red" } }]),
