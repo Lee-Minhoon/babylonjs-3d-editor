@@ -51,7 +51,7 @@ test("↑↓로 고르고, 클릭으로도 고른다. Esc는 닫기만", async (
   ).toContainText("Sphere");
   await page.keyboard.press("Escape");
   await expect(addMenu(page)).toHaveCount(0);
-  await expect(placementHint(page)).toContainText("메쉬를 고른 뒤");
+  await expect(placementHint(page)).toContainText("고른 뒤 씬에서");
 
   await page.getByRole("menuitem", { name: "추가", exact: true }).click();
   await page.getByRole("menuitem", { name: /검색해서 추가/ }).click();

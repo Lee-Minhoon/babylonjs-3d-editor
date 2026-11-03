@@ -33,7 +33,7 @@ test("저장 → 새 씬 → 열기로 그대로 복원된다", async ({ page })
     0,
   );
   const saved = JSON.parse(await readMockFile(page, "scene.json"));
-  expect(saved.version).toBe(5);
+  expect(saved.version).toBe(6);
   expect(saved.meshes.map((m: { name: string }) => m.name)).toEqual([
     "Box 1",
     "Sphere 1",

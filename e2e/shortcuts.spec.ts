@@ -50,7 +50,7 @@ test("열린 메뉴 안에서 누른 키는 에디터 단축키로 새지 않는
   await page.keyboard.press("1"); // 메뉴 안에서는 항목 찾기(typeahead)용
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toHaveCount(0);
-  await expect(placementHint(page)).toContainText("메쉬를 고른 뒤");
+  await expect(placementHint(page)).toContainText("고른 뒤 씬에서");
 });
 
 test("슬라이더를 조절하는 중의 Delete는 메쉬를 지우지 않는다", async ({

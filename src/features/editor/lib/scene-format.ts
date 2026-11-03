@@ -5,13 +5,19 @@ import type { Scene } from "@babylonjs/core/scene";
 import type { FileTypeOptions } from "@/lib/file-access";
 
 import { captureMeshSnapshot } from "./clipboard";
+import {
+  addPresetObject,
+  LIGHT_DEFAULTS,
+  LIGHT_RANGES,
+  type LightValues,
+} from "./editor-lights";
 import { getMeshFlag, setMeshFlag } from "./mesh-flags";
 import { MATERIAL_DEFAULTS, type MaterialValues } from "./mesh-material";
 import {
-  addPresetMesh,
+  ALL_PRESETS,
   findPreset,
   inCreationOrder,
-  MESH_PRESETS,
+  type LightKind,
   type MeshPreset,
   type MeshPresetId,
   resetMeshNames,
@@ -33,14 +39,16 @@ import {
  *   {
  *     "format": "babylonjs-3d-editor/scene",
  *     "version": 5,
- *     "settings": { "background": "#1A1A1F", "environmentIntensity": 1,
+ *     "settings": { "background": "#1A1A1F", "ambientIntensity": 1, "environmentIntensity": 1,
  *       "exposure": 1, "toneMapping": "none" },
  *     "meshes": [
  *       { "presetId": "box", "name": "Box 1", "position": [0, 0.5, 0],
  *         "rotation": [0, 45, 0], "scaling": [1, 1, 1],
  *         "material": { "color": "#4F8EF7", "metallic": 0, "roughness": 0.5,
  *           "emissive": "#000000", "alpha": 1, "unlit": false },
- *         "hidden": false, "locked": false, "shape": {} }
+ *         "hidden": false, "locked": false, "shape": {}, "light": null },
+ *       { "presetId": "point-light", "name": "Point Light 1", …, "material": null,
+ *         "light": { "color": "#FFFFFF", "intensity": 10, "range": 10, "angle": 60, "shadows": false } }
  *     ]
  *   }
  *
@@ -51,6 +59,7 @@ import {
  * hidden·locked는 숨기기·잠금 (mesh-flags). 없으면 false.
  * shape는 프리셋 모양 값 (MeshPreset.params, 예: 원뿔 { "diameterTop": 0, "diameterBottom": 1, "tessellation": 24 }).
  * 빠진 키는 기본값, 범위 밖이나 그 프리셋에 없는 키는 오류.
+ * 조명(presetId가 *-light)은 light 값을 가진다 (빠진 값은 그 종류의 기본값). 메쉬는 light가 null.
  *
  * 버전 기록:
  *   v1  "color": "#RRGGBB" | null (StandardMaterial diffuse) → v2에서 material.color로 옮기고
@@ -58,12 +67,13 @@ import {
  *   v2  hidden·locked 없음 → v3에서 false
  *   v3  settings·material.emissive/alpha/unlit 없음 → v4에서 기본값
  *   v4  shape 없음 → v5에서 기본 모양 (지금까지 만든 모양과 같다)
+ *   v5  조명 객체·light·settings.ambientIntensity 없음 → v6 (조명 없음, 기본 조명 세기 1)
  * 형식을 바꿀 땐 SCENE_FILE_VERSION을 올리고 parseSceneFile에서 이전 버전을 변환한다.
  * 메쉬에 새 속성을 추가하면 MeshSnapshot과 함께 여기도 넣어야 저장된다.
  */
 
 export const SCENE_FILE_FORMAT = "babylonjs-3d-editor/scene";
-export const SCENE_FILE_VERSION = 5;
+export const SCENE_FILE_VERSION = 6;
 
 export const SCENE_FILE_TYPE: FileTypeOptions = {
   description: "씬 파일",
@@ -83,6 +93,7 @@ export type SceneFileMesh = {
   hidden: boolean;
   locked: boolean;
   shape: ShapeParams;
+  light: LightValues | null;
 };
 
 export type SceneFileData = {
@@ -141,6 +152,10 @@ export function serializeScene(scene: Scene): SceneFileData {
         hidden: getMeshFlag(mesh, "hidden"),
         locked: getMeshFlag(mesh, "locked"),
         shape: snapshot.shape,
+        light: snapshot.light && {
+          ...snapshot.light,
+          color: snapshot.light.color.toUpperCase(),
+        },
       },
     ];
   });
@@ -171,7 +186,7 @@ export function stringifySceneFile(file: SceneFileData): string {
   return `${text}\n`;
 }
 
-const PRESET_IDS = new Set<string>(MESH_PRESETS.map((preset) => preset.id));
+const PRESET_IDS = new Set<string>(ALL_PRESETS.map((preset) => preset.id));
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -298,6 +313,60 @@ function parseMesh(
     hidden: flags.hidden as boolean,
     locked: flags.locked as boolean,
     shape: parseShape(value.shape, preset, where),
+    light: preset.light ? parseLight(value.light, preset.light, where) : null,
+  };
+}
+
+/** 조명 값. 빠진 값은 그 종류의 기본값 */
+function parseLight(
+  value: unknown,
+  kind: LightKind,
+  where: string,
+): LightValues {
+  if (value === undefined || value === null) return { ...LIGHT_DEFAULTS[kind] };
+  if (!isRecord(value)) {
+    throw new SceneFileError(`${where}: light는 객체여야 합니다.`);
+  }
+  const defaults = LIGHT_DEFAULTS[kind];
+  const {
+    color = defaults.color,
+    intensity = defaults.intensity,
+    range = defaults.range,
+    angle = defaults.angle,
+    shadows = defaults.shadows,
+  } = value;
+  if (!isHexColor(color)) {
+    throw new SceneFileError(`${where}: light.color는 "#RRGGBB"여야 합니다.`);
+  }
+  const limits = {
+    intensity: [LIGHT_RANGES.intensity.min, Infinity],
+    range: [LIGHT_RANGES.range.min, LIGHT_RANGES.range.max],
+    angle: [LIGHT_RANGES.angle.min, LIGHT_RANGES.angle.max],
+  } as const;
+  for (const [key, number] of Object.entries({ intensity, range, angle })) {
+    const [min, max] = limits[key as keyof typeof limits];
+    if (
+      typeof number !== "number" ||
+      !Number.isFinite(number) ||
+      number < min ||
+      number > max
+    ) {
+      throw new SceneFileError(
+        `${where}: light.${key}는 ${min}${max === Infinity ? " 이상" : `~${max} 사이`} 숫자여야 합니다.`,
+      );
+    }
+  }
+  if (typeof shadows !== "boolean") {
+    throw new SceneFileError(
+      `${where}: light.shadows는 true 또는 false여야 합니다.`,
+    );
+  }
+  return {
+    color: color as string,
+    intensity: intensity as number,
+    range: range as number,
+    angle: angle as number,
+    shadows,
   };
 }
 
@@ -342,6 +411,7 @@ function parseSettings(value: unknown): SceneSettings {
   }
   const {
     background = DEFAULT_SCENE_SETTINGS.background,
+    ambientIntensity = DEFAULT_SCENE_SETTINGS.ambientIntensity,
     environmentIntensity = DEFAULT_SCENE_SETTINGS.environmentIntensity,
     exposure = DEFAULT_SCENE_SETTINGS.exposure,
     toneMapping = DEFAULT_SCENE_SETTINGS.toneMapping,
@@ -350,6 +420,7 @@ function parseSettings(value: unknown): SceneSettings {
     throw new SceneFileError('settings.background는 "#RRGGBB"여야 합니다.');
   }
   for (const [key, number] of Object.entries({
+    ambientIntensity,
     environmentIntensity,
     exposure,
   })) {
@@ -364,6 +435,7 @@ function parseSettings(value: unknown): SceneSettings {
   }
   return {
     background,
+    ambientIntensity: ambientIntensity as number,
     environmentIntensity: environmentIntensity as number,
     exposure: exposure as number,
     toneMapping: toneMapping as SceneSettings["toneMapping"],
@@ -422,13 +494,7 @@ export function loadSceneFile(scene: Scene, file: SceneFileData) {
   for (const entry of file.meshes) {
     const preset = findPreset(entry.presetId);
     if (!preset) continue;
-    const mesh = addPresetMesh(
-      scene,
-      preset,
-      entry.material ?? undefined,
-      entry.name,
-      entry.shape,
-    );
+    const mesh = addPresetObject(scene, preset, entry);
     mesh.position = Vector3.FromArray(entry.position);
     mesh.rotationQuaternion = null;
     mesh.rotation = Vector3.FromArray(entry.rotation).scaleInPlace(1 / DEGREES);

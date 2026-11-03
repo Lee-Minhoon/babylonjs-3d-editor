@@ -10,6 +10,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useSceneMeshes } from "@/hooks/use-scene-meshes";
+import { cn } from "@/lib/utils";
 
 import {
   useActivePresetId,
@@ -20,15 +21,31 @@ import { useMeshFlag } from "../hooks/use-mesh-flags";
 import { useMeshName } from "../hooks/use-mesh-name";
 import { deleteMesh, toggleMeshFlag } from "../lib/editor-actions";
 import { getPresetShortcut, SHORTCUT_LABELS } from "../lib/editor-shortcuts";
-import { inCreationOrder, MESH_PRESETS } from "../lib/mesh-presets";
+import {
+  inCreationOrder,
+  LIGHT_PRESETS,
+  MESH_PRESETS,
+  type MeshPreset,
+} from "../lib/mesh-presets";
 import { isAdditiveClick } from "../lib/selection";
 import type { EditorRuntime } from "./editor-viewport";
 import { MeshNameInput } from "./mesh-name-input";
 import { MeshIcon, PRESET_ICONS } from "./preset-icons";
 
-function SectionTitle({ children }: { children: ReactNode }) {
+function SectionTitle({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <h2 className="mb-2 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground uppercase">
+    <h2
+      className={cn(
+        "mb-2 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground uppercase",
+        className,
+      )}
+    >
       {children}
     </h2>
   );
@@ -147,7 +164,44 @@ type MeshSidebarProps = {
   runtime: EditorRuntime | null;
 };
 
-/** 왼쪽 사이드바: 메쉬 추가(배치 모드) + 씬 목록 */
+/** 프리셋 배치 버튼 (누르면 배치 모드 토글, 켜져 있으면 강조) */
+function PresetButton({
+  preset,
+  runtime,
+  active,
+  label = preset.label,
+}: {
+  preset: MeshPreset;
+  runtime: EditorRuntime | null;
+  active: boolean;
+  label?: string;
+}) {
+  const Icon = PRESET_ICONS[preset.id];
+  const shortcut = getPresetShortcut(preset.id);
+  return (
+    <Button
+      variant={active ? "default" : "secondary"}
+      size="lg"
+      // min-w-0: 라벨+단축키가 길어도 그리드 칸을 넘지 않게
+      className="min-w-0 justify-start gap-2 pr-1.5"
+      disabled={!runtime}
+      aria-label={label === preset.label ? undefined : preset.label}
+      aria-pressed={active}
+      aria-keyshortcuts={shortcut ?? undefined}
+      onClick={() => runtime?.placement.toggle(preset)}
+    >
+      <Icon strokeWidth={1.75} aria-hidden />
+      <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+      {shortcut && (
+        <Kbd className={active ? "bg-primary-foreground/15 text-current" : ""}>
+          {shortcut}
+        </Kbd>
+      )}
+    </Button>
+  );
+}
+
+/** 왼쪽 사이드바: 메쉬·조명 추가(배치 모드) + 씬 목록 */
 export function MeshSidebar({ runtime }: MeshSidebarProps) {
   const meshes = inCreationOrder(useSceneMeshes(runtime?.scene ?? null));
   const activePresetId = useActivePresetId(runtime);
@@ -159,38 +213,27 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
       <section className="p-3">
         <SectionTitle>메쉬 추가</SectionTitle>
         <div className="grid grid-cols-2 gap-1.5">
-          {MESH_PRESETS.map((preset) => {
-            const isActive = activePresetId === preset.id;
-            const Icon = PRESET_ICONS[preset.id];
-            const shortcut = getPresetShortcut(preset.id);
-            return (
-              <Button
-                key={preset.id}
-                variant={isActive ? "default" : "secondary"}
-                size="lg"
-                // min-w-0: 라벨+단축키가 길어도 그리드 칸을 넘지 않게
-                className="min-w-0 justify-start gap-2 pr-1.5"
-                disabled={!runtime}
-                aria-pressed={isActive}
-                aria-keyshortcuts={shortcut ?? undefined}
-                onClick={() => runtime?.placement.toggle(preset)}
-              >
-                <Icon strokeWidth={1.75} aria-hidden />
-                <span className="min-w-0 flex-1 truncate text-left">
-                  {preset.label}
-                </span>
-                {shortcut && (
-                  <Kbd
-                    className={
-                      isActive ? "bg-primary-foreground/15 text-current" : ""
-                    }
-                  >
-                    {shortcut}
-                  </Kbd>
-                )}
-              </Button>
-            );
-          })}
+          {MESH_PRESETS.map((preset) => (
+            <PresetButton
+              key={preset.id}
+              preset={preset}
+              runtime={runtime}
+              active={activePresetId === preset.id}
+            />
+          ))}
+        </div>
+        <SectionTitle className="mt-3">조명 추가</SectionTitle>
+        <div className="grid grid-cols-2 gap-1.5">
+          {LIGHT_PRESETS.map((preset) => (
+            <PresetButton
+              key={preset.id}
+              preset={preset}
+              runtime={runtime}
+              active={activePresetId === preset.id}
+              // 좁은 칸이라 "Directional Light" → "Directional"
+              label={preset.label.replace(/ Light$/, "")}
+            />
+          ))}
         </div>
         <p className="mt-2 flex min-h-5 flex-wrap items-center gap-1 text-xs text-muted-foreground">
           {placement?.kind === "preset" ? (
@@ -206,7 +249,7 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
               <Kbd>{SHORTCUT_LABELS.deselect}</Kbd> / 우클릭 취소
             </>
           ) : (
-            "메쉬를 고른 뒤 씬에서 놓을 위치를 클릭하세요."
+            "메쉬나 조명을 고른 뒤 씬에서 놓을 위치를 클릭하세요."
           )}
         </p>
       </section>

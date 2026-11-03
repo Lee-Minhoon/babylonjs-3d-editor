@@ -8,6 +8,7 @@ import { ArrowLeft } from "lucide-react";
 import { Kbd } from "@/components/ui/kbd";
 
 import { AUTOSAVE_DELAY } from "../lib/autosave";
+import { LIGHT_DEFAULTS, LIGHT_RANGES } from "../lib/editor-lights";
 import { TOOL_LABELS } from "../lib/editor-reference";
 import {
   getPresetShortcut,
@@ -16,7 +17,7 @@ import {
   VIEW_SHORTCUTS,
 } from "../lib/editor-shortcuts";
 import { MATERIAL_DEFAULTS } from "../lib/mesh-material";
-import { MESH_PRESETS } from "../lib/mesh-presets";
+import { LIGHT_PRESETS, MESH_PRESETS } from "../lib/mesh-presets";
 import {
   DEFAULT_SCENE_SETTINGS,
   SETTING_RANGES,
@@ -45,6 +46,7 @@ const SECTIONS = [
   { id: "transform", title: "변형 (위치·회전·크기)" },
   { id: "shape", title: "모양" },
   { id: "material", title: "머티리얼" },
+  { id: "lights", title: "조명·그림자" },
   { id: "scene-settings", title: "씬 설정 (배경·조명 느낌)" },
   { id: "object", title: "숨기기·잠금·정렬" },
   { id: "clipboard", title: "복사·붙여넣기·복제" },
@@ -391,6 +393,50 @@ export function ManualPage() {
             </List>
           </Section>
 
+          <Section id="lights">
+            <p>
+              왼쪽 &quot;조명 추가&quot;, 추가 메뉴,{" "}
+              <Kbd>{SHORTCUT_LABELS.addMenu}</Kbd>로 놓습니다. 놓은 자리보다{" "}
+              {LIGHT_PRESETS[0].lift} 위에 뜨고, 뷰포트에는 조명 색의 작은
+              아이콘으로 보입니다. 씬 목록에 메쉬와 함께 나오고
+              선택·이동·회전·이름 바꾸기·숨기기·잠금·삭제·복사·실행 취소가
+              메쉬와 같습니다. 아이콘의 아래(-Y)쪽으로 비추므로 회전 기즈모로
+              방향을 바꿉니다.
+            </p>
+            <List>
+              <li>
+                <Term>Directional Light</Term> (방향광): 해처럼 한 방향으로 씬
+                전체를 같은 세기로 비춥니다. 위치는 상관없고 방향만 씁니다. 기본
+                세기 {LIGHT_DEFAULTS.directional.intensity}.
+              </li>
+              <li>
+                <Term>Point Light</Term> (점광원): 전구처럼 모든 방향으로.
+                멀어질수록 어두워지고 범위 밖은 비추지 않습니다. 기본 세기{" "}
+                {LIGHT_DEFAULTS.point.intensity}, 범위{" "}
+                {LIGHT_DEFAULTS.point.range}.
+              </li>
+              <li>
+                <Term>Spot Light</Term> (스포트): 원뿔 모양으로. 각도는 원뿔
+                전체 각도(
+                {LIGHT_RANGES.angle.min}~{LIGHT_RANGES.angle.max}°, 기본{" "}
+                {LIGHT_DEFAULTS.spot.angle}°)입니다.
+              </li>
+              <li>
+                <Term>그림자</Term>: 조명마다 켭니다 (기본 꺼짐). 보이는 메쉬가
+                서로와 바닥에 그림자를 드리웁니다. 바닥에는 그림자를 켠 첫
+                조명의 그림자만 보입니다. 기본 조명(씬 설정)이 밝으면 그림자가
+                옅게 보이니 낮추세요.
+              </li>
+              <li>
+                숨기면 그 조명이 꺼집니다. 조명은 크기와 머티리얼이 없습니다.
+              </li>
+              <li>
+                조명 아이콘은 스크린샷과 glTF에 들어가지 않습니다 (조명의 빛은
+                스크린샷에 보입니다). glTF로는 조명을 내보내지 않습니다.
+              </li>
+            </List>
+          </Section>
+
           <Section id="scene-settings">
             <p>
               아무것도 선택하지 않으면 속성 패널이 씬 설정으로 바뀝니다. 씬
@@ -402,6 +448,12 @@ export function ManualPage() {
                 <Term>배경색</Term>: 기본 {DEFAULT_SCENE_SETTINGS.background}.
                 바닥 격자에 가려서 화면에서는 지평선 위로 보이고, 스크린샷에서는
                 격자가 빠지므로 전체 배경이 됩니다.
+              </li>
+              <li>
+                <Term>기본 조명 세기</Term>: 씬 전체를 고르게 밝히는 기본 조명
+                (0 ~ {SETTING_RANGES.ambientIntensity.max}, 기본{" "}
+                {DEFAULT_SCENE_SETTINGS.ambientIntensity}). 직접 놓은 조명을
+                돋보이게 하려면 낮춥니다.
               </li>
               <li>
                 <Term>환경광 세기</Term>: 환경 반사와 간접광의 세기 (0 ~{" "}
@@ -512,12 +564,12 @@ export function ManualPage() {
                 뷰어에서 여는 표준 3D 파일입니다. 메쉬 이름·위치·회전·크기와
                 머티리얼(색·메탈릭·거칠기·발광색·불투명도·조명 무시)이
                 들어갑니다. 숨긴 메쉬, 바닥 격자, 카메라·조명, 씬 설정은
-                빠집니다. 이 파일은 에디터로 다시 열 수 없습니다 — 편집은 씬
-                파일(.json)로 이어 갑니다.
+                빠집니다. 조명도 아직 내보내지 않습니다. 이 파일은 에디터로 다시
+                열 수 없습니다 — 편집은 씬 파일(.json)로 이어 갑니다.
               </li>
               <li>
                 <Term>스크린샷 저장</Term>: 지금 시점을 PNG로 저장합니다. 바닥
-                격자·기즈모·선택 외곽선·숨긴 메쉬는 찍히지 않습니다.
+                격자·기즈모·선택 외곽선·숨긴 메쉬·조명 아이콘은 찍히지 않습니다.
               </li>
               <li>
                 파일 이름은 씬 파일 이름을 따릅니다 (예: castle.json →

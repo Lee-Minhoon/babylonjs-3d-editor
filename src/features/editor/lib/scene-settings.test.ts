@@ -13,6 +13,7 @@ import { createTestScene } from "./test-scene";
 
 const bright: SceneSettings = {
   background: "#FFFFFF",
+  ambientIntensity: 0.3,
   environmentIntensity: 2,
   exposure: 0.5,
   toneMapping: "standard",

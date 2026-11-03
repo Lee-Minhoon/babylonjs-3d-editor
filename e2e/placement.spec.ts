@@ -71,6 +71,6 @@ test("우클릭은 배치를 취소한다", async ({ page }) => {
       y: b!.y + b!.height / 2,
     }));
   await page.mouse.click(x, y, { button: "right" });
-  await expect(placementHint(page)).toContainText("메쉬를 고른 뒤");
+  await expect(placementHint(page)).toContainText("고른 뒤 씬에서");
   await expectScene(page, []);
 });

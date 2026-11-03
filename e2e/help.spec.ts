@@ -40,7 +40,7 @@ test("?와 도움말 메뉴로 단축키 창을 열고, Esc로 닫는다", async
   // 창 안의 키는 에디터로 새지 않는다 (1 = Box 배치가 켜지면 안 됨)
   await page.keyboard.press("1");
   await page.keyboard.press("Escape");
-  await expect(placementHint(page)).toContainText("메쉬를 고른 뒤");
+  await expect(placementHint(page)).toContainText("고른 뒤 씬에서");
 });
 
 test("도움말 창에 적힌 도구·메쉬 단축키가 실제로 동작한다", async ({

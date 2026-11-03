@@ -12,11 +12,12 @@ import type { Scene } from "@babylonjs/core/scene";
 import { createListeners } from "@/lib/listeners";
 
 import { createMeshFromSnapshot, type MeshSnapshot } from "./clipboard";
+import { addPresetObject } from "./editor-lights";
 import { createMacroCommand, type History, macroLabel } from "./history";
 import { createSpawnMeshCommand, type SpawnMeshCommand } from "./mesh-commands";
 import {
-  addPresetMesh,
   findPreset,
+  isLightObject,
   type MeshPreset,
   type MeshPresetId,
   type ShapeParams,
@@ -126,7 +127,12 @@ export function createPlacementTool(
 
     const hit = scene.pickWithRay(
       ray,
-      (mesh) => mesh.isPickable && mesh.isEnabled() && mesh.isVisible,
+      // 조명 아이콘 위에는 놓지 않는다
+      (mesh) =>
+        mesh.isPickable &&
+        mesh.isEnabled() &&
+        mesh.isVisible &&
+        !isLightObject(mesh),
     );
     const normal = hit?.hit ? hit.getNormal(true) : null;
     if (hit?.pickedPoint && normal && normal.y >= TOP_FACE_MIN_NORMAL_Y) {
@@ -240,6 +246,8 @@ export function createPlacementTool(
     const [offset] = layoutItems([
       { preview, position: Vector3.Zero(), baseRotation: Vector3.Zero() },
     ]);
+    // 조명은 표면에서 띄워 놓는다
+    offset.y += preset.lift ?? 0;
     begin({
       state: {
         kind: "preset",
@@ -255,7 +263,7 @@ export function createPlacementTool(
             createSpawnMeshCommand(
               scene,
               () => {
-                const mesh = addPresetMesh(scene, preset);
+                const mesh = addPresetObject(scene, preset);
                 mesh.position.copyFrom(position);
                 mesh.rotation.copyFrom(rotation);
                 return mesh;

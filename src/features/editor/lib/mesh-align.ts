@@ -5,7 +5,7 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
 import { type Command, createMacroCommand, macroLabel } from "./history";
 import { getMeshFlag } from "./mesh-flags";
-import { inCreationOrder } from "./mesh-presets";
+import { inCreationOrder, isLightObject } from "./mesh-presets";
 import {
   applyTransform,
   captureTransform,
@@ -96,7 +96,7 @@ function findFloor(
 /**
  * 바닥에 붙이기 (End): 각 메쉬를 바로 아래 표면(다른 메쉬 윗면 또는 바닥)으로 내리거나 올린다.
  * 여러 개면 낮은 것부터 차례로 붙여서, 함께 고른 메쉬끼리 쌓여 있어도 위에 있던 것이 아래 것 위에 놓인다.
- * 숨긴 메쉬는 표면이 아니다 (잠근 메쉬는 표면이다).
+ * 숨긴 메쉬·조명 아이콘은 표면이 아니다 (잠근 메쉬는 표면이다).
  */
 export function createDropToFloorCommand(
   meshes: readonly AbstractMesh[],
@@ -106,7 +106,10 @@ export function createDropToFloorCommand(
   const pending = new Set(meshes);
   const obstacles = new Set(
     inCreationOrder(scene.meshes).filter(
-      (mesh) => !pending.has(mesh) && !getMeshFlag(mesh, "hidden"),
+      (mesh) =>
+        !pending.has(mesh) &&
+        !getMeshFlag(mesh, "hidden") &&
+        !isLightObject(mesh),
     ),
   );
   const ordered = meshes.toSorted(

@@ -30,6 +30,7 @@ import { bindPointerRouter } from "../lib/pointer-router";
 import { createSceneExport, type SceneExport } from "../lib/scene-export";
 import { createSceneFile, type SceneFile } from "../lib/scene-file";
 import {
+  AMBIENT_LIGHT_NAME,
   applySceneSettings,
   DEFAULT_SCENE_SETTINGS,
 } from "../lib/scene-settings";
@@ -39,8 +40,6 @@ import { createToolState, type ToolState } from "../lib/tools";
 import { createTransformGizmo } from "../lib/transform-gizmo";
 
 function setupScene(scene: Scene): ArcRotateCamera {
-  applySceneSettings(scene, DEFAULT_SCENE_SETTINGS);
-
   const camera = new ArcRotateCamera(
     "camera",
     -Math.PI / 4,
@@ -54,7 +53,10 @@ function setupScene(scene: Scene): ArcRotateCamera {
   camera.wheelDeltaPercentage = 0.01;
   camera.attachControl(scene.getEngine().getRenderingCanvas(), true);
 
-  new HemisphericLight("light", new Vector3(0.3, 1, 0.2), scene);
+  // 씬 전체를 밝히는 기본 조명 (세기는 씬 설정). 직접 놓는 조명은 editor-lights
+  new HemisphericLight(AMBIENT_LIGHT_NAME, new Vector3(0.3, 1, 0.2), scene);
+  // 기본 조명을 만든 뒤에 (세기도 설정이 정한다)
+  applySceneSettings(scene, DEFAULT_SCENE_SETTINGS);
   // PBR 반사·간접광용 환경 (스카이박스로 보여주진 않음). 금속은 이게 없으면 검게 보인다.
   scene.environmentTexture = CubeTexture.CreateFromPrefilteredData(
     "/environments/studio.env",

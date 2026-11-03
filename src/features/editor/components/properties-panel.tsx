@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useRef } from "react";
+import { type ReactNode, useMemo, useRef } from "react";
 
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { NumberField } from "@base-ui/react/number-field";
@@ -14,6 +14,7 @@ import { useMeshTransforms } from "../hooks/use-mesh-transform";
 import { getShortcutKey, handleFieldHistoryKey } from "../lib/editor-shortcuts";
 import { createMacroCommand, type History, macroLabel } from "../lib/history";
 import { MESH_NAME_INPUT_ID } from "../lib/mesh-name";
+import { isLightObject } from "../lib/mesh-presets";
 import {
   applyTransform,
   captureTransform,
@@ -30,6 +31,7 @@ import {
 } from "../lib/transform-values";
 import type { EditorRuntime } from "./editor-viewport";
 import { HistoryPanel } from "./history-panel";
+import { LightSection } from "./light-section";
 import { MaterialSection } from "./material-section";
 import { MeshNameInput } from "./mesh-name-input";
 import { MeshIcon } from "./preset-icons";
@@ -216,15 +218,21 @@ function AxisField({
 function TransformSection({
   meshes,
   history,
+  withScaling,
 }: {
   meshes: readonly AbstractMesh[];
   history: History;
+  /** 조명만 골랐으면 크기 칸을 숨긴다 (조명은 크기가 없다) */
+  withScaling: boolean;
 }) {
   const values = useMeshTransforms(meshes);
+  const fields = withScaling
+    ? FIELDS
+    : FIELDS.filter(({ field }) => field !== "scaling");
 
   return (
     <div className="space-y-3">
-      {FIELDS.map(({ field, label, ...steps }) => (
+      {fields.map(({ field, label, ...steps }) => (
         <div key={field}>
           <div className="mb-1.5 text-[0.6875rem] text-muted-foreground">
             {label}
@@ -284,7 +292,7 @@ function MultiSelectionHeader({ meshes }: { meshes: readonly AbstractMesh[] }) {
 }
 
 /**
- * 속성 패널: 메쉬를 고르면 변형 · 모양(같은 프리셋일 때) · 머티리얼 (여러 개면 함께 편집 — 값이 다른 칸은 "—"),
+ * 속성 패널: 메쉬를 고르면 변형 · 모양(같은 프리셋일 때) · 조명(조명 객체) · 머티리얼(메쉬) (여러 개면 함께 편집 — 값이 다른 칸은 "—"),
  * 선택이 없으면 씬 설정. 아래에는 히스토리 패널.
  */
 export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
@@ -294,6 +302,9 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
   const selectionKey = selected.map(({ uniqueId }) => uniqueId).join(",");
   // 모양 값은 고른 메쉬가 모두 같은 프리셋일 때만 (프리셋마다 항목이 다르다)
   const shapePreset = sharedShapePreset(selected);
+  // 조명과 메쉬를 함께 골랐으면 각자의 칸에 각자만 (구독 훅에 넘기므로 선택이 바뀔 때만 새 배열)
+  const lights = useMemo(() => selected.filter(isLightObject), [selected]);
+  const hasMeshes = lights.length < selected.length;
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-l border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">
@@ -327,6 +338,7 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
               key={selectionKey}
               meshes={selected}
               history={runtime.history}
+              withScaling={hasMeshes}
             />
             <p className="text-muted-foreground">
               축 이름(X/Y/Z)을 좌우로 드래그해 값을 조절할 수 있습니다.
@@ -347,15 +359,32 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
                 </div>
               </>
             )}
-            <Separator />
-            <div>
-              <SectionTitle>머티리얼</SectionTitle>
-              <MaterialSection
-                key={selectionKey}
-                meshes={selected}
-                history={runtime.history}
-              />
-            </div>
+            {lights.length > 0 && (
+              <>
+                <Separator />
+                <div>
+                  <SectionTitle>조명</SectionTitle>
+                  <LightSection
+                    key={selectionKey}
+                    lights={lights}
+                    history={runtime.history}
+                  />
+                </div>
+              </>
+            )}
+            {hasMeshes && (
+              <>
+                <Separator />
+                <div>
+                  <SectionTitle>머티리얼</SectionTitle>
+                  <MaterialSection
+                    key={selectionKey}
+                    meshes={selected}
+                    history={runtime.history}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </ScrollArea>
       ) : runtime ? (

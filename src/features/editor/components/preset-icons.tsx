@@ -3,12 +3,15 @@ import {
   Box,
   Cone,
   Cylinder,
+  Flashlight,
   Gem,
   Globe,
+  Lightbulb,
   type LucideIcon,
   type LucideProps,
   Pill,
   Square,
+  Sun,
   Torus,
 } from "lucide-react";
 
@@ -27,6 +30,9 @@ export const PRESET_ICONS: Record<MeshPresetId, LucideIcon> = {
   capsule: Pill,
   torus: Torus,
   plane: Square,
+  "directional-light": Sun,
+  "point-light": Lightbulb,
+  "spot-light": Flashlight,
 };
 
 /** 메쉬의 프리셋 아이콘 (에디터 메쉬가 아니면 Box) */

@@ -6,7 +6,7 @@ import { CreateIcoSphere } from "@babylonjs/core/Meshes/Builders/icoSphereBuilde
 import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder";
 import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
 import { CreateTorus } from "@babylonjs/core/Meshes/Builders/torusBuilder";
-import type { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
 
 import {
@@ -23,7 +23,13 @@ export type MeshPresetId =
   | "cone"
   | "capsule"
   | "torus"
-  | "plane";
+  | "plane"
+  | "directional-light"
+  | "point-light"
+  | "spot-light";
+
+/** 조명 종류 (조명 프리셋만). 실제 Babylon 조명은 editor-lights가 아이콘 메쉬에 붙인다 */
+export type LightKind = "directional" | "point" | "spot";
 
 /** 모양 파라미터 값 (프리셋마다 키가 다르다 — MeshPreset.params) */
 export type ShapeParams = Readonly<Record<string, number>>;
@@ -53,6 +59,10 @@ export type MeshPreset = {
   keywords: readonly string[];
   params: readonly ShapeParamDef[];
   create: (name: string, scene: Scene, shape: ShapeParams) => Mesh;
+  /** 조명 프리셋이면 그 종류. create는 뷰포트에 보이는 작은 아이콘 메쉬만 만든다 */
+  light?: LightKind;
+  /** 배치할 때 표면에서 이만큼 띄운다 (조명) */
+  lift?: number;
 };
 
 const tessellation = (defaultValue: number, max = 64): ShapeParamDef => ({
@@ -195,6 +205,74 @@ export const MESH_PRESETS: readonly MeshPreset[] = [
   },
 ];
 
+/**
+ * 조명 아이콘 메쉬: 원점이 조명 자리, -Y가 비추는 방향 (기즈모로 돌리면 조명도 돈다).
+ * 방향광은 구 + 아래로 뻗은 막대, 스포트는 아래로 열린 원뿔, 점광은 구.
+ */
+function createLightIcon(kind: LightKind, name: string, scene: Scene): Mesh {
+  if (kind === "spot") {
+    const cone = CreateCylinder(
+      name,
+      { height: 0.35, diameterTop: 0, diameterBottom: 0.35, tessellation: 16 },
+      scene,
+    );
+    return cone;
+  }
+  const bulb = CreateSphere(name, { diameter: 0.3, segments: 12 }, scene);
+  if (kind === "point") return bulb;
+  const ray = CreateCylinder(
+    `${name} ray`,
+    { height: 0.7, diameter: 0.04, tessellation: 8 },
+    scene,
+  );
+  ray.position.y = -0.5;
+  // 하나의 메쉬로 (선택·삭제·undo가 메쉬 하나만 다루게)
+  const icon = Mesh.MergeMeshes([bulb, ray], true)!;
+  icon.name = name;
+  return icon;
+}
+
+const lightPreset = (
+  id: MeshPresetId,
+  label: string,
+  kind: LightKind,
+  keywords: readonly string[],
+): MeshPreset => ({
+  id,
+  label,
+  keywords,
+  params: [],
+  light: kind,
+  lift: 2,
+  create: (name, scene) => createLightIcon(kind, name, scene),
+});
+
+/** 조명 프리셋 (숫자 단축키 없음 — 사이드바·추가 메뉴·⇧A로 놓는다) */
+export const LIGHT_PRESETS: readonly MeshPreset[] = [
+  lightPreset("directional-light", "Directional Light", "directional", [
+    "방향광",
+    "태양",
+    "해",
+    "sun",
+  ]),
+  lightPreset("point-light", "Point Light", "point", [
+    "점광원",
+    "전구",
+    "bulb",
+  ]),
+  lightPreset("spot-light", "Spot Light", "spot", [
+    "스포트라이트",
+    "스팟",
+    "핀조명",
+  ]),
+];
+
+/** 메쉬 + 조명 프리셋 전체 (파일 열기·검색형 추가 메뉴) */
+export const ALL_PRESETS: readonly MeshPreset[] = [
+  ...MESH_PRESETS,
+  ...LIGHT_PRESETS,
+];
+
 /** 프리셋의 모양 값: 주어진 값 위에 빠진 키는 기본값 (모르는 키는 버린다) */
 export function shapeParamsOf(
   preset: MeshPreset,
@@ -209,7 +287,13 @@ export function shapeParamsOf(
 }
 
 export function findPreset(id: MeshPresetId): MeshPreset | undefined {
-  return MESH_PRESETS.find((preset) => preset.id === id);
+  return ALL_PRESETS.find((preset) => preset.id === id);
+}
+
+/** 조명 아이콘 메쉬인가 (에디터 객체지만 메쉬처럼 그려지거나 내보내지지 않는다) */
+export function isLightObject(mesh: AbstractMesh): boolean {
+  const presetId = getPresetId(mesh);
+  return Boolean(presetId && findPreset(presetId)?.light);
 }
 
 /** 에디터에서 추가한 메쉬에 붙는 메타데이터. shape는 지금 모양 값 (mesh-shape가 바꾼다) */
@@ -304,7 +388,11 @@ export function addPresetMesh(
   const params = shapeParamsOf(preset, shape);
   const mesh = preset.create(name, scene, params);
 
-  mesh.material = createMeshMaterial(`${name} Material`, scene, material);
+  // 조명 아이콘의 머티리얼은 editor-lights가 붙인다 (PBR이 아니라 조명 색의 단색)
+  if (!preset.light) {
+    mesh.material = createMeshMaterial(`${name} Material`, scene, material);
+    mesh.receiveShadows = true;
+  }
 
   mesh.metadata = {
     editor: { presetId: preset.id, shape: params },

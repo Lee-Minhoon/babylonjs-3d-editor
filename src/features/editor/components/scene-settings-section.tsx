@@ -59,6 +59,13 @@ export function SceneSettingsSection({
         onCancel={cancel}
       />
       <SliderField
+        label="기본 조명 세기"
+        value={settings.ambientIntensity}
+        {...SETTING_RANGES.ambientIntensity}
+        onPreview={(ambientIntensity) => preview({ ambientIntensity })}
+        onCommit={commit}
+      />
+      <SliderField
         label="환경광 세기"
         value={settings.environmentIntensity}
         {...SETTING_RANGES.environmentIntensity}

@@ -1,10 +1,10 @@
 import { createListeners } from "@/lib/listeners";
 
-import { MESH_PRESETS, type MeshPreset } from "./mesh-presets";
+import { ALL_PRESETS, type MeshPreset } from "./mesh-presets";
 
 /*
  * 검색형 추가 메뉴 (⇧A, Blender 방식): 커서 위치에 검색창을 띄워 추가할 것을 고른다.
- * 지금은 메쉬 프리셋만 — 조명·가져온 모델이 생기면 ADD_MENU_ITEMS에 더한다.
+ * 메쉬·조명 프리셋 — 가져온 모델이 생기면 ADD_MENU_ITEMS에 더한다.
  * 고르면 배치 모드가 시작된다 (startPresetPlacement).
  */
 
@@ -17,12 +17,14 @@ export type AddMenuItem = {
   preset: MeshPreset;
 };
 
-export const ADD_MENU_ITEMS: readonly AddMenuItem[] = MESH_PRESETS.map(
+export const ADD_MENU_ITEMS: readonly AddMenuItem[] = ALL_PRESETS.map(
   (preset) => ({
     id: preset.id,
     label: preset.label,
-    kind: "메쉬",
-    keywords: preset.keywords,
+    kind: preset.light ? "조명" : "메쉬",
+    keywords: preset.light
+      ? [...preset.keywords, "조명", "light"]
+      : preset.keywords,
     preset,
   }),
 );

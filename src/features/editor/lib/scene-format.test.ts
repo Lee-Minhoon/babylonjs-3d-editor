@@ -123,6 +123,7 @@ describe("저장 → 열기 왕복", () => {
     addPresetMesh(scene, findPreset("box")!, glass);
     const settings = {
       background: "#204060",
+      ambientIntensity: 0.5,
       environmentIntensity: 0.4,
       exposure: 1.5,
       toneMapping: "aces",

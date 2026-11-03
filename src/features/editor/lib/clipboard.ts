@@ -5,9 +5,13 @@ import type { Scene } from "@babylonjs/core/scene";
 
 import { createListeners } from "@/lib/listeners";
 
+import {
+  addPresetObject,
+  getLightValues,
+  type LightValues,
+} from "./editor-lights";
 import { getMaterialValues, type MaterialValues } from "./mesh-material";
 import {
-  addPresetMesh,
   findPreset,
   getPresetId,
   getShapeParams,
@@ -31,6 +35,8 @@ export type MeshSnapshot = {
   material: MaterialValues | null;
   /** 모양 값 (프리셋 파라미터) */
   shape: ShapeParams;
+  /** 조명 값 (조명 객체만, 메쉬는 null) */
+  light: LightValues | null;
 };
 
 export function captureMeshSnapshot(mesh: AbstractMesh): MeshSnapshot | null {
@@ -41,6 +47,7 @@ export function captureMeshSnapshot(mesh: AbstractMesh): MeshSnapshot | null {
     transform: captureTransform(mesh),
     material: getMaterialValues(mesh),
     shape: getShapeParams(mesh) ?? {},
+    light: getLightValues(mesh),
   };
 }
 
@@ -52,13 +59,7 @@ export function createMeshFromSnapshot(
 ): Mesh {
   const preset = findPreset(snapshot.presetId);
   if (!preset) throw new Error(`Unknown preset: ${snapshot.presetId}`);
-  const mesh = addPresetMesh(
-    scene,
-    preset,
-    snapshot.material ?? undefined,
-    undefined,
-    snapshot.shape,
-  );
+  const mesh = addPresetObject(scene, preset, snapshot);
   applyTransform(mesh, snapshot.transform);
   mesh.position.addInPlace(offset);
   return mesh;

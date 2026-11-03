@@ -75,7 +75,11 @@ import {
   VIEW_SHORTCUTS,
 } from "../lib/editor-shortcuts";
 import type { AlignAxis, AlignEdge } from "../lib/mesh-align";
-import { inCreationOrder, MESH_PRESETS } from "../lib/mesh-presets";
+import {
+  inCreationOrder,
+  LIGHT_PRESETS,
+  MESH_PRESETS,
+} from "../lib/mesh-presets";
 import {
   formatSnapStep,
   type GizmoSpace,
@@ -464,30 +468,39 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
               <MenubarShortcut>{SHORTCUT_LABELS.addMenu}</MenubarShortcut>
             </MenubarItem>
             <MenubarSeparator />
-            <MenubarGroup>
-              <MenubarLabel>메쉬</MenubarLabel>
-              {MESH_PRESETS.map((preset) => {
-                const Icon = PRESET_ICONS[preset.id];
-                return (
-                  <MenubarItem
-                    key={preset.id}
-                    disabled={!runtime}
-                    onClick={() => {
-                      // 메뉴에서 고르면 항상 그 프리셋 배치 시작 (이미 켜져 있으면 유지)
-                      if (runtime) {
-                        startPresetPlacement(runtime.placement, preset);
-                      }
-                    }}
-                  >
-                    <Icon strokeWidth={1.75} aria-hidden />
-                    {preset.label}
-                    <MenubarShortcut>
-                      {getPresetShortcut(preset.id)}
-                    </MenubarShortcut>
-                  </MenubarItem>
-                );
-              })}
-            </MenubarGroup>
+            {(
+              [
+                ["메쉬", MESH_PRESETS],
+                ["조명", LIGHT_PRESETS],
+              ] as const
+            ).map(([group, presets], index) => (
+              <MenubarGroup key={group}>
+                {index > 0 && <MenubarSeparator />}
+                <MenubarLabel>{group}</MenubarLabel>
+                {presets.map((preset) => {
+                  const Icon = PRESET_ICONS[preset.id];
+                  const shortcut = getPresetShortcut(preset.id);
+                  return (
+                    <MenubarItem
+                      key={preset.id}
+                      disabled={!runtime}
+                      onClick={() => {
+                        // 메뉴에서 고르면 항상 그 프리셋 배치 시작 (이미 켜져 있으면 유지)
+                        if (runtime) {
+                          startPresetPlacement(runtime.placement, preset);
+                        }
+                      }}
+                    >
+                      <Icon strokeWidth={1.75} aria-hidden />
+                      {preset.label}
+                      {shortcut && (
+                        <MenubarShortcut>{shortcut}</MenubarShortcut>
+                      )}
+                    </MenubarItem>
+                  );
+                })}
+              </MenubarGroup>
+            ))}
           </MenubarContent>
         </MenubarMenu>
 

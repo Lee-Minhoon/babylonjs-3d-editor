@@ -1,11 +1,12 @@
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 
+import { attachToScene, detachFromScene } from "./editor-lights";
 import type { Command } from "./history";
 
 /*
  * 메쉬 생성/삭제 Command.
- * undo/redo 시 메쉬를 dispose 하지 않고 씬에서 떼었다(removeMesh) 붙인다(addMesh).
+ * undo/redo 시 메쉬를 dispose 하지 않고 씬에서 떼었다 붙인다 (detachFromScene·attachToScene — 조명이면 조명도 같이).
  * → 객체가 그대로 유지되어 머티리얼·이후 추가될 속성을 다시 만들 필요가 없다.
  * 떼어둔 상태로 히스토리에서 빠지면(dispose) 그때 실제로 해제한다.
  */
@@ -39,12 +40,12 @@ export function createSpawnMeshCommand(
     },
     getMesh: () => mesh,
     execute() {
-      if (mesh) scene.addMesh(mesh);
+      if (mesh) attachToScene(scene, mesh);
       else mesh = spawn();
       inScene = true;
     },
     undo() {
-      if (mesh) scene.removeMesh(mesh);
+      if (mesh) detachFromScene(scene, mesh);
       inScene = false;
     },
     dispose() {
@@ -65,11 +66,11 @@ export function createRemoveMeshCommand(
   return {
     label: `${mesh.name} ${verb}`,
     execute() {
-      scene.removeMesh(mesh);
+      detachFromScene(scene, mesh);
       inScene = false;
     },
     undo() {
-      scene.addMesh(mesh);
+      attachToScene(scene, mesh);
       inScene = true;
     },
     dispose() {

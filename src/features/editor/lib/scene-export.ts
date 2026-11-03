@@ -5,6 +5,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import { type FileTypeOptions, saveFile } from "@/lib/file-access";
 
 import { getMeshFlag } from "./mesh-flags";
+import { isLightObject } from "./mesh-presets";
 import type { SceneFileNotice } from "./scene-file";
 import { getEditorMeshes } from "./scene-format";
 
@@ -26,9 +27,11 @@ export const PNG_FILE_TYPE: FileTypeOptions = {
   extension: ".png",
 };
 
-/** 내보낼 메쉬: 숨기지 않은 에디터 메쉬 (만든 순서) */
+/** 내보낼 메쉬: 숨기지 않은 에디터 메쉬 (만든 순서). 조명 아이콘은 빠진다 */
 export function getExportMeshes(scene: Scene): AbstractMesh[] {
-  return getEditorMeshes(scene).filter((mesh) => !getMeshFlag(mesh, "hidden"));
+  return getEditorMeshes(scene).filter(
+    (mesh) => !getMeshFlag(mesh, "hidden") && !isLightObject(mesh),
+  );
 }
 
 /** 씬을 GLB로. 메쉬 이름·변형·PBR 머티리얼이 들어간다 (카메라·조명·환경은 빼고) */
