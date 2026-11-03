@@ -40,7 +40,7 @@ const SECTIONS = [
   { id: "material", title: "머티리얼" },
   { id: "object", title: "숨기기·잠금·정렬" },
   { id: "clipboard", title: "복사·붙여넣기·복제" },
-  { id: "file", title: "저장·열기·자동 저장" },
+  { id: "file", title: "저장·열기·내보내기" },
   { id: "shortcuts", title: "단축키 전체" },
 ] as const;
 
@@ -393,6 +393,24 @@ export function ManualPage() {
                 {AUTOSAVE_DELAY / 1000}초 뒤(탭을 닫거나 숨기면 바로) 브라우저에
                 남겨 둡니다. 다음에 열 때 복구할지 묻습니다. 여러 탭에서 동시에
                 편집하면 마지막 탭의 내용만 남습니다.
+              </li>
+            </List>
+            <h3 className="pt-2 font-medium">내보내기 (파일 메뉴)</h3>
+            <List>
+              <li>
+                <Term>glTF(.glb)로 내보내기</Term>: Blender·게임 엔진·웹
+                뷰어에서 여는 표준 3D 파일입니다. 메쉬 이름·위치·회전·크기와
+                머티리얼(색·메탈릭·거칠기)이 들어갑니다. 숨긴 메쉬, 바닥 격자,
+                카메라·조명은 빠집니다. 이 파일은 에디터로 다시 열 수 없습니다 —
+                편집은 씬 파일(.json)로 이어 갑니다.
+              </li>
+              <li>
+                <Term>스크린샷 저장</Term>: 지금 시점을 PNG로 저장합니다. 바닥
+                격자·기즈모·선택 외곽선·숨긴 메쉬는 찍히지 않습니다.
+              </li>
+              <li>
+                파일 이름은 씬 파일 이름을 따릅니다 (예: castle.json →
+                castle.glb).
               </li>
             </List>
           </Section>

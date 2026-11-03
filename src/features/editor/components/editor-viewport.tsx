@@ -27,6 +27,7 @@ import { createGroundGrid } from "../lib/ground-grid";
 import { createHistory, type History } from "../lib/history";
 import { createPlacementTool, type PlacementTool } from "../lib/placement-tool";
 import { bindPointerRouter } from "../lib/pointer-router";
+import { createSceneExport, type SceneExport } from "../lib/scene-export";
 import { createSceneFile, type SceneFile } from "../lib/scene-file";
 import { createSelection, type Selection } from "../lib/selection";
 import { createShortcutHelp, type ShortcutHelp } from "../lib/shortcut-help";
@@ -63,6 +64,7 @@ function setupScene(scene: Scene): ArcRotateCamera {
 /** 뷰포트가 만들어 에디터 UI에 넘겨주는 씬과 씬에 붙은 도구들 */
 export type EditorRuntime = {
   scene: Scene;
+  sceneExport: SceneExport;
   help: ShortcutHelp;
   cameraView: CameraView;
   boxSelect: BoxSelect;
@@ -138,6 +140,10 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
             placement,
             notify: (notice) => toast.add(notice),
           });
+          const sceneExport = createSceneExport(scene, {
+            getFileName: () => sceneFile.getState().fileName,
+            notify: (notice) => toast.add(notice),
+          });
           const autosave = createAutosave({
             sceneFile,
             storage: createBrowserAutosaveStorage(),
@@ -163,6 +169,7 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           });
           onRuntimeChange({
             scene,
+            sceneExport,
             help,
             cameraView,
             boxSelect,

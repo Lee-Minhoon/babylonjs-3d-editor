@@ -77,15 +77,18 @@ export function axisInput(page: Page, axis: "X" | "Y" | "Z", field: string) {
 
 /**
  * File System Access API를 메모리 파일로 바꾼다 (헤드리스에선 파일 창을 조작할 수 없다).
- * window.__files[name] = 내용, window.__nextOpen = 열기 창에서 고를 파일 이름.
+ * window.__files[name] = 텍스트 내용, window.__blobs[name] = 바이너리(GLB·PNG),
+ * window.__nextOpen = 열기 창에서 고를 파일 이름.
  */
 export async function mockFileSystem(page: Page) {
   await page.addInitScript(() => {
     const w = window as unknown as Record<string, unknown> & {
       __files: Record<string, string>;
+      __blobs: Record<string, Blob>;
       __nextOpen: string | null;
     };
     w.__files = {};
+    w.__blobs = {};
     w.__nextOpen = null;
     const handle = (name: string) => ({
       name,
@@ -93,9 +96,16 @@ export async function mockFileSystem(page: Page) {
       getFile: async () => new File([w.__files[name] ?? ""], name),
       createWritable: async () => {
         let buffer = "";
+        let blob: Blob | null = null;
         return {
-          write: async (text: string) => void (buffer += text),
-          close: async () => void (w.__files[name] = buffer),
+          write: async (data: string | Blob) => {
+            if (data instanceof Blob) blob = data;
+            else buffer += data;
+          },
+          close: async () => {
+            if (blob) w.__blobs[name] = blob;
+            else w.__files[name] = buffer;
+          },
         };
       },
     });
@@ -119,6 +129,21 @@ export function readMockFile(page: Page, name: string) {
       ],
     name,
   );
+}
+
+/** 바이너리로 저장된 파일의 크기·종류와 앞 4바이트 (예: "glTF", "\x89PNG"). 없으면 null */
+export function readMockBlob(page: Page, name: string) {
+  return page.evaluate(async (fileName) => {
+    const blob = (window as unknown as { __blobs: Record<string, Blob> })
+      .__blobs[fileName];
+    if (!blob) return null;
+    const head = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+    return {
+      size: blob.size,
+      type: blob.type,
+      magic: String.fromCharCode(...head),
+    };
+  }, name);
 }
 
 export function writeMockFile(page: Page, name: string, text: string) {

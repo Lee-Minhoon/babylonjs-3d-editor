@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent, ReactNode } from "react";
+import type { KeyboardEvent } from "react";
 import Link from "next/link";
 
 import type { BaseUIEvent } from "@base-ui/react/types";
@@ -251,23 +251,6 @@ function ObjectMenu({ runtime }: { runtime: EditorRuntime | null }) {
   );
 }
 
-/** 아직 기능이 없는 예약 항목 (단축키 자리는 비워두되 메뉴엔 보여준다) */
-function PlannedItem({
-  children,
-  shortcut,
-}: {
-  children: ReactNode;
-  shortcut?: string;
-}) {
-  return (
-    <MenubarItem disabled>
-      {children}
-      <span className="text-[0.625rem] text-muted-foreground">준비 중</span>
-      {shortcut && <MenubarShortcut>{shortcut}</MenubarShortcut>}
-    </MenubarItem>
-  );
-}
-
 function HistoryIconButton({
   icon: Icon,
   label,
@@ -365,7 +348,18 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
               <MenubarShortcut>{SHORTCUT_LABELS.saveAs}</MenubarShortcut>
             </MenubarItem>
             <MenubarSeparator />
-            <PlannedItem>glTF로 내보내기…</PlannedItem>
+            <MenubarItem
+              disabled={!runtime}
+              onClick={() => void runtime?.sceneExport.exportGlb()}
+            >
+              glTF(.glb)로 내보내기…
+            </MenubarItem>
+            <MenubarItem
+              disabled={!runtime}
+              onClick={() => void runtime?.sceneExport.saveScreenshot()}
+            >
+              스크린샷 저장…
+            </MenubarItem>
           </MenubarContent>
         </MenubarMenu>
 

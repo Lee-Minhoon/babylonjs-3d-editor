@@ -78,14 +78,22 @@ export async function openTextFile(
     : null;
 }
 
-async function writeToHandle(handle: FileSystemFileHandle, text: string) {
+/** 저장할 내용: 텍스트(씬 파일) 또는 바이너리(GLB·PNG) */
+export type FileContent = string | Blob;
+
+async function writeToHandle(
+  handle: FileSystemFileHandle,
+  content: FileContent,
+) {
   const writable = await handle.createWritable();
-  await writable.write(text);
+  await writable.write(content);
   await writable.close();
 }
 
-function download(name: string, text: string, mimeType: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: mimeType }));
+function download(name: string, content: FileContent, mimeType: string) {
+  const blob =
+    content instanceof Blob ? content : new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = name;
@@ -95,11 +103,11 @@ function download(name: string, text: string, mimeType: string) {
 }
 
 /**
- * 텍스트를 파일로 저장한다. 취소하면 null.
+ * 내용을 파일로 저장한다. 취소하면 null.
  * @param handle 있으면 묻지 않고 그 파일에 덮어쓴다 (없으면 저장 위치를 묻거나 다운로드)
  */
-export async function saveTextFile(
-  text: string,
+export async function saveFile(
+  content: FileContent,
   {
     handle,
     suggestedName,
@@ -111,7 +119,7 @@ export async function saveTextFile(
   },
 ): Promise<SavedFile | null> {
   if (handle) {
-    await writeToHandle(handle, text);
+    await writeToHandle(handle, content);
     return { name: handle.name, handle };
   }
 
@@ -119,7 +127,7 @@ export async function saveTextFile(
   if (picker) {
     try {
       const picked = await picker({ suggestedName, types: pickerTypes(type) });
-      await writeToHandle(picked, text);
+      await writeToHandle(picked, content);
       return { name: picked.name, handle: picked };
     } catch (error) {
       if (isAbort(error)) return null;
@@ -127,6 +135,6 @@ export async function saveTextFile(
     }
   }
 
-  download(suggestedName, text, type.mimeType);
+  download(suggestedName, content, type.mimeType);
   return { name: suggestedName, handle: null };
 }

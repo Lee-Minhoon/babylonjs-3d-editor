@@ -1,6 +1,6 @@
 import type { Scene } from "@babylonjs/core/scene";
 
-import { openTextFile, saveTextFile } from "@/lib/file-access";
+import { openTextFile, saveFile } from "@/lib/file-access";
 import { createListeners } from "@/lib/listeners";
 
 import type { History, HistoryMark } from "./history";
@@ -141,7 +141,7 @@ export function createSceneFile(
     // 그 편집은 파일에 없으므로 "변경 있음"이어야 한다
     const mark = history.mark();
     const text = stringifySceneFile(serializeScene(scene));
-    const saved = await saveTextFile(text, {
+    const saved = await saveFile(text, {
       handle: pickLocation ? null : handle,
       suggestedName: fileName ?? DEFAULT_FILE_NAME,
       type: SCENE_FILE_TYPE,

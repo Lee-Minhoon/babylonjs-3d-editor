@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { openTextFile, saveTextFile } from "@/lib/file-access";
+import { openTextFile, saveFile } from "@/lib/file-access";
 
 import { createHistory } from "./history";
 import { createSpawnMeshCommand } from "./mesh-commands";
@@ -14,7 +14,7 @@ import { createTestScene } from "./test-scene";
 // 브라우저 파일 창 대신 메모리로
 vi.mock("@/lib/file-access", () => ({
   openTextFile: vi.fn(),
-  saveTextFile: vi.fn(),
+  saveFile: vi.fn(),
 }));
 
 const scene = createTestScene();
@@ -44,7 +44,7 @@ const meshCount = (text: string) =>
   (JSON.parse(text) as { meshes: unknown[] }).meshes.length;
 
 beforeEach(() => {
-  vi.mocked(saveTextFile).mockResolvedValue({
+  vi.mocked(saveFile).mockResolvedValue({
     name: "scene.json",
     handle: null,
   });
@@ -86,7 +86,7 @@ describe("저장", () => {
     const { history, sceneFile, addBox } = setup();
     addBox();
     let finishWrite!: () => void;
-    vi.mocked(saveTextFile).mockImplementation(
+    vi.mocked(saveFile).mockImplementation(
       () =>
         new Promise((resolve) => {
           finishWrite = () => resolve({ name: "scene.json", handle: null });
@@ -98,7 +98,7 @@ describe("저장", () => {
     finishWrite();
     await saving;
 
-    expect(meshCount(vi.mocked(saveTextFile).mock.calls[0][0])).toBe(1);
+    expect(meshCount(vi.mocked(saveFile).mock.calls[0][0] as string)).toBe(1);
     expect(sceneFile.getState().dirty).toBe(true);
     history.undo(); // 파일에 쓴 시점으로 돌아오면 깨끗하다
     expect(sceneFile.getState().dirty).toBe(false);
@@ -107,7 +107,7 @@ describe("저장", () => {
   test("저장 창을 취소하면 아무것도 바뀌지 않는다", async () => {
     const { sceneFile, addBox } = setup();
     addBox();
-    vi.mocked(saveTextFile).mockResolvedValue(null);
+    vi.mocked(saveFile).mockResolvedValue(null);
     await sceneFile.save();
     expect(sceneFile.getState()).toMatchObject({ fileName: null, dirty: true });
   });

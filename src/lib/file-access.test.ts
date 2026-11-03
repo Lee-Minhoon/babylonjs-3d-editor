@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { saveTextFile } from "./file-access";
+import { saveFile } from "./file-access";
 
 const TYPE = {
   description: "씬 파일",
@@ -8,7 +8,7 @@ const TYPE = {
   extension: ".json",
 };
 
-describe("saveTextFile — File System Access API가 없을 때 (다운로드)", () => {
+describe("saveFile — File System Access API가 없을 때 (다운로드)", () => {
   const link = { href: "", download: "", click: vi.fn() };
 
   beforeEach(() => {
@@ -25,7 +25,7 @@ describe("saveTextFile — File System Access API가 없을 때 (다운로드)",
   });
 
   test("다운로드를 시작한 뒤에 blob URL을 해제한다 (클릭 직후 해제하면 다운로드가 끊길 수 있다)", async () => {
-    const saved = await saveTextFile("{}", {
+    const saved = await saveFile("{}", {
       handle: null,
       suggestedName: "scene.json",
       type: TYPE,
