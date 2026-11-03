@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import { getMeshFlag, setMeshFlag } from "./mesh-flags";
 import { getMaterialValues, MATERIAL_DEFAULTS } from "./mesh-material";
-import { addPresetMesh, findPreset } from "./mesh-presets";
+import { addPresetMesh, findPreset, getShapeParams } from "./mesh-presets";
 import {
   clearEditorMeshes,
   getEditorMeshes,
@@ -138,6 +138,32 @@ describe("저장 → 열기 왕복", () => {
     expect(scene.imageProcessingConfiguration.toneMappingEnabled).toBe(true);
   });
 
+  test("모양 값이 그대로 돌아온다 (빠진 키는 기본값)", () => {
+    const torus = addPresetMesh(scene, findPreset("torus")!, gold, undefined, {
+      thickness: 0.1,
+      tessellation: 12,
+    });
+    const text = stringifySceneFile(serializeScene(scene));
+    expect(text).toContain('"thickness": 0.1');
+    const vertices = torus.getTotalVertices();
+    clearEditorMeshes(scene);
+    loadSceneFile(scene, parseSceneFile(text));
+    const [loaded] = getEditorMeshes(scene);
+    expect(getShapeParams(loaded)).toEqual({
+      thickness: 0.1,
+      tessellation: 12,
+    });
+    expect(loaded.getTotalVertices()).toBe(vertices);
+
+    const partial = parseSceneFile(
+      file([{ ...validMesh, presetId: "torus", shape: { thickness: 0.2 } }]),
+    );
+    expect(partial.meshes[0].shape).toEqual({
+      thickness: 0.2,
+      tessellation: 48,
+    });
+  });
+
   test("연 뒤 새로 만드는 메쉬는 파일 속 번호 다음부터", () => {
     loadSceneFile(
       scene,
@@ -215,6 +241,20 @@ describe("v3 파일 변환", () => {
   });
 });
 
+describe("v4 파일 변환", () => {
+  test("shape가 없으면 기본 모양으로 연다", () => {
+    const parsed = parseSceneFile(
+      file([{ ...validMesh, presetId: "cone", name: "Cone 1" }], 4),
+    );
+    expect(parsed.version).toBe(SCENE_FILE_VERSION);
+    expect(parsed.meshes[0].shape).toEqual({
+      diameterTop: 0,
+      diameterBottom: 1,
+      tessellation: 24,
+    });
+  });
+});
+
 describe("잘못된 파일은 SceneFileError (씬을 바꾸기 전에 거른다)", () => {
   test.each([
     ["JSON이 아님", "{not json", "JSON 형식이 아닙니다"],
@@ -241,6 +281,21 @@ describe("잘못된 파일은 SceneFileError (씬을 바꾸기 전에 거른다)
       "metallic",
     ],
     ["숨김 값", file([{ ...validMesh, hidden: "yes" }]), "hidden"],
+    [
+      "프리셋에 없는 모양 값",
+      file([{ ...validMesh, shape: { segments: 8 } }]),
+      "shape.segments",
+    ],
+    [
+      "모양 값 범위",
+      file([{ ...validMesh, presetId: "sphere", shape: { segments: 2 } }]),
+      "shape.segments",
+    ],
+    [
+      "정수가 아닌 분할",
+      file([{ ...validMesh, presetId: "sphere", shape: { segments: 8.5 } }]),
+      "정수",
+    ],
     [
       "불투명도 범위",
       file([{ ...validMesh, material: { ...gold, alpha: 1.5 } }]),

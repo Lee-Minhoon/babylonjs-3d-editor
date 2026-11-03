@@ -12,6 +12,7 @@ import { BabylonCanvas } from "@/components/babylon-canvas";
 import { toast } from "@/components/ui/toast";
 import { attachInspectorToggle } from "@/lib/babylon/inspector";
 
+import { type AddMenu, createAddMenu } from "../lib/add-menu";
 import {
   type Autosave,
   createAutosave,
@@ -69,6 +70,7 @@ export type EditorRuntime = {
   scene: Scene;
   sceneExport: SceneExport;
   help: ShortcutHelp;
+  addMenu: AddMenu;
   cameraView: CameraView;
   boxSelect: BoxSelect;
   history: History;
@@ -137,6 +139,7 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           });
           const clipboard = createClipboard();
           const help = createShortcutHelp();
+          const addMenu = createAddMenu();
           const sceneFile = createSceneFile(scene, {
             history,
             selection,
@@ -161,6 +164,7 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           const unbindShortcuts = bindEditorShortcuts({
             scene,
             help,
+            addMenu,
             cameraView,
             history,
             placement,
@@ -174,6 +178,7 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
             scene,
             sceneExport,
             help,
+            addMenu,
             cameraView,
             boxSelect,
             history,

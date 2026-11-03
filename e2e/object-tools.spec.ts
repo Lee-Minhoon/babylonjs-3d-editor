@@ -3,6 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 import {
   axisInput,
   clickViewport,
+  closeMenu,
   expectScene,
   mockFileSystem,
   openEditor,
@@ -133,7 +134,7 @@ test("정렬은 2개, 분배는 3개 이상에서 켜지고 Command 하나로 �
   await selectMesh(page, "Box 1");
   await page.getByRole("menuitem", { name: "객체", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: "정렬" })).toBeDisabled();
-  await page.keyboard.press("Escape");
+  await closeMenu(page);
 
   await page.keyboard.press("Meta+a");
   await objectMenu(page, "정렬", "Z 최소");

@@ -32,6 +32,7 @@ pnpm build      # 프로덕션 빌드
 - **E2E(Playwright)**: `e2e/*.spec.ts`, 공용 도우미는 `e2e/editor.ts`. 사용자가 보는 것(씬 목록·메뉴·패널·안내 문구)으로 확인하고 Babylon 내부는 들여다보지 않는다. 파일 창은 `mockFileSystem`, 한글 입력은 `pressHangul`로 흉내 낸다. 설치된 Chrome을 쓴다 (`channel: "chrome"`).
 - `lib/` 로직을 바꾸거나 고치면 단위 테스트를 같이 추가·수정한다. 버그를 고칠 땐 그 버그를 재현하는 테스트를 먼저 쓴다. 새 사용자 기능은 E2E 시나리오를 하나 이상 추가한다.
 - 파일 형식(`scene-format.ts`)을 바꾸면 이전 버전 파일 변환 테스트를 반드시 추가한다.
+- E2E에서 메뉴를 닫을 땐 `closeMenu`(열린 메뉴가 포커스를 가져간 뒤 Esc, 다 닫힐 때까지 대기), 실행 취소 라벨은 `undoMenuText`를 쓴다. `click()` 직후 바로 Esc를 누르면 메뉴가 아직 열리는 중이라 Esc가 트리거에서 에디터로 가 선택을 풀고, 닫히는 중인 메뉴의 항목도 locator에 잡힌다 (열림은 `[role=menu][data-open]`으로 본다).
 - E2E가 간헐적으로 실패하면 재시도 횟수를 늘리지 말고 원인을 찾는다 (예: Esc 직후 blur 커밋 버그는 E2E 반복 실행에서 발견됨). 확인은 `pnpm test:e2e --repeat-each=3`.
 
 ## 포맷 / 린트
@@ -91,7 +92,9 @@ src/
 - 활성 도구(`tools`): `select | move | rotate | scale` (Q/W/E/R). 배치 모드는 그 위에 잠깐 덮어쓰는 모드다. 기즈모는 선택된 메쉬 + move/rotate/scale + 배치 모드 아님일 때만 보인다.
 - **뷰포트 포인터 입력은 `lib/pointer-router.ts` 한 곳에서만 받는다.** 우선순위: 기즈모 위/드래그 중 → 배치 모드 → 박스 선택 드래그 → 선택. 새 도구가 클릭을 받아야 하면 `scene.onPointerObservable`을 직접 구독하지 말고 라우터에 분기를 추가한다 (기즈모 클릭이 선택 해제로 새는 식의 충돌 방지).
 - 기즈모 드래그는 시작/끝 스냅샷으로 **드래그 한 번 = 변형 Command 하나**를 기록한다 (`transform-command.ts`). 여러 개 선택이면 묶음 중심의 피벗(`TransformNode`)에 기즈모를 붙이고, 드래그 동안만 메쉬들을 피벗 자식으로 만들어(`setParent`) 함께 움직인 뒤 Command 하나로 묶는다. 피벗은 메쉬를 따라가지 않으므로 선택·히스토리가 바뀔 때마다 다시 놓는다. **드래그 중에는 단축키를 받지 않는다** (`gizmo.isDragging()`) — 자식인 동안 undo·삭제가 끼어들면 변형이 어긋난다. 알려진 한계: 여러 개를 회전·크기 조절할 때 비균일 크기 메쉬는 전단이 생겨 TRS로 근사된다 (이동은 정확). 변형 비교(`isSameTransform`)는 숫자가 아니라 "같은 자세"(epsilon·쿼터니언)로 하고, 움직이지 않은 드래그는 기록하지 않고 시작 값을 복원한다 — `setParent` 왕복은 값을 비트 단위로 보존하지 않는다. `captureTransform`은 부모가 있으면 월드 값을 담는다 (드래그 중 자동 저장 대비).
-- 메쉬 프리셋(`lib/mesh-presets.ts`)은 원점에 만들기만 한다 (`addPresetMesh(scene, preset, material?, name?)`). 바닥에 놓을 높이는 배치 도구가 미리보기의 바운딩 박스로 잰다 — 프리셋에 높이 값을 따로 두지 않는다.
+- 메쉬 프리셋(`lib/mesh-presets.ts`)은 원점에 만들기만 한다 (`addPresetMesh(scene, preset, material?, name?, shape?)`). 프리셋마다 모양 파라미터 정의 `params`(`ShapeParamDef`: 범위·기본값·정수 여부 — 슬라이더와 파일 검증이 같이 쓴다)와 검색어 `keywords`(한글 이름)가 있다. 기본값은 예전 모양과 같게 둔다. 빠진 키 채우기는 `shapeParamsOf`.
+- 모양 바꾸기(`lib/mesh-shape.ts`): `applyShapeParams`가 같은 빌더로 임시 메쉬를 만들어 **같은 메쉬의 정점만** 바꾼다 (메쉬를 새로 만들지 않음 — 선택·이름·머티리얼·Command가 이어진다). 바꾸는 곳은 모두 이 함수를 거치고 화면은 `useMeshShapes`(`onShapeChange`)로 구독, 편집은 `createShapeCommand`("Box 1 모양"). 값은 메타데이터(`getShapeParams`)에 있고 `MeshSnapshot.shape`·씬 파일 `shape`에 들어간다. 패널의 "모양"은 고른 메쉬가 모두 같은 프리셋일 때만(`sharedShapePreset`).
+- 검색형 추가 메뉴(⇧A, `lib/add-menu.ts` + `add-menu-popup.tsx`): 커서가 캔버스 위면 그 자리(`scene.pointerX/Y`), 아니면 가운데. 항목은 `ADD_MENU_ITEMS`(지금은 프리셋), 검색은 `searchAddMenu`(이름·`keywords`, 이름 시작 → 검색어 시작 → 포함 순). 고르면 `startPresetPlacement`(이미 그 프리셋이면 유지 — `toggle`과 다름). 조명·모델이 생기면 여기에 항목을 더한다. 바닥에 놓을 높이는 배치 도구가 미리보기의 바운딩 박스로 잰다 — 프리셋에 높이 값을 따로 두지 않는다.
 - 씬 파일 텍스트의 숫자 배열 한 줄 접기(`stringifySceneFile`)는 줄 첫머리의 `"키": [` 꼴만 맞춘다. 문자열 값(이름)까지 바꾸는 정규식은 쓰지 않는다.
 - 스냅: `tools.getActiveSnap(kind)` — `kind`는 `move`(위치) · `rotate`(도) · `scale`(배율 변화량). 켜기/끄기는 셋이 함께, 단위는 종류별로 따로 (`SNAP_STEPS`·`DEFAULT_SNAP_STEPS`, `lib/tools.ts`). 툴바 드롭다운은 지금 도구의 종류를 보여주고(`snapKindForTool`, 선택 도구는 이동), 보기 메뉴엔 셋 다 있다. 표시 문자열은 `formatSnapStep`. 배치는 X/Z를 절대 격자에 맞추고(`snapValue`), 기즈모는 Babylon `snapDistance`(변화량 단위 — 회전은 라디안으로 바꿔 넣고, 크기는 `incrementalSnap`으로 1 → 1.1 → 1.2)를 쓴다. 배치 중 R 회전은 스냅과 무관하게 90°. 새 위치 입력 도구도 `getActiveSnap("move")`를 따른다.
 - 기즈모 축(`tools.getGizmoSpace()`): `local`(기본, 메쉬 자신의 축) / `world`. 이동·회전 기즈모의 `updateGizmoRotationToMatchAttachedMesh`로 적용한다. 크기 기즈모는 Babylon이 월드 축을 지원하지 않아 항상 로컬. 여러 개 선택 피벗은 로컬이면 처음 고른 메쉬의 회전을 따른다.
@@ -124,13 +127,13 @@ src/
   - 변경 여부는 저장 시점의 `history.mark()`와 비교한다 (undo로 저장 시점에 돌아오면 깨끗한 상태. 최대 개수 초과로 빠진 Command가 있으면 끝까지 undo 해도 처음과 다른 값). 변경이 있으면 `DiscardChangesDialog`로 묻는다 (`confirmPending` → `resolveConfirm`).
   - 열기는 파싱·검증(`parseSceneFile`)이 성공한 뒤에만 씬을 바꾼다. 실패 메시지(`SceneFileError`)는 토스트로 보여준다.
   - 자동 저장(`lib/autosave.ts`): 파일로 저장 안 된 변경이 있으면 1초 뒤(탭이 숨겨지면 즉시) IndexedDB(`src/lib/kv-store.ts`)에 씬 텍스트를 남기고, 깨끗해지면 지운다. 시작할 때 기록이 있으면 `RecoveryDialog`로 복구/버리기를 묻고, **답을 받기 전에는 아무것도 쓰지 않는다** (빈 씬이 기록을 지우지 않게). 복구는 `sceneFile.restore` — 히스토리는 비우고, 파일로 저장할 때까지 "변경 있음"으로 둔다. 파일 핸들은 복구하지 않는다(첫 저장 때 위치를 다시 묻는다). 저장소는 하나라 여러 탭에서 동시에 편집하면 마지막 탭 내용만 남는다.
-  - 현재 v4: 최상위 `settings`, 머티리얼 `emissive`·`alpha`·`unlit` (v3 이하·빠진 값은 기본값). v3에서 메쉬마다 `hidden`·`locked` (v2 이하는 false로 변환).
+  - 현재 v5: 메쉬마다 `shape` (v4 이하·빠진 키는 기본 모양, 프리셋에 없는 키·범위 밖은 오류). v4: 최상위 `settings`, 머티리얼 `emissive`·`alpha`·`unlit` (v3 이하·빠진 값은 기본값). v3에서 메쉬마다 `hidden`·`locked` (v2 이하는 false로 변환).
   - 내보내기(`lib/scene-export.ts`, 파일 메뉴): glTF(.glb)와 스크린샷(.png). 씬 파일 저장이 아니다 — 히스토리·"변경 있음"은 그대로. 둘 다 "숨기지 않은 에디터 메쉬"(`getExportMeshes`)만 담고, 파일 이름은 씬 파일 이름을 따른다(`exportBaseName`). 저장은 공용 `saveFile`(텍스트·Blob).
     - GLB: `@babylonjs/serializers`(버전은 core와 같게 고정)를 처음 내보낼 때 동적 import. `shouldExportNode`로 격자·피벗·카메라·조명을 뺀다. Babylon 규칙대로 X가 반전돼 나간다(왼손→오른손, Babylon 로더로 열면 원래 자리). 이 파일은 에디터로 다시 열지 않는다.
     - 스크린샷: 자체 `RenderTargetTexture`(renderList = 내보낼 메쉬)를 그려 `readPixels` → 2D 캔버스로 PNG 인코딩. 기즈모(유틸리티 레이어)·선택 외곽선(효과 레이어)은 렌더 타깃에 안 그려진다. 렌더 타깃 픽셀은 WebGL·WebGPU 모두 아래 줄부터라 뒤집는다. Babylon `CreateScreenshotUsingRenderTargetAsync`는 쓰지 않는다 — 딥 import에선 인코딩용 셰이더·엔진 확장이 빠져 하얀 이미지가 나오거나 Promise가 끝나지 않는다. E2E가 두 엔진에서 픽셀(배경색·위아래)을 확인한다.
   - 형식을 바꾸면 `SCENE_FILE_VERSION`을 올리고 이전 버전 변환을 `parseSceneFile`에 넣는다. 메쉬에 새 속성을 추가하면 `MeshSnapshot`과 씬 파일 둘 다에 넣는다.
 - **키보드 단축키는 `lib/editor-shortcuts.ts` 한 곳에서만 등록**한다. 도구에서 `window.addEventListener("keydown")`을 직접 달지 않는다 (같은 키의 우선순위가 등록 순서에 묶이기 때문). 현재 키 목록은 그 파일 상단 주석이 기준이다.
-  - 사용 중: Esc · Delete/Backspace · Q/W/E/R(도구) · R/⇧R(배치 중일 때만 미리보기 90° 회전 — 크기 도구보다 우선, `placement.rotate`) · 1~8(메쉬 프리셋, `MESH_PRESETS` 순서, 상단 숫자열만) · ⌘Z/⌘⇧Z/Ctrl+Y · ⌘C/⌘X/⌘V(복사/잘라내기/붙여넣기) · ⌘D(복제, 브라우저 북마크는 항상 막음) · F(선택 메쉬로 카메라 포커스) · ⌘A(전체 선택, 숨기거나 잠근 메쉬 제외) · H/⌥H(숨기기/모두 보이기) · End(바닥에 붙이기) · 숫자패드 1/3/7(⌃와 함께 반대편)·5(시점·직교) · F2(이름 바꾸기) · ⌘S/⌘⇧S(저장/다른 이름으로 저장) · ⌘O(열기). 새 씬은 단축키 없음(⌘N은 브라우저가 가로챔).
+  - 사용 중: Esc · Delete/Backspace · Q/W/E/R(도구) · R/⇧R(배치 중일 때만 미리보기 90° 회전 — 크기 도구보다 우선, `placement.rotate`) · 1~8(메쉬 프리셋, `MESH_PRESETS` 순서, 상단 숫자열만) · ⌘Z/⌘⇧Z/Ctrl+Y · ⌘C/⌘X/⌘V(복사/잘라내기/붙여넣기) · ⌘D(복제, 브라우저 북마크는 항상 막음) · F(선택 메쉬로 카메라 포커스) · ⌘A(전체 선택, 숨기거나 잠근 메쉬 제외) · H/⌥H(숨기기/모두 보이기) · End(바닥에 붙이기) · 숫자패드 1/3/7(⌃와 함께 반대편)·5(시점·직교) · F2(이름 바꾸기) · ⌘S/⌘⇧S(저장/다른 이름으로 저장) · ⌘O(열기) · ⇧A(검색형 추가 메뉴) · ?(도움말). 새 씬은 단축키 없음(⌘N은 브라우저가 가로챔).
   - 키를 누르고 있을 때의 반복 입력(`event.repeat`)은 undo/redo와 배치 회전(R)만 받는다 (숫자 키를 누르고 있으면 배치가 켜졌다 꺼지는 것을 막는다). 누르고 있는 동안 반복돼야 하는 새 단축키는 `repeatable`에 추가한다.
   - **키 판정은 `getShortcutKey(event)`로 한다** (`event.key` 직접 비교 금지). 글자 키를 `event.code`(물리 키 위치)로 봐서 한글 입력 상태(Q → "ㅂ")에서도 같은 단축키가 동작한다. 입력창 안에서 ⌘Z 등을 직접 처리하는 컴포넌트도 같은 함수를 쓴다.
   - 단축키를 UI에 보여줄 땐 하드코딩하지 말고 `editor-shortcuts.ts`에서 가져온다: `getPresetShortcut`, `getToolShortcut`, `SHORTCUT_LABELS`(undo/redo/delete/save/open/selectAll/focus/hide/dropToFloor/orthographic 등), 시점은 `VIEW_SHORTCUTS`.

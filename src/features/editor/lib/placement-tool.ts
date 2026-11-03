@@ -19,6 +19,8 @@ import {
   findPreset,
   type MeshPreset,
   type MeshPresetId,
+  type ShapeParams,
+  shapeParamsOf,
 } from "./mesh-presets";
 import { snapValue, type ToolState } from "./tools";
 
@@ -165,8 +167,13 @@ export function createPlacementTool(
     }
   }
 
-  function createPreview(preset: MeshPreset): Mesh {
-    const preview = preset.create("__placement-preview", scene);
+  /** shape: 복사본은 원본의 모양 값 (없으면 기본 모양) */
+  function createPreview(preset: MeshPreset, shape?: ShapeParams): Mesh {
+    const preview = preset.create(
+      "__placement-preview",
+      scene,
+      shapeParamsOf(preset, shape),
+    );
     preview.material = previewMaterial;
     preview.isPickable = false;
     preview.setEnabled(false);
@@ -273,7 +280,7 @@ export function createPlacementTool(
     const entries = snapshots.flatMap((snapshot) => {
       const preset = findPreset(snapshot.presetId);
       if (!preset) return [];
-      const preview = createPreview(preset);
+      const preview = createPreview(preset, snapshot.shape);
       // 미리보기에 원본의 크기를 입힌다 (회전은 layoutItems·updatePreview)
       preview.scaling.copyFrom(snapshot.transform.scaling);
       return [

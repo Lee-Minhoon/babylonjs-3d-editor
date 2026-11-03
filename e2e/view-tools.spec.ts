@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  closeMenu,
   expectScene,
   openEditor,
   placePreset,
@@ -38,10 +39,12 @@ test("F는 선택한 메쉬로 화면을 옮기고, 히스토리에 남지 않�
 
   await viewMenu.click();
   await expect(focusItem).toBeDisabled();
-  await page.keyboard.press("Escape");
+  await closeMenu(page);
 
   await selectMesh(page, "Box 1");
   const canvas = page.locator("canvas");
+  // 선택 외곽선·기즈모가 그려질 때까지 기다린 뒤 찍는다
+  await page.waitForTimeout(500);
   const before = await canvas.screenshot();
   // F 전에는 화면이 그대로다 (아래 비교가 F 때문에 달라졌다는 근거)
   await page.waitForTimeout(500);

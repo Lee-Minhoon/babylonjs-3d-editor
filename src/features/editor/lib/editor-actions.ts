@@ -24,7 +24,7 @@ import {
   type MeshFlag,
 } from "./mesh-flags";
 import { createRenameCommand, MESH_NAME_INPUT_ID } from "./mesh-name";
-import { inCreationOrder } from "./mesh-presets";
+import { inCreationOrder, type MeshPreset } from "./mesh-presets";
 import type { PlacementTool } from "./placement-tool";
 import type { Selection } from "./selection";
 
@@ -233,4 +233,12 @@ export function distributeSelected(
   axis: AlignAxis,
 ): boolean {
   return run(history, createDistributeCommand(selection.getMeshes(), axis));
+}
+
+/** 프리셋 배치 시작 (메뉴·검색형 추가 메뉴). 이미 그 프리셋으로 배치 중이면 그대로 둔다 — toggle과 달리 끄지 않는다 */
+export function startPresetPlacement(
+  placement: PlacementTool,
+  preset: MeshPreset,
+) {
+  if (placement.getActivePresetId() !== preset.id) placement.toggle(preset);
 }

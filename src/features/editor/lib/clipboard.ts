@@ -10,7 +10,9 @@ import {
   addPresetMesh,
   findPreset,
   getPresetId,
+  getShapeParams,
   type MeshPresetId,
+  type ShapeParams,
 } from "./mesh-presets";
 import {
   applyTransform,
@@ -27,6 +29,8 @@ export type MeshSnapshot = {
   transform: TransformSnapshot;
   /** null이면 새 메쉬처럼 랜덤 값 */
   material: MaterialValues | null;
+  /** 모양 값 (프리셋 파라미터) */
+  shape: ShapeParams;
 };
 
 export function captureMeshSnapshot(mesh: AbstractMesh): MeshSnapshot | null {
@@ -36,6 +40,7 @@ export function captureMeshSnapshot(mesh: AbstractMesh): MeshSnapshot | null {
     presetId,
     transform: captureTransform(mesh),
     material: getMaterialValues(mesh),
+    shape: getShapeParams(mesh) ?? {},
   };
 }
 
@@ -47,7 +52,13 @@ export function createMeshFromSnapshot(
 ): Mesh {
   const preset = findPreset(snapshot.presetId);
   if (!preset) throw new Error(`Unknown preset: ${snapshot.presetId}`);
-  const mesh = addPresetMesh(scene, preset, snapshot.material ?? undefined);
+  const mesh = addPresetMesh(
+    scene,
+    preset,
+    snapshot.material ?? undefined,
+    undefined,
+    snapshot.shape,
+  );
   applyTransform(mesh, snapshot.transform);
   mesh.position.addInPlace(offset);
   return mesh;

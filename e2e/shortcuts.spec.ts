@@ -45,7 +45,8 @@ test("열린 메뉴 안에서 누른 키는 에디터 단축키로 새지 않는
   page,
 }) => {
   await page.getByRole("menuitem", { name: "편집", exact: true }).click();
-  await expect(page.getByRole("menu")).toBeVisible();
+  // 메뉴가 포커스를 가져간 뒤에 (그 전엔 키가 메뉴바 트리거에서 에디터로 간다)
+  await expect(page.locator("[role=menu][data-open]")).toBeFocused();
   await page.keyboard.press("1"); // 메뉴 안에서는 항목 찾기(typeahead)용
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toHaveCount(0);

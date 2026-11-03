@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import {
+  closeMenu,
   openEditor,
   placePreset,
   sceneList,
@@ -80,7 +81,7 @@ test("숫자패드 5는 직교 투영, 7·보기 메뉴는 시점을 바꾼다 (
   }).toPass({ timeout: 3_000 });
   await viewMenu.click();
   await expect(ortho).toBeChecked();
-  await page.keyboard.press("Escape");
+  await closeMenu(page);
 
   await page.waitForTimeout(400);
   before = await canvas.screenshot();
@@ -95,6 +96,6 @@ test("숫자패드 5는 직교 투영, 7·보기 메뉴는 시점을 바꾼다 (
   await ortho.click();
   await viewMenu.click();
   await expect(ortho).not.toBeChecked();
-  await page.keyboard.press("Escape");
+  await closeMenu(page);
   expect(await undoMenuText(page)).toContain("Box 1 추가");
 });

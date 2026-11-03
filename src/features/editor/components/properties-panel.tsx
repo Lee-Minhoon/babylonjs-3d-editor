@@ -34,6 +34,7 @@ import { MaterialSection } from "./material-section";
 import { MeshNameInput } from "./mesh-name-input";
 import { MeshIcon } from "./preset-icons";
 import { SceneSettingsSection } from "./scene-settings-section";
+import { ShapeSection, sharedShapePreset } from "./shape-section";
 import { MIXED_LABEL } from "./value-fields";
 
 const AXES = [
@@ -283,7 +284,7 @@ function MultiSelectionHeader({ meshes }: { meshes: readonly AbstractMesh[] }) {
 }
 
 /**
- * 속성 패널: 메쉬를 고르면 변형 · 머티리얼 (여러 개면 함께 편집 — 값이 다른 칸은 "—"),
+ * 속성 패널: 메쉬를 고르면 변형 · 모양(같은 프리셋일 때) · 머티리얼 (여러 개면 함께 편집 — 값이 다른 칸은 "—"),
  * 선택이 없으면 씬 설정. 아래에는 히스토리 패널.
  */
 export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
@@ -291,6 +292,8 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
   const mesh = selected.length === 1 ? selected[0] : null;
   // key: 선택이 바뀌면 편집 중 상태(before)를 버린다
   const selectionKey = selected.map(({ uniqueId }) => uniqueId).join(",");
+  // 모양 값은 고른 메쉬가 모두 같은 프리셋일 때만 (프리셋마다 항목이 다르다)
+  const shapePreset = sharedShapePreset(selected);
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-l border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">
@@ -330,6 +333,20 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
               {!mesh &&
                 ` 여러 개면 입력한 값이 모두에 들어갑니다 (값이 서로 다른 칸은 ${MIXED_LABEL}).`}
             </p>
+            {shapePreset && (
+              <>
+                <Separator />
+                <div>
+                  <SectionTitle>모양</SectionTitle>
+                  <ShapeSection
+                    key={selectionKey}
+                    preset={shapePreset}
+                    meshes={selected}
+                    history={runtime.history}
+                  />
+                </div>
+              </>
+            )}
             <Separator />
             <div>
               <SectionTitle>머티리얼</SectionTitle>

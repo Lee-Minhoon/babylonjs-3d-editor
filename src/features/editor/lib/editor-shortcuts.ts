@@ -1,5 +1,6 @@
 import type { Scene } from "@babylonjs/core/scene";
 
+import type { AddMenu } from "./add-menu";
 import type { CameraView, ViewName } from "./camera-views";
 import type { Clipboard } from "./clipboard";
 import {
@@ -44,6 +45,7 @@ import type { TransformGizmo } from "./transform-gizmo";
  *   ⌘/Ctrl+S          저장 (⌘/Ctrl+Shift+S 다른 이름으로 저장)
  *   ⌘/Ctrl+O          열기
  *   ?                 단축키 도움말 창
+ *   Shift+A           검색형 추가 메뉴 (커서가 뷰포트 위면 그 자리, 아니면 가운데)
  *   (새 씬은 단축키 없음 — ⌘N은 브라우저가 가로채 막을 수 없다)
  *
  *   숫자패드 1 / 3 / 7  정면 / 오른쪽 / 위 시점 (⌃와 함께: 뒤 / 왼쪽 / 아래) — Blender 방식
@@ -53,6 +55,7 @@ import type { TransformGizmo } from "./transform-gizmo";
 type EditorShortcutTargets = {
   scene: Scene;
   help: ShortcutHelp;
+  addMenu: AddMenu;
   cameraView: CameraView;
   history: History;
   placement: PlacementTool;
@@ -127,6 +130,7 @@ export const SHORTCUT_LABELS = {
   rename: "F2",
   rotatePlacement: "R",
   help: "?",
+  addMenu: "⇧A",
 } as const;
 
 /**
@@ -202,6 +206,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 export function bindEditorShortcuts({
   scene,
   help,
+  addMenu,
   cameraView,
   history,
   placement,
@@ -294,6 +299,18 @@ export function bindEditorShortcuts({
     if (key === "?" && !event.altKey) {
       event.preventDefault();
       help.setOpen(true);
+      return;
+    }
+
+    // ⇧A: 커서가 캔버스 위에 있으면 그 자리에 (scene.pointerX/Y는 캔버스 기준 CSS 픽셀)
+    if (key === "a" && event.shiftKey && !event.altKey) {
+      event.preventDefault();
+      const canvas = scene.getEngine().getRenderingCanvas();
+      addMenu.open(
+        canvas?.matches(":hover")
+          ? { x: scene.pointerX, y: scene.pointerY }
+          : null,
+      );
       return;
     }
 

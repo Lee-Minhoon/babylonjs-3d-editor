@@ -61,13 +61,27 @@ export function placementHint(page: Page) {
   return page.locator("aside section p").first();
 }
 
+/**
+ * 열린 메뉴를 Esc로 닫는다. 메뉴가 열려 포커스를 가져간 뒤에 누른다 — 열리는 중(포커스가 아직 트리거)에 누른 Esc는
+ * 메뉴를 닫지 못하고 에디터로 가서 선택을 푼다. 닫히는 중인 메뉴의 항목도 locator에 잡히므로 열림(data-open)으로 본다.
+ */
+export async function closeMenu(page: Page) {
+  const menu = page.locator("[role=menu][data-open]");
+  await expect(menu).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+}
+
 /** 편집 메뉴의 "실행 취소" 항목 라벨 (예: "실행 취소Box 1 추가⌘Z") */
 export async function undoMenuText(page: Page) {
+  const menu = page.locator("[role=menu][data-open]");
+  // 바로 전에 닫은 메뉴가 다 닫힌 뒤에 연다 (닫히는 중에 다른 트리거를 누르면 열리지 않는다)
+  await expect(menu).toHaveCount(0);
   await page.getByRole("menuitem", { name: "편집", exact: true }).click();
-  const text = await page
+  const text = await menu
     .getByRole("menuitem", { name: /^실행 취소/ })
     .textContent();
-  await page.keyboard.press("Escape");
+  await closeMenu(page);
   return text ?? "";
 }
 

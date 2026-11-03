@@ -147,6 +147,7 @@ export function SliderField({
   min = 0,
   max = 1,
   step = 0.01,
+  digits = 2,
   disabled,
   onPreview,
   onCommit,
@@ -158,13 +159,15 @@ export function SliderField({
   min?: number;
   max?: number;
   step?: number;
+  /** 표시 자릿수 (분할 수처럼 정수면 0) */
+  digits?: number;
   disabled?: boolean;
   onPreview: (value: number) => void;
   onCommit: () => void;
 }) {
   return (
     <div>
-      <FieldLabel value={mixed ? MIXED_LABEL : value.toFixed(2)}>
+      <FieldLabel value={mixed ? MIXED_LABEL : value.toFixed(digits)}>
         {label}
       </FieldLabel>
       <Slider

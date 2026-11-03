@@ -9,6 +9,7 @@ import {
   ExternalLink,
   type LucideIcon,
   Redo2,
+  Search,
   Undo2,
 } from "lucide-react";
 
@@ -40,7 +41,6 @@ import {
 import { useSceneMeshes } from "@/hooks/use-scene-meshes";
 
 import {
-  useActivePresetId,
   useActiveTool,
   useClipboardHasContent,
   useGizmoSpace,
@@ -65,6 +65,7 @@ import {
   paste,
   setSelectedLocked,
   showAllHidden,
+  startPresetPlacement,
   startRename,
 } from "../lib/editor-actions";
 import {
@@ -296,7 +297,6 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
   const { undoLabel, redoLabel } = useHistoryState(runtime);
   const selectionCount = useSelection(runtime).length;
   const hasSelection = selectionCount > 0;
-  const activePresetId = useActivePresetId(runtime);
   const activeTool = useActiveTool(runtime);
   const snapEnabled = useSnap(runtime, "move").enabled;
   const gizmoSpace = useGizmoSpace(runtime);
@@ -455,6 +455,15 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
         <MenubarMenu>
           <MenubarTrigger>추가</MenubarTrigger>
           <MenubarContent>
+            <MenubarItem
+              disabled={!runtime}
+              onClick={() => runtime?.addMenu.open()}
+            >
+              <Search strokeWidth={1.75} aria-hidden />
+              검색해서 추가…
+              <MenubarShortcut>{SHORTCUT_LABELS.addMenu}</MenubarShortcut>
+            </MenubarItem>
+            <MenubarSeparator />
             <MenubarGroup>
               <MenubarLabel>메쉬</MenubarLabel>
               {MESH_PRESETS.map((preset) => {
@@ -465,8 +474,9 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
                     disabled={!runtime}
                     onClick={() => {
                       // 메뉴에서 고르면 항상 그 프리셋 배치 시작 (이미 켜져 있으면 유지)
-                      if (activePresetId !== preset.id)
-                        runtime?.placement.toggle(preset);
+                      if (runtime) {
+                        startPresetPlacement(runtime.placement, preset);
+                      }
                     }}
                   >
                     <Icon strokeWidth={1.75} aria-hidden />

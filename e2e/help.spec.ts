@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { expectScene, openEditor, placementHint } from "./editor";
+import { closeMenu, expectScene, openEditor, placementHint } from "./editor";
 
 /** 도움말 창의 한 단축키 묶음 (예: "도구") */
 function shortcutGroup(page: Page, title: string) {
@@ -62,8 +62,7 @@ test("도움말 창에 적힌 도구·메쉬 단축키가 실제로 동작한다
     await expect(
       page.getByRole("menuitemradio", { name: new RegExp(`^${tool}`) }),
     ).toBeChecked();
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("menu")).toHaveCount(0);
+    await closeMenu(page);
   }
 
   await page.keyboard.press(sphereKey);

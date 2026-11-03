@@ -77,6 +77,11 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   {
     title: "메쉬 추가",
     items: [
+      {
+        action: "검색해서 추가",
+        keys: [L.addMenu],
+        note: "커서 위치에 검색창",
+      },
       ...MESH_PRESETS.flatMap((preset) => {
         const key = getPresetShortcut(preset.id);
         return key ? [{ action: preset.label, keys: [key] }] : [];

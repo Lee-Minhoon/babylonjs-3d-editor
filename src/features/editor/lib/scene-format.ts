@@ -12,8 +12,11 @@ import {
   findPreset,
   inCreationOrder,
   MESH_PRESETS,
+  type MeshPreset,
   type MeshPresetId,
   resetMeshNames,
+  type ShapeParams,
+  shapeParamsOf,
 } from "./mesh-presets";
 import {
   applySceneSettings,
@@ -29,7 +32,7 @@ import {
  *
  *   {
  *     "format": "babylonjs-3d-editor/scene",
- *     "version": 4,
+ *     "version": 5,
  *     "settings": { "background": "#1A1A1F", "environmentIntensity": 1,
  *       "exposure": 1, "toneMapping": "none" },
  *     "meshes": [
@@ -37,7 +40,7 @@ import {
  *         "rotation": [0, 45, 0], "scaling": [1, 1, 1],
  *         "material": { "color": "#4F8EF7", "metallic": 0, "roughness": 0.5,
  *           "emissive": "#000000", "alpha": 1, "unlit": false },
- *         "hidden": false, "locked": false }
+ *         "hidden": false, "locked": false, "shape": {} }
  *     ]
  *   }
  *
@@ -46,18 +49,21 @@ import {
  * material은 PBR metallic-roughness (color·emissive는 sRGB), 없으면 null (열 때 랜덤 색).
  * emissive·alpha·unlit이 빠져 있으면 기본값 (발광 없음·불투명·조명 받음).
  * hidden·locked는 숨기기·잠금 (mesh-flags). 없으면 false.
+ * shape는 프리셋 모양 값 (MeshPreset.params, 예: 원뿔 { "diameterTop": 0, "diameterBottom": 1, "tessellation": 24 }).
+ * 빠진 키는 기본값, 범위 밖이나 그 프리셋에 없는 키는 오류.
  *
  * 버전 기록:
  *   v1  "color": "#RRGGBB" | null (StandardMaterial diffuse) → v2에서 material.color로 옮기고
  *       metallic·roughness는 기본값
  *   v2  hidden·locked 없음 → v3에서 false
  *   v3  settings·material.emissive/alpha/unlit 없음 → v4에서 기본값
+ *   v4  shape 없음 → v5에서 기본 모양 (지금까지 만든 모양과 같다)
  * 형식을 바꿀 땐 SCENE_FILE_VERSION을 올리고 parseSceneFile에서 이전 버전을 변환한다.
  * 메쉬에 새 속성을 추가하면 MeshSnapshot과 함께 여기도 넣어야 저장된다.
  */
 
 export const SCENE_FILE_FORMAT = "babylonjs-3d-editor/scene";
-export const SCENE_FILE_VERSION = 4;
+export const SCENE_FILE_VERSION = 5;
 
 export const SCENE_FILE_TYPE: FileTypeOptions = {
   description: "씬 파일",
@@ -76,6 +82,7 @@ export type SceneFileMesh = {
   material: MaterialValues | null;
   hidden: boolean;
   locked: boolean;
+  shape: ShapeParams;
 };
 
 export type SceneFileData = {
@@ -133,6 +140,7 @@ export function serializeScene(scene: Scene): SceneFileData {
         },
         hidden: getMeshFlag(mesh, "hidden"),
         locked: getMeshFlag(mesh, "locked"),
+        shape: snapshot.shape,
       },
     ];
   });
@@ -278,6 +286,8 @@ function parseMesh(
     }
   }
 
+  const preset = findPreset(presetId as MeshPresetId)!;
+
   return {
     presetId: presetId as MeshPresetId,
     name,
@@ -287,7 +297,39 @@ function parseMesh(
     material,
     hidden: flags.hidden as boolean,
     locked: flags.locked as boolean,
+    shape: parseShape(value.shape, preset, where),
   };
+}
+
+/** v4 이하에는 없다. 빠진 키는 기본값 */
+function parseShape(
+  value: unknown,
+  preset: MeshPreset,
+  where: string,
+): ShapeParams {
+  if (value === undefined) return shapeParamsOf(preset);
+  if (!isRecord(value)) {
+    throw new SceneFileError(`${where}: shape는 객체여야 합니다.`);
+  }
+  for (const [key, number] of Object.entries(value)) {
+    const param = preset.params.find((def) => def.key === key);
+    if (!param) {
+      throw new SceneFileError(
+        `${where}: ${preset.label}에는 shape.${key}가 없습니다.`,
+      );
+    }
+    if (
+      typeof number !== "number" ||
+      number < param.min ||
+      number > param.max ||
+      (param.integer && !Number.isInteger(number))
+    ) {
+      throw new SceneFileError(
+        `${where}: shape.${key}는 ${param.min}~${param.max} 사이${param.integer ? " 정수" : " 숫자"}여야 합니다.`,
+      );
+    }
+  }
+  return shapeParamsOf(preset, value as ShapeParams);
 }
 
 const TONE_MAPPING_IDS = new Set<string>(TONE_MAPPINGS.map(({ id }) => id));
@@ -385,6 +427,7 @@ export function loadSceneFile(scene: Scene, file: SceneFileData) {
       preset,
       entry.material ?? undefined,
       entry.name,
+      entry.shape,
     );
     mesh.position = Vector3.FromArray(entry.position);
     mesh.rotationQuaternion = null;

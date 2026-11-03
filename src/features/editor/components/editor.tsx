@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+import { AddMenuPopup } from "./add-menu-popup";
 import { DiscardChangesDialog } from "./discard-changes-dialog";
 import { EditorHeader } from "./editor-header";
 import { type EditorRuntime, EditorViewport } from "./editor-viewport";
@@ -39,6 +40,7 @@ export function Editor() {
                   <TransformToolbar runtime={runtime} />
                 </div>
               )}
+              {runtime && <AddMenuPopup runtime={runtime} />}
             </div>
             <PropertiesPanel runtime={runtime} />
           </div>

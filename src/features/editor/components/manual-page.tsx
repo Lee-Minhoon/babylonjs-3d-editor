@@ -43,6 +43,7 @@ const SECTIONS = [
   { id: "select", title: "선택" },
   { id: "camera", title: "카메라" },
   { id: "transform", title: "변형 (위치·회전·크기)" },
+  { id: "shape", title: "모양" },
   { id: "material", title: "머티리얼" },
   { id: "scene-settings", title: "씬 설정 (배경·조명 느낌)" },
   { id: "object", title: "숨기기·잠금·정렬" },
@@ -188,7 +189,43 @@ export function ManualPage() {
                 돌립니다.
               </li>
               <li>
+                <Term>검색해서 추가</Term> (<Kbd>{SHORTCUT_LABELS.addMenu}</Kbd>
+                , 추가 메뉴): 커서 자리에 검색창이 뜹니다. 영어 이름이나 한글
+                이름(원기둥, 도넛 …)으로 거르고, ↑↓와 Enter 또는 클릭으로 고르면
+                배치가 시작됩니다. 커서가 뷰포트 밖이면 가운데에 뜹니다.
+              </li>
+              <li>
                 새 메쉬는 이름에 번호가 붙고(Box 1, Box 2 …) 색은 무작위입니다.
+              </li>
+            </List>
+          </Section>
+
+          <Section id="shape">
+            <p>
+              크기 조절만으로는 안 되는 모양을 속성 패널의 &quot;모양&quot;에서
+              바꿉니다. 슬라이더를 놓을 때 실행 취소 한 번으로 기록되고,
+              복사본과 씬 파일에 따라갑니다. 여러 개를 골랐을 때는 모두 같은
+              종류일 때만 보입니다.
+            </p>
+            <List>
+              {MESH_PRESETS.filter((preset) => preset.params.length > 0).map(
+                (preset) => (
+                  <li key={preset.id}>
+                    <Term>{preset.label}</Term>:{" "}
+                    {preset.params
+                      .map(
+                        (param) =>
+                          `${param.label} ${param.min}~${param.max} (기본 ${param.default})`,
+                      )
+                      .join(" · ")}
+                  </li>
+                ),
+              )}
+              <li>
+                {MESH_PRESETS.filter((preset) => preset.params.length === 0)
+                  .map((preset) => preset.label)
+                  .join(" · ")}
+                는 모양 값이 없습니다 (크기로 조절).
               </li>
             </List>
           </Section>

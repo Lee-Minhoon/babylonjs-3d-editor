@@ -70,3 +70,27 @@ test("머티리얼: hex·슬라이더 편집이 각각 Command 하나", async ({
   await page.keyboard.press("Meta+z");
   await expect(hex).not.toHaveValue("#D4AF37");
 });
+
+test("모양: 분할 슬라이더는 놓을 때 Command 하나, 다른 프리셋과 함께 고르면 숨는다", async ({
+  page,
+}) => {
+  await placePreset(page, "1", 120, 0);
+  await page.keyboard.press("Escape");
+  await selectMesh(page, "Sphere 1");
+  const segments = page.getByRole("slider", { name: "분할" });
+  await expect(segments).toHaveAttribute("aria-valuenow", "32");
+  await segments.focus();
+  await page.keyboard.press("Home");
+  await expect(segments).toHaveAttribute("aria-valuenow", "3");
+  expect(await undoMenuText(page)).toContain("Sphere 1 모양");
+  await segments.focus();
+  await page.keyboard.press("Meta+z");
+  await expect(segments).toHaveAttribute("aria-valuenow", "32");
+
+  await page
+    .getByRole("list", { name: "씬 메쉬" })
+    .getByRole("button", { name: "Box 1", exact: true })
+    .click({ modifiers: ["Shift"] });
+  await expect(page.getByText("메쉬 2개 선택됨")).toBeVisible();
+  await expect(page.getByRole("slider", { name: "분할" })).toHaveCount(0);
+});
