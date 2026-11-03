@@ -85,7 +85,7 @@ src/
 - 도구의 변경 알림은 `createListeners()`(`src/lib/listeners.ts`), 메쉬별 알림(이름·머티리얼)은 `createKeyedListeners()`로 만든다.
 - 뷰포트가 씬과 함께 도구들을 만들어 `EditorRuntime`(`{ scene, cameraView, boxSelect, history, placement, selection, tools, clipboard, sceneFile, autosave }`)으로 UI에 넘긴다. 도구는 순수 TS 객체(`lib/`)이고, React는 `subscribe`/`getX`를 `useSyncExternalStore`로 구독만 한다. 구독 훅은 `hooks/use-editor-state.ts`(`useHistoryState`, `useSelection`, `useActivePresetId`, `useActiveTool`, `useSnap`, `useSceneFileState` …). Babylon 객체 값 구독은 `use-mesh-transform.ts`·`use-mesh-material.ts`에 모아 두고, 컴포넌트마다 다시 만들지 않는다.
 - 레이아웃: 상단 `editor-header`(메뉴바: 파일/편집/추가/객체/보기 + undo/redo), 왼쪽 `mesh-sidebar`, 가운데 뷰포트 + `transform-toolbar`, 오른쪽 `properties-panel`.
-- 단축키 처리기는 입력창, 대화상자(`role=dialog/alertdialog`), 슬라이더, **열려 있는**(`data-open`) 메뉴·리스트박스 안의 키를 무시한다 (`SHORTCUT_FREE_ZONE`·`POPUP_ZONE`). 닫히는 중인 팝업에는 포커스가 잠깐 남으므로 열림 여부를 꼭 본다 (Esc 직후 ⌘Z가 먹히지 않는 버그). 글자 키로 항목을 찾거나 화살표로 값을 바꾸는 UI를 새로 붙이면 거기에 role을 추가한다.
+- 단축키 처리기는 입력창, 슬라이더, **열려 있는**(`data-open`) 메뉴·리스트박스·대화상자(`role=dialog/alertdialog`) 안의 키를 무시한다 (`SHORTCUT_FREE_ZONE`·`POPUP_ZONE`). 닫히는 중인 팝업에는 포커스가 잠깐 남으므로 열림 여부를 꼭 본다 (Esc 직후 ⌘Z가 먹히지 않는 버그, 도움말 창을 닫자마자 누른 Q가 무시되는 버그). 글자 키로 항목을 찾거나 화살표로 값을 바꾸는 UI를 새로 붙이면 거기에 role을 추가한다.
 - 단축키·메뉴·버튼이 공유하는 동작은 `lib/editor-actions.ts`에 둔다 (예: `deleteSelected`). 입력 경로마다 로직을 따로 쓰지 않는다.
 - 메뉴에 아직 없는 기능(예약 키)은 `PlannedItem`으로 비활성 "준비 중" 표시. 기능을 붙일 때 `MenubarItem`으로 바꾸고 단축키를 `editor-shortcuts.ts`에 연결한다.
 - 활성 도구(`tools`): `select | move | rotate | scale` (Q/W/E/R). 배치 모드는 그 위에 잠깐 덮어쓰는 모드다. 기즈모는 선택된 메쉬 + move/rotate/scale + 배치 모드 아님일 때만 보인다.
@@ -131,6 +131,9 @@ src/
   - **키 판정은 `getShortcutKey(event)`로 한다** (`event.key` 직접 비교 금지). 글자 키를 `event.code`(물리 키 위치)로 봐서 한글 입력 상태(Q → "ㅂ")에서도 같은 단축키가 동작한다. 입력창 안에서 ⌘Z 등을 직접 처리하는 컴포넌트도 같은 함수를 쓴다.
   - 단축키를 UI에 보여줄 땐 하드코딩하지 말고 `editor-shortcuts.ts`에서 가져온다: `getPresetShortcut`, `getToolShortcut`, `SHORTCUT_LABELS`(undo/redo/delete/save/open/selectAll/focus/hide/dropToFloor/orthographic 등), 시점은 `VIEW_SHORTCUTS`.
   - 메뉴의 라디오·체크박스 항목엔 `closeOnClick`을 준다 (Base UI 기본값은 안 닫힘 → 다음 키 입력이 메뉴로 빨려 들어간다).
+- 도움말: `?`·도움말 메뉴의 단축키 창(`shortcut-help-dialog.tsx`, 상태는 `runtime.help`)과 사용 설명서 페이지(`/manual` → `ManualPage`). 둘 다 단축키 목록 `SHORTCUT_GROUPS`(`lib/editor-reference.ts`)와 마우스 조작표 `MOUSE_CONTROLS`(`lib/camera-controls.ts`)를 같이 쓴다. 메쉬 종류·스냅 단위·도구 이름도 에디터 값에서 가져온다 — 손으로 다시 적지 않는다.
+  - 단축키를 추가하면 `SHORTCUT_GROUPS`에도 넣는다 (`editor-reference.test`가 `SHORTCUT_LABELS`·`VIEW_SHORTCUTS`·프리셋 키가 다 있는지 확인). 마우스 규칙을 바꾸면 `MOUSE_CONTROLS`도 고친다.
+  - 사용자가 보는 동작을 바꾸면 `manual-page.tsx`의 설명 글도 고친다.
 - 뷰포트 클릭은 `POINTERTAP`으로 처리한다 (드래그 = 카메라 조작·기즈모 드래그와 구분).
 
 ## UI 규칙 (shadcn / Base UI)

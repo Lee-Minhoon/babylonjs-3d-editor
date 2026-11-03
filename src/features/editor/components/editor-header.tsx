@@ -1,9 +1,16 @@
 "use client";
 
 import type { KeyboardEvent, ReactNode } from "react";
+import Link from "next/link";
 
 import type { BaseUIEvent } from "@base-ui/react/types";
-import { Box as BoxIcon, type LucideIcon, Redo2, Undo2 } from "lucide-react";
+import {
+  Box as BoxIcon,
+  ExternalLink,
+  type LucideIcon,
+  Redo2,
+  Undo2,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -301,7 +308,7 @@ type EditorHeaderProps = {
   runtime: EditorRuntime | null;
 };
 
-/** 상단 헤더: 앱 이름 · 메뉴바(파일/편집/추가/객체/보기) · 실행 취소/다시 실행 · 파일 이름 · 렌더러 표시 */
+/** 상단 헤더: 앱 이름 · 메뉴바(파일/편집/추가/객체/보기/도움말) · 실행 취소/다시 실행 · 파일 이름 · 렌더러 표시 */
 export function EditorHeader({ runtime }: EditorHeaderProps) {
   const { undoLabel, redoLabel } = useHistoryState(runtime);
   const selectionCount = useSelection(runtime).length;
@@ -582,6 +589,25 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
               직교 투영
               <MenubarShortcut>{SHORTCUT_LABELS.orthographic}</MenubarShortcut>
             </MenubarCheckboxItem>
+          </MenubarContent>
+        </MenubarMenu>
+
+        <MenubarMenu>
+          <MenubarTrigger>도움말</MenubarTrigger>
+          <MenubarContent>
+            <MenubarItem
+              disabled={!runtime}
+              onClick={() => runtime?.help.setOpen(true)}
+            >
+              단축키
+              <MenubarShortcut>{SHORTCUT_LABELS.help}</MenubarShortcut>
+            </MenubarItem>
+            <MenubarItem
+              render={<Link href="/manual" target="_blank" rel="noopener" />}
+            >
+              사용 설명서
+              <ExternalLink aria-hidden />
+            </MenubarItem>
           </MenubarContent>
         </MenubarMenu>
       </Menubar>

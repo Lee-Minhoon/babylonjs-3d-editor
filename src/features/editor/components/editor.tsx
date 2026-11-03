@@ -12,6 +12,7 @@ import { MeshSidebar } from "./mesh-sidebar";
 import { PropertiesPanel } from "./properties-panel";
 import { RecoveryDialog } from "./recovery-dialog";
 import { SelectionBox } from "./selection-box";
+import { ShortcutHelpDialog } from "./shortcut-help-dialog";
 import { TransformToolbar } from "./transform-toolbar";
 
 /**
@@ -44,6 +45,7 @@ export function Editor() {
         </div>
         <DiscardChangesDialog runtime={runtime} />
         <RecoveryDialog runtime={runtime} />
+        <ShortcutHelpDialog runtime={runtime} />
       </TooltipProvider>
     </Toaster>
   );

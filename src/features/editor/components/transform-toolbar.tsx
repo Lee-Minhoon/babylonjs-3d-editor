@@ -37,6 +37,7 @@ import {
   useGizmoSpace,
   useSnap,
 } from "../hooks/use-editor-state";
+import { TOOL_LABELS } from "../lib/editor-reference";
 import { getToolShortcut } from "../lib/editor-shortcuts";
 import {
   formatSnapStep,
@@ -53,10 +54,10 @@ export const TOOL_ITEMS: {
   label: string;
   icon: LucideIcon;
 }[] = [
-  { id: "select", label: "선택", icon: MousePointer2 },
-  { id: "move", label: "이동", icon: Move3d },
-  { id: "rotate", label: "회전", icon: Rotate3d },
-  { id: "scale", label: "크기", icon: Scale3d },
+  { id: "select", label: TOOL_LABELS.select, icon: MousePointer2 },
+  { id: "move", label: TOOL_LABELS.move, icon: Move3d },
+  { id: "rotate", label: TOOL_LABELS.rotate, icon: Rotate3d },
+  { id: "scale", label: TOOL_LABELS.scale, icon: Scale3d },
 ];
 
 export const GIZMO_SPACE_LABELS: Record<GizmoSpace, string> = {

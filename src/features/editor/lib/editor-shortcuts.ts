@@ -19,6 +19,7 @@ import { MESH_PRESETS, type MeshPresetId } from "./mesh-presets";
 import type { PlacementTool } from "./placement-tool";
 import type { SceneFile } from "./scene-file";
 import type { Selection } from "./selection";
+import type { ShortcutHelp } from "./shortcut-help";
 import type { ToolState, TransformTool } from "./tools";
 import type { TransformGizmo } from "./transform-gizmo";
 
@@ -42,6 +43,7 @@ import type { TransformGizmo } from "./transform-gizmo";
  *   ⌘/Ctrl+A          전체 선택 (숨기거나 잠근 메쉬 제외)
  *   ⌘/Ctrl+S          저장 (⌘/Ctrl+Shift+S 다른 이름으로 저장)
  *   ⌘/Ctrl+O          열기
+ *   ?                 단축키 도움말 창
  *   (새 씬은 단축키 없음 — ⌘N은 브라우저가 가로채 막을 수 없다)
  *
  *   숫자패드 1 / 3 / 7  정면 / 오른쪽 / 위 시점 (⌃와 함께: 뒤 / 왼쪽 / 아래) — Blender 방식
@@ -50,6 +52,7 @@ import type { TransformGizmo } from "./transform-gizmo";
 
 type EditorShortcutTargets = {
   scene: Scene;
+  help: ShortcutHelp;
   cameraView: CameraView;
   history: History;
   placement: PlacementTool;
@@ -123,6 +126,7 @@ export const SHORTCUT_LABELS = {
   orthographic: "Num5",
   rename: "F2",
   rotatePlacement: "R",
+  help: "?",
 } as const;
 
 /**
@@ -170,10 +174,13 @@ export function handleFieldHistoryKey(
  * — 메뉴는 글자 키로 항목을 찾고(typeahead), 슬라이더는 화살표로 값을 바꾸는 중이라
  * 같은 키가 배치 토글·삭제·도구 전환으로 새면 안 된다.
  */
-const SHORTCUT_FREE_ZONE =
-  '[role="dialog"], [role="alertdialog"], [role="slider"]';
-/** 팝업형 — 열려 있을 때만 (Base UI는 열린 팝업에 data-open을 붙인다) */
-const POPUP_ZONE = '[role="menu"], [role="listbox"]';
+const SHORTCUT_FREE_ZONE = '[role="slider"]';
+/**
+ * 팝업형 — 열려 있을 때만 (Base UI는 열린 팝업에 data-open을 붙인다).
+ * 대화상자도 여기 — 도움말 창을 Esc로 닫자마자 누른 Q가 닫히는 중인 창에 막히던 버그
+ */
+const POPUP_ZONE =
+  '[role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]';
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -186,13 +193,14 @@ function isTypingTarget(target: EventTarget | null): boolean {
   ) {
     return true;
   }
-  // 닫히는 중인 메뉴(퇴장 애니메이션, data-open 없음)에는 포커스가 잠깐 남는다
+  // 닫히는 중인 메뉴·대화상자(퇴장 애니메이션, data-open 없음)에는 포커스가 잠깐 남는다
   // — 그때의 키(Esc 직후 ⌘Z 등)는 에디터가 받아야 한다
   return target.closest(POPUP_ZONE)?.closest("[data-open]") != null;
 }
 
 export function bindEditorShortcuts({
   scene,
+  help,
   cameraView,
   history,
   placement,
@@ -278,6 +286,13 @@ export function bindEditorShortcuts({
       !event.altKey &&
       placement.rotate(event.shiftKey ? -1 : 1)
     ) {
+      return;
+    }
+
+    // ?는 Shift+/ — 글자 키가 아니라 event.key로 본다 (한글 입력 상태에서도 "?")
+    if (key === "?" && !event.altKey) {
+      event.preventDefault();
+      help.setOpen(true);
       return;
     }
 

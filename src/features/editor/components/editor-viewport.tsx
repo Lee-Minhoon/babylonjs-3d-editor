@@ -29,6 +29,7 @@ import { createPlacementTool, type PlacementTool } from "../lib/placement-tool";
 import { bindPointerRouter } from "../lib/pointer-router";
 import { createSceneFile, type SceneFile } from "../lib/scene-file";
 import { createSelection, type Selection } from "../lib/selection";
+import { createShortcutHelp, type ShortcutHelp } from "../lib/shortcut-help";
 import { createToolState, type ToolState } from "../lib/tools";
 import { createTransformGizmo } from "../lib/transform-gizmo";
 
@@ -62,6 +63,7 @@ function setupScene(scene: Scene): ArcRotateCamera {
 /** 뷰포트가 만들어 에디터 UI에 넘겨주는 씬과 씬에 붙은 도구들 */
 export type EditorRuntime = {
   scene: Scene;
+  help: ShortcutHelp;
   cameraView: CameraView;
   boxSelect: BoxSelect;
   history: History;
@@ -129,6 +131,7 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
             boxSelect,
           });
           const clipboard = createClipboard();
+          const help = createShortcutHelp();
           const sceneFile = createSceneFile(scene, {
             history,
             selection,
@@ -148,6 +151,7 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           document.addEventListener("visibilitychange", onVisibilityChange);
           const unbindShortcuts = bindEditorShortcuts({
             scene,
+            help,
             cameraView,
             history,
             placement,
@@ -159,6 +163,7 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
           });
           onRuntimeChange({
             scene,
+            help,
             cameraView,
             boxSelect,
             history,

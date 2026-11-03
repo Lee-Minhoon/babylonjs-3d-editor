@@ -18,6 +18,36 @@ import type { ToolState } from "./tools";
 
 type PointerEntry = PointerInputMapEntry<"rotate" | "pan">;
 
+/**
+ * 설명서·도움말 창에 보여줄 마우스 조작표. 아래 규칙(cameraPointerMap·isBoxSelectDrag)을 바꾸면 여기도 고친다.
+ * selectTool: 선택 도구(Q)일 때, otherTools: 이동·회전·크기 도구일 때
+ */
+export const MOUSE_CONTROLS: readonly {
+  input: string;
+  selectTool: string;
+  otherTools: string;
+}[] = [
+  { input: "왼쪽 클릭", selectTool: "선택", otherTools: "선택" },
+  {
+    input: "Shift · ⌘ + 왼쪽 클릭",
+    selectTool: "선택에 넣기/빼기",
+    otherTools: "선택에 넣기/빼기",
+  },
+  { input: "왼쪽 드래그", selectTool: "박스 선택", otherTools: "카메라 회전" },
+  { input: "⌥ + 왼쪽 드래그", selectTool: "카메라 회전", otherTools: "—" },
+  {
+    input: "Shift + 왼쪽 드래그",
+    selectTool: "박스 선택 (기존 선택에 더함)",
+    otherTools: "박스 선택 (기존 선택에 더함)",
+  },
+  {
+    input: "오른쪽 · 가운데 드래그, ⌃ + 왼쪽 드래그",
+    selectTool: "카메라 이동 (팬)",
+    otherTools: "카메라 이동 (팬)",
+  },
+  { input: "휠 · 핀치", selectTool: "줌", otherTools: "줌" },
+];
+
 /** 선택 도구이고 배치 중이 아닐 때만 왼쪽 드래그가 박스 선택이다 */
 export function leftDragSelects(tools: ToolState, placement: PlacementTool) {
   return tools.getTool() === "select" && !placement.isActive();
