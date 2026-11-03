@@ -182,7 +182,8 @@ const SHORTCUT_FREE_ZONE = '[role="slider"]';
 const POPUP_ZONE =
   '[role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]';
 
-function isTypingTarget(target: EventTarget | null): boolean {
+/** 단축키 처리기가 건너뛰는 곳(입력창·슬라이더·셀렉트, 열린 팝업)인가. 패널이 ⌘Z를 직접 처리할지 판단할 때도 쓴다 */
+export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (
     target.isContentEditable ||

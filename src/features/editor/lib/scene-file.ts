@@ -14,6 +14,7 @@ import {
   serializeScene,
   stringifySceneFile,
 } from "./scene-format";
+import { applySceneSettings, DEFAULT_SCENE_SETTINGS } from "./scene-settings";
 import type { Selection } from "./selection";
 
 /*
@@ -106,13 +107,14 @@ export function createSceneFile(
     });
   };
 
-  /** 씬을 비우고(필요하면 파일 내용을 채우고) 히스토리를 처음 상태로 만든다 */
+  /** 씬을 비우고 설정을 기본값으로 돌린 뒤(필요하면 파일 내용을 채우고) 히스토리를 처음 상태로 만든다 */
   const replaceScene = (load?: (scene: Scene) => void) => {
     placement.cancel();
     selection.select(null);
     // 먼저 비워야 undo로 떼어둔 메쉬가 Command와 함께 해제된다
     history.clear();
     clearEditorMeshes(scene);
+    applySceneSettings(scene, DEFAULT_SCENE_SETTINGS);
     load?.(scene);
     savedMark = history.mark();
     restored = false;

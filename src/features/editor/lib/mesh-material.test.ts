@@ -1,3 +1,4 @@
+import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { describe, expect, test, vi } from "vitest";
 
 import {
@@ -5,19 +6,24 @@ import {
   createMaterialCommand,
   getMaterialValues,
   isSameMaterial,
+  MATERIAL_DEFAULTS,
   onMaterialChange,
 } from "./mesh-material";
 import { addPresetMesh, findPreset } from "./mesh-presets";
 import { createTestScene } from "./test-scene";
 
 const scene = createTestScene();
-const gold = { color: "#D4AF37", metallic: 1, roughness: 0.15 };
+const gold = {
+  ...MATERIAL_DEFAULTS,
+  color: "#D4AF37",
+  metallic: 1,
+  roughness: 0.15,
+};
 
 function createBox() {
   return addPresetMesh(scene, findPreset("box")!, {
+    ...MATERIAL_DEFAULTS,
     color: "#FF0000",
-    metallic: 0,
-    roughness: 0.5,
   });
 }
 
@@ -55,8 +61,23 @@ describe("mesh material", () => {
     expect(getMaterialValues(mesh)).toEqual(before);
   });
 
+  test("불투명도가 1보다 작으면 알파 블렌드, 조명 무시는 unlit", () => {
+    const mesh = createBox();
+    const material = mesh.material as PBRMaterial;
+    applyMaterialValues(mesh, { ...gold, alpha: 0.4, unlit: true });
+    expect(material.alpha).toBe(0.4);
+    expect(material.transparencyMode).toBe(PBRMaterial.PBRMATERIAL_ALPHABLEND);
+    expect(material.unlit).toBe(true);
+
+    applyMaterialValues(mesh, gold);
+    expect(material.transparencyMode).toBe(PBRMaterial.PBRMATERIAL_OPAQUE);
+    expect(material.unlit).toBe(false);
+  });
+
   test("색 비교는 대소문자를 무시한다", () => {
     expect(isSameMaterial(gold, { ...gold, color: "#d4af37" })).toBe(true);
     expect(isSameMaterial(gold, { ...gold, metallic: 0.9 })).toBe(false);
+    expect(isSameMaterial(gold, { ...gold, emissive: "#000001" })).toBe(false);
+    expect(isSameMaterial(gold, { ...gold, unlit: true })).toBe(false);
   });
 });

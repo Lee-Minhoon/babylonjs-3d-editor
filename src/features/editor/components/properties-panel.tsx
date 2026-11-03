@@ -31,6 +31,7 @@ import type { EditorRuntime } from "./editor-viewport";
 import { MaterialSection } from "./material-section";
 import { MeshNameInput } from "./mesh-name-input";
 import { MeshIcon } from "./preset-icons";
+import { SceneSettingsSection } from "./scene-settings-section";
 
 const AXES = [
   { axis: 0, label: "X", color: "text-red-400" },
@@ -258,7 +259,7 @@ function MultiSelectionSummary({
   );
 }
 
-/** 선택된 메쉬의 속성 패널 (변형 · 머티리얼) */
+/** 속성 패널: 메쉬 하나면 변형 · 머티리얼, 여러 개면 목록, 선택이 없으면 씬 설정 */
 export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
   const selected = useSelection(runtime);
   const mesh = selected.length === 1 ? selected[0] : null;
@@ -313,11 +314,24 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
         <ScrollArea className="min-h-0 flex-1">
           <MultiSelectionSummary meshes={selected} />
         </ScrollArea>
-      ) : (
-        <p className="p-3 text-muted-foreground">
-          메쉬를 선택하면 위치·회전·크기와 머티리얼을 편집할 수 있습니다.
-        </p>
-      )}
+      ) : runtime ? (
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="space-y-4 p-3">
+            <div>
+              <h3 className="mb-2 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground uppercase">
+                씬 설정
+              </h3>
+              <SceneSettingsSection
+                scene={runtime.scene}
+                history={runtime.history}
+              />
+            </div>
+            <p className="text-muted-foreground">
+              메쉬를 선택하면 위치·회전·크기와 머티리얼을 편집할 수 있습니다.
+            </p>
+          </div>
+        </ScrollArea>
+      ) : null}
     </aside>
   );
 }

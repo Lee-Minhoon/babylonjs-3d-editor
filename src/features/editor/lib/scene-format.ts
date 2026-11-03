@@ -6,11 +6,7 @@ import type { FileTypeOptions } from "@/lib/file-access";
 
 import { captureMeshSnapshot } from "./clipboard";
 import { getMeshFlag, setMeshFlag } from "./mesh-flags";
-import {
-  DEFAULT_METALLIC,
-  DEFAULT_ROUGHNESS,
-  type MaterialValues,
-} from "./mesh-material";
+import { MATERIAL_DEFAULTS, type MaterialValues } from "./mesh-material";
 import {
   addPresetMesh,
   findPreset,
@@ -19,6 +15,13 @@ import {
   type MeshPresetId,
   resetMeshNames,
 } from "./mesh-presets";
+import {
+  applySceneSettings,
+  DEFAULT_SCENE_SETTINGS,
+  getSceneSettings,
+  type SceneSettings,
+  TONE_MAPPINGS,
+} from "./scene-settings";
 
 /*
  * 씬 파일(.json) 형식. 에디터 메쉬는 모두 프리셋으로 만들어지므로
@@ -26,29 +29,35 @@ import {
  *
  *   {
  *     "format": "babylonjs-3d-editor/scene",
- *     "version": 3,
+ *     "version": 4,
+ *     "settings": { "background": "#1A1A1F", "environmentIntensity": 1,
+ *       "exposure": 1, "toneMapping": "none" },
  *     "meshes": [
  *       { "presetId": "box", "name": "Box 1", "position": [0, 0.5, 0],
  *         "rotation": [0, 45, 0], "scaling": [1, 1, 1],
- *         "material": { "color": "#4F8EF7", "metallic": 0, "roughness": 0.5 },
+ *         "material": { "color": "#4F8EF7", "metallic": 0, "roughness": 0.5,
+ *           "emissive": "#000000", "alpha": 1, "unlit": false },
  *         "hidden": false, "locked": false }
  *     ]
  *   }
  *
+ * settings는 씬 환경 설정 (scene-settings). 없거나 빠진 값은 기본값.
  * rotation은 도(°) 단위 오일러 각 (속성 패널과 같음).
- * material은 PBR metallic-roughness (color는 sRGB), 없으면 null (열 때 랜덤 색).
+ * material은 PBR metallic-roughness (color·emissive는 sRGB), 없으면 null (열 때 랜덤 색).
+ * emissive·alpha·unlit이 빠져 있으면 기본값 (발광 없음·불투명·조명 받음).
  * hidden·locked는 숨기기·잠금 (mesh-flags). 없으면 false.
  *
  * 버전 기록:
  *   v1  "color": "#RRGGBB" | null (StandardMaterial diffuse) → v2에서 material.color로 옮기고
  *       metallic·roughness는 기본값
  *   v2  hidden·locked 없음 → v3에서 false
+ *   v3  settings·material.emissive/alpha/unlit 없음 → v4에서 기본값
  * 형식을 바꿀 땐 SCENE_FILE_VERSION을 올리고 parseSceneFile에서 이전 버전을 변환한다.
  * 메쉬에 새 속성을 추가하면 MeshSnapshot과 함께 여기도 넣어야 저장된다.
  */
 
 export const SCENE_FILE_FORMAT = "babylonjs-3d-editor/scene";
-export const SCENE_FILE_VERSION = 3;
+export const SCENE_FILE_VERSION = 4;
 
 export const SCENE_FILE_TYPE: FileTypeOptions = {
   description: "씬 파일",
@@ -72,6 +81,7 @@ export type SceneFileMesh = {
 export type SceneFileData = {
   format: typeof SCENE_FILE_FORMAT;
   version: typeof SCENE_FILE_VERSION;
+  settings: SceneSettings;
   meshes: SceneFileMesh[];
 };
 
@@ -119,13 +129,20 @@ export function serializeScene(scene: Scene): SceneFileData {
         material: snapshot.material && {
           ...snapshot.material,
           color: snapshot.material.color.toUpperCase(),
+          emissive: snapshot.material.emissive.toUpperCase(),
         },
         hidden: getMeshFlag(mesh, "hidden"),
         locked: getMeshFlag(mesh, "locked"),
       },
     ];
   });
-  return { format: SCENE_FILE_FORMAT, version: SCENE_FILE_VERSION, meshes };
+  const settings = getSceneSettings(scene);
+  return {
+    format: SCENE_FILE_FORMAT,
+    version: SCENE_FILE_VERSION,
+    settings: { ...settings, background: settings.background.toUpperCase() },
+    meshes,
+  };
 }
 
 /**
@@ -174,22 +191,38 @@ function parseMaterial(value: unknown, where: string): MaterialValues | null {
     );
   }
   const { color, metallic, roughness } = value;
-  if (!isHexColor(color)) {
-    throw new SceneFileError(
-      `${where}: material.color는 "#RRGGBB"여야 합니다.`,
-    );
+  // v3 이하에는 없다 (v4에서 빠져 있어도 기본값)
+  const {
+    emissive = MATERIAL_DEFAULTS.emissive,
+    alpha = MATERIAL_DEFAULTS.alpha,
+    unlit = MATERIAL_DEFAULTS.unlit,
+  } = value;
+  for (const [key, hex] of Object.entries({ color, emissive })) {
+    if (!isHexColor(hex)) {
+      throw new SceneFileError(
+        `${where}: material.${key}는 "#RRGGBB"여야 합니다.`,
+      );
+    }
   }
-  for (const [key, number] of Object.entries({ metallic, roughness })) {
+  for (const [key, number] of Object.entries({ metallic, roughness, alpha })) {
     if (!isUnitNumber(number)) {
       throw new SceneFileError(
         `${where}: material.${key}는 0~1 사이 숫자여야 합니다.`,
       );
     }
   }
+  if (typeof unlit !== "boolean") {
+    throw new SceneFileError(
+      `${where}: material.unlit는 true 또는 false여야 합니다.`,
+    );
+  }
   return {
-    color,
+    color: color as string,
     metallic: metallic as number,
     roughness: roughness as number,
+    emissive: emissive as string,
+    alpha: alpha as number,
+    unlit,
   };
 }
 
@@ -201,11 +234,7 @@ function parseV1Color(value: unknown, where: string): MaterialValues | null {
       `${where}: color는 "#RRGGBB" 또는 null이어야 합니다.`,
     );
   }
-  return {
-    color: value,
-    metallic: DEFAULT_METALLIC,
-    roughness: DEFAULT_ROUGHNESS,
-  };
+  return { color: value, ...MATERIAL_DEFAULTS };
 }
 
 function parseMesh(
@@ -261,6 +290,44 @@ function parseMesh(
   };
 }
 
+const TONE_MAPPING_IDS = new Set<string>(TONE_MAPPINGS.map(({ id }) => id));
+
+/** v3 이하에는 없다. 빠진 값은 기본값 */
+function parseSettings(value: unknown): SceneSettings {
+  if (value === undefined) return { ...DEFAULT_SCENE_SETTINGS };
+  if (!isRecord(value)) {
+    throw new SceneFileError("settings는 객체여야 합니다.");
+  }
+  const {
+    background = DEFAULT_SCENE_SETTINGS.background,
+    environmentIntensity = DEFAULT_SCENE_SETTINGS.environmentIntensity,
+    exposure = DEFAULT_SCENE_SETTINGS.exposure,
+    toneMapping = DEFAULT_SCENE_SETTINGS.toneMapping,
+  } = value;
+  if (!isHexColor(background)) {
+    throw new SceneFileError('settings.background는 "#RRGGBB"여야 합니다.');
+  }
+  for (const [key, number] of Object.entries({
+    environmentIntensity,
+    exposure,
+  })) {
+    if (typeof number !== "number" || !Number.isFinite(number) || number < 0) {
+      throw new SceneFileError(`settings.${key}는 0 이상의 숫자여야 합니다.`);
+    }
+  }
+  if (typeof toneMapping !== "string" || !TONE_MAPPING_IDS.has(toneMapping)) {
+    throw new SceneFileError(
+      `settings.toneMapping은 ${[...TONE_MAPPING_IDS].join(", ")} 중 하나여야 합니다.`,
+    );
+  }
+  return {
+    background,
+    environmentIntensity: environmentIntensity as number,
+    exposure: exposure as number,
+    toneMapping: toneMapping as SceneSettings["toneMapping"],
+  };
+}
+
 /** 파일 텍스트를 검사해 SceneFileData로 만든다. 잘못된 파일이면 SceneFileError */
 export function parseSceneFile(text: string): SceneFileData {
   let data: unknown;
@@ -291,6 +358,7 @@ export function parseSceneFile(text: string): SceneFileData {
   return {
     format: SCENE_FILE_FORMAT,
     version: SCENE_FILE_VERSION,
+    settings: parseSettings(data.settings),
     meshes: data.meshes.map((mesh, index) =>
       parseMesh(mesh, index, data.version as number),
     ),
@@ -306,8 +374,9 @@ export function clearEditorMeshes(scene: Scene) {
   resetMeshNames(scene);
 }
 
-/** 파일 내용으로 메쉬를 만든다 (비어 있는 씬에 부른다). 히스토리에는 기록하지 않는다. */
+/** 파일 내용으로 씬 설정을 바꾸고 메쉬를 만든다 (비어 있는 씬에 부른다). 히스토리에는 기록하지 않는다. */
 export function loadSceneFile(scene: Scene, file: SceneFileData) {
+  applySceneSettings(scene, file.settings);
   for (const entry of file.meshes) {
     const preset = findPreset(entry.presetId);
     if (!preset) continue;

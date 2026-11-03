@@ -57,8 +57,7 @@ test("슬라이더를 조절하는 중의 Delete는 메쉬를 지우지 않는�
 }) => {
   await placePreset(page, "1", -100, 60);
   await selectMesh(page, "Box 1");
-  // aria-label은 슬라이더 그룹에 붙고, 포커스는 그 안의 thumb(range input)이 받는다
-  await page.getByRole("group", { name: "메탈릭" }).getByRole("slider").focus();
+  await page.getByRole("slider", { name: "메탈릭" }).focus();
   await page.keyboard.press("Delete");
   await expectScene(page, ["Box 1"]);
 });

@@ -5,6 +5,7 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { describe, expect, test } from "vitest";
 
 import { setMeshFlag } from "./mesh-flags";
+import { MATERIAL_DEFAULTS } from "./mesh-material";
 import { addPresetMesh, findPreset } from "./mesh-presets";
 import { exportBaseName, exportGlb } from "./scene-export";
 import { createTestScene } from "./test-scene";
@@ -19,7 +20,11 @@ async function readGlbJson(blob: Blob) {
   );
   return JSON.parse(json) as {
     nodes: { name: string; mesh?: number; translation?: number[] }[];
+    extensionsUsed?: string[];
     materials: {
+      alphaMode?: string;
+      emissiveFactor?: number[];
+      extensions?: Record<string, unknown>;
       pbrMetallicRoughness: {
         baseColorFactor: number[];
         metallicFactor?: number;
@@ -36,6 +41,7 @@ describe("GLB 내보내기", () => {
     CreateGround("__grid", { width: 10, height: 10 }, scene);
     new TransformNode("__pivot", scene);
     const box = addPresetMesh(scene, findPreset("box")!, {
+      ...MATERIAL_DEFAULTS,
       color: "#FFFFFF",
       metallic: 1,
       roughness: 0.25,
@@ -56,6 +62,29 @@ describe("GLB 내보내기", () => {
     // glTF 기본값(1)이면 생략된다
     expect(pbr.metallicFactor ?? 1).toBeCloseTo(1);
     expect(pbr.roughnessFactor).toBeCloseTo(0.25);
+    scene.dispose();
+  });
+});
+
+describe("GLB 머티리얼 확장", () => {
+  test("발광색·불투명도·조명 무시가 glTF 값으로 나간다", async () => {
+    const scene = createTestScene();
+    new ArcRotateCamera("camera", 0, 1, 10, Vector3.Zero(), scene);
+    addPresetMesh(scene, findPreset("box")!, {
+      ...MATERIAL_DEFAULTS,
+      color: "#FFFFFF",
+      emissive: "#FF0000",
+      alpha: 0.5,
+      unlit: true,
+    });
+
+    const gltf = await readGlbJson(await exportGlb(scene, "scene"));
+    const [material] = gltf.materials;
+    expect(material.emissiveFactor).toEqual([1, 0, 0]);
+    expect(material.alphaMode).toBe("BLEND");
+    expect(material.pbrMetallicRoughness.baseColorFactor[3]).toBeCloseTo(0.5);
+    expect(material.extensions).toHaveProperty("KHR_materials_unlit");
+    expect(gltf.extensionsUsed).toContain("KHR_materials_unlit");
     scene.dispose();
   });
 });

@@ -59,14 +59,14 @@ test("머티리얼: hex·슬라이더 편집이 각각 Command 하나", async ({
   await expect(hex).toHaveValue("#D4AF37");
   expect(await undoMenuText(page)).toContain("Sphere 1 머티리얼");
 
-  const metallic = page.locator("[data-slot=slider-thumb] input").first();
+  const metallic = page.getByRole("slider", { name: "메탈릭" });
   await metallic.focus();
   await page.keyboard.press("End");
-  await expect(page.getByText("1.00")).toBeVisible();
+  await expect(metallic).toHaveAttribute("aria-valuenow", "1");
 
   // 슬라이더에 포커스가 있어도 ⌘Z가 동작한다
   await page.keyboard.press("Meta+z");
-  await expect(page.getByText("1.00")).toHaveCount(0);
+  await expect(metallic).toHaveAttribute("aria-valuenow", "0");
   await page.keyboard.press("Meta+z");
   await expect(hex).not.toHaveValue("#D4AF37");
 });

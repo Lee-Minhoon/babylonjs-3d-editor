@@ -1,44 +1,25 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
-import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 
 import { useMeshMaterial } from "../hooks/use-mesh-material";
-import { handleFieldHistoryKey } from "../lib/editor-shortcuts";
+import { usePreviewEdit } from "../hooks/use-preview-edit";
+import { handleFieldHistoryKey, isTypingTarget } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 import {
   applyMaterialValues,
   createMaterialCommand,
   getMaterialValues,
   isSameMaterial,
-  type MaterialValues,
 } from "../lib/mesh-material";
-
-const SLIDERS = [
-  { key: "metallic", label: "메탈릭" },
-  { key: "roughness", label: "거칠기" },
-] as const satisfies readonly {
-  key: keyof MaterialValues;
-  label: string;
-}[];
-
-/** "#abc123" / "abc123" → "#ABC123". 잘못된 값이면 null */
-function normalizeHex(text: string): string | null {
-  const hex = text.trim().replace(/^#/, "");
-  return /^[0-9a-f]{6}$/i.test(hex) ? `#${hex.toUpperCase()}` : null;
-}
-
-const firstValue = (value: number | readonly number[]) =>
-  Array.isArray(value) ? (value[0] as number) : (value as number);
+import { ColorField, SliderField } from "./value-fields";
 
 /**
- * 머티리얼 편집 (PBR 기본색·메탈릭·거칠기).
+ * 머티리얼 편집 (PBR 기본색·메탈릭·거칠기·발광색·불투명도·조명 무시).
  * 속성 패널 숫자 입력과 같은 원칙: 색을 고르는 중·슬라이더를 끄는 중에는 메쉬에 바로 적용(미리보기)하고,
- * 커밋(색상 창 닫기·슬라이더 놓기·hex Enter)에서 편집 시작 전 값과 비교해 Command 하나로 기록한다.
+ * 커밋(색상 창 닫기·슬라이더 놓기·hex Enter·스위치)에서 편집 시작 전 값과 비교해 Command 하나로 기록한다.
  */
 export function MaterialSection({
   mesh,
@@ -48,130 +29,76 @@ export function MaterialSection({
   history: History;
 }) {
   const values = useMeshMaterial(mesh);
-  const before = useRef<MaterialValues | null>(null);
-  const colorInput = useRef<HTMLInputElement>(null);
-
-  const preview = (next: Partial<MaterialValues>) => {
-    const current = getMaterialValues(mesh);
-    if (!current) return;
-    before.current ??= current;
-    applyMaterialValues(mesh, { ...current, ...next });
-  };
-
-  const commit = () => {
-    const after = getMaterialValues(mesh);
-    if (before.current && after && !isSameMaterial(before.current, after)) {
-      history.execute(createMaterialCommand(mesh, before.current, after));
-    }
-    before.current = null;
-  };
-
-  const revert = () => {
-    if (!before.current) return;
-    applyMaterialValues(mesh, before.current);
-    before.current = null;
-  };
-
-  /** 미리보기 중이면 그것만 취소하고 true (handleFieldHistoryKey의 cancelEdit) */
-  const cancelPreview = () => {
-    if (!before.current) return false;
-    revert();
-    return true;
-  };
-
-  // <input type="color">: React onChange는 고르는 중(input 이벤트)마다 오고,
-  // 네이티브 change는 색상 창을 닫아 값이 확정될 때 온다 → 그때 커밋
-  useEffect(() => {
-    const input = colorInput.current;
-    if (!input) return;
-    input.addEventListener("change", commit);
-    return () => input.removeEventListener("change", commit);
+  const { preview, commit, cancel } = usePreviewEdit({
+    get: () => getMaterialValues(mesh),
+    apply: (next) => applyMaterialValues(mesh, next),
+    isSame: isSameMaterial,
+    record: (before, after) =>
+      history.execute(createMaterialCommand(mesh, before, after)),
   });
 
   if (!values) return null;
+  // 조명 무시면 메탈릭·거칠기는 쓰이지 않는다 (기본색·발광색·불투명도만)
+  const lit = !values.unlit;
 
   return (
     <div
       className="space-y-3"
       // 입력창·슬라이더에 포커스가 있으면 editor-shortcuts가 건너뛰므로 undo/redo를 여기서 처리한다.
-      // 편집 중이면 먼저 그 편집만 취소한다.
-      onKeyDown={(event) =>
-        handleFieldHistoryKey(event, history, cancelPreview)
-      }
+      // 편집 중이면 먼저 그 편집만 취소한다. (스위치 같은 버튼은 editor-shortcuts가 처리 — 두 번 undo 하지 않게)
+      onKeyDown={(event) => {
+        if (isTypingTarget(event.target)) {
+          handleFieldHistoryKey(event, history, cancel);
+        }
+      }}
     >
-      <div>
-        <div className="mb-1.5 text-[0.6875rem] text-muted-foreground">
-          기본색
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Input
-            ref={colorInput}
-            type="color"
-            aria-label="기본색 선택"
-            className="h-7 w-9 shrink-0 cursor-pointer p-0.5"
-            value={values.color.toLowerCase()}
-            onChange={(event) => preview({ color: event.target.value })}
-          />
-          {/* key: 값이 밖에서 바뀌면(undo·색상 창) 입력 중이던 텍스트를 버리고 새 값을 보인다 */}
-          <Input
-            key={values.color}
-            aria-label="기본색 hex"
-            className="font-mono uppercase tabular-nums"
-            defaultValue={values.color.toUpperCase()}
-            spellCheck={false}
-            onKeyDown={(event) => {
-              const input = event.currentTarget;
-              const shown = values.color.toUpperCase();
-              if (event.key === "Enter") input.blur();
-              else if (event.key === "Escape") {
-                input.value = shown;
-                input.blur();
-              } else if (
-                // 입력 중인 글자가 있으면 ⌘Z는 그 글자만 되돌린다 (히스토리 undo가 아니라)
-                handleFieldHistoryKey(event, history, () => {
-                  if (normalizeHex(input.value) !== shown) {
-                    input.value = shown;
-                    return true;
-                  }
-                  return cancelPreview();
-                })
-              ) {
-                event.stopPropagation(); // 바깥 onKeyDown이 한 번 더 undo 하지 않게
-              }
-            }}
-            onBlur={(event) => {
-              const color = normalizeHex(event.currentTarget.value);
-              if (!color) {
-                event.currentTarget.value = values.color.toUpperCase();
-                return;
-              }
-              preview({ color });
-              commit();
-            }}
-          />
-        </div>
-      </div>
-
-      {SLIDERS.map(({ key, label }) => (
-        <div key={key}>
-          <div className="mb-2 flex items-center justify-between text-[0.6875rem] text-muted-foreground">
-            <span>{label}</span>
-            <span className="text-foreground tabular-nums">
-              {values[key].toFixed(2)}
-            </span>
-          </div>
-          <Slider
-            aria-label={label}
-            min={0}
-            max={1}
-            step={0.01}
-            // 배열로 넘긴다 — 숫자 하나를 넘기면 shadcn Slider가 thumb을 두 개 그린다
-            value={[values[key]]}
-            onValueChange={(value) => preview({ [key]: firstValue(value) })}
-            onValueCommitted={commit}
-          />
-        </div>
-      ))}
+      <ColorField
+        label="기본색"
+        value={values.color}
+        history={history}
+        onPreview={(color) => preview({ color })}
+        onCommit={commit}
+        onCancel={cancel}
+      />
+      <SliderField
+        label="메탈릭"
+        value={values.metallic}
+        disabled={!lit}
+        onPreview={(metallic) => preview({ metallic })}
+        onCommit={commit}
+      />
+      <SliderField
+        label="거칠기"
+        value={values.roughness}
+        disabled={!lit}
+        onPreview={(roughness) => preview({ roughness })}
+        onCommit={commit}
+      />
+      <ColorField
+        label="발광색"
+        value={values.emissive}
+        history={history}
+        onPreview={(emissive) => preview({ emissive })}
+        onCommit={commit}
+        onCancel={cancel}
+      />
+      <SliderField
+        label="불투명도"
+        value={values.alpha}
+        onPreview={(alpha) => preview({ alpha })}
+        onCommit={commit}
+      />
+      <label className="flex items-center justify-between text-[0.6875rem] text-muted-foreground">
+        조명 무시
+        <Switch
+          size="sm"
+          checked={values.unlit}
+          onCheckedChange={(unlit) => {
+            preview({ unlit });
+            commit();
+          }}
+        />
+      </label>
     </div>
   );
 }

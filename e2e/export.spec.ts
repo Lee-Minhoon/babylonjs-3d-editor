@@ -1,6 +1,8 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import {
+  fileMenu,
+  inspectPng,
   mockFileSystem,
   openEditor,
   placePreset,
@@ -13,11 +15,6 @@ test.beforeEach(async ({ page }) => {
   await mockFileSystem(page);
   await openEditor(page);
 });
-
-async function fileMenu(page: Page, item: string | RegExp) {
-  await page.getByRole("menuitem", { name: "파일", exact: true }).click();
-  await page.getByRole("menuitem", { name: item }).click();
-}
 
 test("glTF(.glb)로 내보내기는 GLB 파일을 저장하고 씬·히스토리는 그대로 둔다", async ({
   page,
@@ -38,40 +35,6 @@ test("glTF(.glb)로 내보내기는 GLB 파일을 저장하고 씬·히스토리
   // 내보내기는 씬 파일 저장이 아니다 — 저장 안 된 변경 표시가 남는다
   await expect(page.getByLabel("저장되지 않은 변경 사항")).toBeVisible();
 });
-
-/** 저장된 PNG를 읽어 크기·배경색·위/아래 절반의 "배경이 아닌" 픽셀 수를 센다 */
-function inspectPng(page: Page, name: string) {
-  return page.evaluate(async (fileName) => {
-    const blob = (window as unknown as { __blobs: Record<string, Blob> })
-      .__blobs[fileName];
-    const image = await createImageBitmap(blob);
-    const canvas = new OffscreenCanvas(image.width, image.height);
-    const context = canvas.getContext("2d")!;
-    context.drawImage(image, 0, 0);
-    const { data } = context.getImageData(0, 0, image.width, image.height);
-    const background = [...data.slice(0, 3)];
-    const half = (image.height / 2) * image.width;
-    let top = 0;
-    let bottom = 0;
-    for (let i = 0; i < image.width * image.height; i++) {
-      const differs = [0, 1, 2].some(
-        (c) => Math.abs(data[i * 4 + c] - background[c]) > 24,
-      );
-      if (differs) {
-        if (i < half) top++;
-        else bottom++;
-      }
-    }
-    const viewport = document.querySelector("canvas")!;
-    return {
-      size: [image.width, image.height],
-      canvas: [viewport.width, viewport.height],
-      background,
-      top,
-      bottom,
-    };
-  }, name);
-}
 
 // WebGL 폴백에서도 같은 결과인지 (navigator.gpu를 없애면 엔진이 WebGL로 뜬다)
 for (const engine of ["WebGPU", "WebGL"] as const) {

@@ -5,7 +5,6 @@ import { useState } from "react";
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { CubeTexture } from "@babylonjs/core/Materials/Textures/cubeTexture";
-import { Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 
@@ -29,13 +28,17 @@ import { createPlacementTool, type PlacementTool } from "../lib/placement-tool";
 import { bindPointerRouter } from "../lib/pointer-router";
 import { createSceneExport, type SceneExport } from "../lib/scene-export";
 import { createSceneFile, type SceneFile } from "../lib/scene-file";
+import {
+  applySceneSettings,
+  DEFAULT_SCENE_SETTINGS,
+} from "../lib/scene-settings";
 import { createSelection, type Selection } from "../lib/selection";
 import { createShortcutHelp, type ShortcutHelp } from "../lib/shortcut-help";
 import { createToolState, type ToolState } from "../lib/tools";
 import { createTransformGizmo } from "../lib/transform-gizmo";
 
 function setupScene(scene: Scene): ArcRotateCamera {
-  scene.clearColor = new Color4(0.1, 0.1, 0.12, 1);
+  applySceneSettings(scene, DEFAULT_SCENE_SETTINGS);
 
   const camera = new ArcRotateCamera(
     "camera",

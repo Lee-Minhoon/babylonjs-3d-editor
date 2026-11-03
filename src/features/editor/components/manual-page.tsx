@@ -15,8 +15,13 @@ import {
   SHORTCUT_LABELS,
   VIEW_SHORTCUTS,
 } from "../lib/editor-shortcuts";
-import { DEFAULT_METALLIC, DEFAULT_ROUGHNESS } from "../lib/mesh-material";
+import { MATERIAL_DEFAULTS } from "../lib/mesh-material";
 import { MESH_PRESETS } from "../lib/mesh-presets";
+import {
+  DEFAULT_SCENE_SETTINGS,
+  SETTING_RANGES,
+  TONE_MAPPINGS,
+} from "../lib/scene-settings";
 import {
   DEFAULT_SNAP_STEPS,
   formatSnapStep,
@@ -38,6 +43,7 @@ const SECTIONS = [
   { id: "camera", title: "카메라" },
   { id: "transform", title: "변형 (위치·회전·크기)" },
   { id: "material", title: "머티리얼" },
+  { id: "scene-settings", title: "씬 설정 (배경·조명 느낌)" },
   { id: "object", title: "숨기기·잠금·정렬" },
   { id: "clipboard", title: "복사·붙여넣기·복제" },
   { id: "file", title: "저장·열기·내보내기" },
@@ -133,7 +139,7 @@ export function ManualPage() {
               <li>
                 <Term>오른쪽 속성 패널</Term>: 메쉬 하나를 골랐을 때
                 이름·위치·회전·크기·머티리얼을 편집합니다. 여러 개를 고르면
-                목록만 보입니다.
+                목록만 보입니다. 아무것도 고르지 않으면 씬 설정이 보입니다.
               </li>
             </List>
           </Section>
@@ -303,15 +309,64 @@ export function ManualPage() {
               </li>
               <li>
                 <Term>메탈릭</Term>: 0(비금속) ~ 1(금속), 기본{" "}
-                {DEFAULT_METALLIC}.
+                {MATERIAL_DEFAULTS.metallic}.
               </li>
               <li>
                 <Term>거칠기</Term>: 0(매끈, 선명한 반사) ~ 1(거칢), 기본{" "}
-                {DEFAULT_ROUGHNESS}.
+                {MATERIAL_DEFAULTS.roughness}.
+              </li>
+              <li>
+                <Term>발광색</Term>: 조명과 상관없이 더해지는 빛의 색.
+                검정(기본)이면 발광하지 않습니다. 주변을 밝히지는 않습니다.
+              </li>
+              <li>
+                <Term>불투명도</Term>: 1(불투명, 기본) ~ 0(완전히 투명). 1보다
+                작으면 반투명하게 그립니다. 반투명 메쉬끼리 서로 파고들면 앞뒤
+                순서가 어긋나 보일 수 있습니다.
+              </li>
+              <li>
+                <Term>조명 무시</Term>: 켜면 조명·환경 반사와 상관없이 기본색
+                그대로 보입니다 (표지판·단색 표시물용). 메탈릭·거칠기는 쓰이지
+                않습니다.
               </li>
               <li>
                 슬라이더를 놓거나 색 창을 닫을 때 실행 취소 한 번으로
                 기록됩니다.
+              </li>
+            </List>
+          </Section>
+
+          <Section id="scene-settings">
+            <p>
+              아무것도 선택하지 않으면 속성 패널이 씬 설정으로 바뀝니다. 씬
+              파일에 함께 저장되고, 바꾼 값은 실행 취소할 수 있습니다. 새 씬은
+              기본값으로 시작합니다.
+            </p>
+            <List>
+              <li>
+                <Term>배경색</Term>: 기본 {DEFAULT_SCENE_SETTINGS.background}.
+                바닥 격자에 가려서 화면에서는 지평선 위로 보이고, 스크린샷에서는
+                격자가 빠지므로 전체 배경이 됩니다.
+              </li>
+              <li>
+                <Term>환경광 세기</Term>: 환경 반사와 간접광의 세기 (0 ~{" "}
+                {SETTING_RANGES.environmentIntensity.max}, 기본{" "}
+                {DEFAULT_SCENE_SETTINGS.environmentIntensity}). 0이면 금속에
+                반사가 비치지 않습니다.
+              </li>
+              <li>
+                <Term>노출</Term>: 메쉬 전체의 밝기 배율 (0 ~{" "}
+                {SETTING_RANGES.exposure.max}, 기본{" "}
+                {DEFAULT_SCENE_SETTINGS.exposure}).
+              </li>
+              <li>
+                <Term>톤 매핑</Term>: 밝은 부분이 하얗게 날아가지 않게 색을 눌러
+                줍니다. {TONE_MAPPINGS.map(({ label }) => label).join(" · ")}.
+                기본은 없음입니다.
+              </li>
+              <li>
+                노출·톤 매핑은 메쉬에만 적용됩니다. 배경색과 바닥 격자는
+                그대로입니다.
               </li>
             </List>
           </Section>
@@ -400,9 +455,10 @@ export function ManualPage() {
               <li>
                 <Term>glTF(.glb)로 내보내기</Term>: Blender·게임 엔진·웹
                 뷰어에서 여는 표준 3D 파일입니다. 메쉬 이름·위치·회전·크기와
-                머티리얼(색·메탈릭·거칠기)이 들어갑니다. 숨긴 메쉬, 바닥 격자,
-                카메라·조명은 빠집니다. 이 파일은 에디터로 다시 열 수 없습니다 —
-                편집은 씬 파일(.json)로 이어 갑니다.
+                머티리얼(색·메탈릭·거칠기·발광색·불투명도·조명 무시)이
+                들어갑니다. 숨긴 메쉬, 바닥 격자, 카메라·조명, 씬 설정은
+                빠집니다. 이 파일은 에디터로 다시 열 수 없습니다 — 편집은 씬
+                파일(.json)로 이어 갑니다.
               </li>
               <li>
                 <Term>스크린샷 저장</Term>: 지금 시점을 PNG로 저장합니다. 바닥

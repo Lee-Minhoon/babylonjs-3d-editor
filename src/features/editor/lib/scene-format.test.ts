@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "vitest";
 
 import { getMeshFlag, setMeshFlag } from "./mesh-flags";
-import { getMaterialValues } from "./mesh-material";
+import { getMaterialValues, MATERIAL_DEFAULTS } from "./mesh-material";
 import { addPresetMesh, findPreset } from "./mesh-presets";
 import {
   clearEditorMeshes,
@@ -14,12 +14,25 @@ import {
   serializeScene,
   stringifySceneFile,
 } from "./scene-format";
+import {
+  applySceneSettings,
+  DEFAULT_SCENE_SETTINGS,
+  getSceneSettings,
+} from "./scene-settings";
 import { createTestScene } from "./test-scene";
 
 const scene = createTestScene();
-afterEach(() => clearEditorMeshes(scene));
+afterEach(() => {
+  clearEditorMeshes(scene);
+  applySceneSettings(scene, DEFAULT_SCENE_SETTINGS);
+});
 
-const gold = { color: "#D4AF37", metallic: 1, roughness: 0.15 };
+const gold = {
+  ...MATERIAL_DEFAULTS,
+  color: "#D4AF37",
+  metallic: 1,
+  roughness: 0.15,
+};
 
 function buildScene() {
   const box = addPresetMesh(scene, findPreset("box")!, gold);
@@ -100,6 +113,31 @@ describe("저장 → 열기 왕복", () => {
     expect(getMeshFlag(loadedSphere, "locked")).toBe(true);
   });
 
+  test("발광색·불투명도·조명 무시와 씬 설정이 그대로 돌아온다", () => {
+    const glass = {
+      ...gold,
+      emissive: "#FF8800",
+      alpha: 0.35,
+      unlit: true,
+    };
+    addPresetMesh(scene, findPreset("box")!, glass);
+    const settings = {
+      background: "#204060",
+      environmentIntensity: 0.4,
+      exposure: 1.5,
+      toneMapping: "aces",
+    } as const;
+    applySceneSettings(scene, settings);
+    const text = stringifySceneFile(serializeScene(scene));
+    clearEditorMeshes(scene);
+    applySceneSettings(scene, DEFAULT_SCENE_SETTINGS);
+
+    loadSceneFile(scene, parseSceneFile(text));
+    expect(getMaterialValues(getEditorMeshes(scene)[0])).toEqual(glass);
+    expect(getSceneSettings(scene)).toEqual(settings);
+    expect(scene.imageProcessingConfiguration.toneMappingEnabled).toBe(true);
+  });
+
   test("연 뒤 새로 만드는 메쉬는 파일 속 번호 다음부터", () => {
     loadSceneFile(
       scene,
@@ -123,9 +161,8 @@ describe("v1 파일 변환", () => {
     );
     expect(parsed.version).toBe(SCENE_FILE_VERSION);
     expect(parsed.meshes[0].material).toEqual({
+      ...MATERIAL_DEFAULTS,
       color: "#FF0000",
-      metallic: 0,
-      roughness: 0.5,
     });
     expect(parsed.meshes[1].material).toBeNull();
   });
@@ -141,6 +178,40 @@ describe("v2 파일 변환", () => {
     const [box] = getEditorMeshes(scene);
     expect(box.isVisible).toBe(true);
     expect(getMeshFlag(box, "locked")).toBe(false);
+  });
+});
+
+describe("v3 파일 변환", () => {
+  test("settings가 없으면 기본 설정, 머티리얼은 발광 없음·불투명·조명 받음", () => {
+    const { material, ...rest } = validMesh;
+    const v3Material = {
+      color: material.color,
+      metallic: material.metallic,
+      roughness: material.roughness,
+    };
+    const parsed = parseSceneFile(
+      file(
+        [{ ...rest, material: v3Material, hidden: false, locked: false }],
+        3,
+      ),
+    );
+    expect(parsed.version).toBe(SCENE_FILE_VERSION);
+    expect(parsed.settings).toEqual(DEFAULT_SCENE_SETTINGS);
+    expect(parsed.meshes[0].material).toEqual({
+      ...MATERIAL_DEFAULTS,
+      ...v3Material,
+    });
+  });
+
+  test("다른 설정에서 v3 파일을 열면 기본 설정으로 돌아간다", () => {
+    applySceneSettings(scene, {
+      ...DEFAULT_SCENE_SETTINGS,
+      exposure: 2,
+      toneMapping: "neutral",
+    });
+    loadSceneFile(scene, parseSceneFile(file([validMesh], 3)));
+    expect(getSceneSettings(scene)).toEqual(DEFAULT_SCENE_SETTINGS);
+    expect(scene.imageProcessingConfiguration.toneMappingEnabled).toBe(false);
   });
 });
 
@@ -170,6 +241,41 @@ describe("잘못된 파일은 SceneFileError (씬을 바꾸기 전에 거른다)
       "metallic",
     ],
     ["숨김 값", file([{ ...validMesh, hidden: "yes" }]), "hidden"],
+    [
+      "불투명도 범위",
+      file([{ ...validMesh, material: { ...gold, alpha: 1.5 } }]),
+      "alpha",
+    ],
+    [
+      "발광색 형식",
+      file([{ ...validMesh, material: { ...gold, emissive: "orange" } }]),
+      "emissive",
+    ],
+    [
+      "조명 무시 값",
+      file([{ ...validMesh, material: { ...gold, unlit: 1 } }]),
+      "unlit",
+    ],
+    [
+      "모르는 톤 매핑",
+      JSON.stringify({
+        format: SCENE_FILE_FORMAT,
+        version: SCENE_FILE_VERSION,
+        settings: { toneMapping: "filmic" },
+        meshes: [],
+      }),
+      "toneMapping",
+    ],
+    [
+      "음수 노출",
+      JSON.stringify({
+        format: SCENE_FILE_FORMAT,
+        version: SCENE_FILE_VERSION,
+        settings: { exposure: -1 },
+        meshes: [],
+      }),
+      "exposure",
+    ],
     [
       "색 형식",
       file([{ ...validMesh, material: { ...gold, color: "red" } }]),

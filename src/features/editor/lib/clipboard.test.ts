@@ -12,7 +12,14 @@ import { addPresetMesh, findPreset } from "./mesh-presets";
 import { createTestScene } from "./test-scene";
 
 const scene = createTestScene();
-const material = { color: "#3366AA", metallic: 0.2, roughness: 0.8 };
+const material = {
+  color: "#3366AA",
+  metallic: 0.2,
+  roughness: 0.8,
+  emissive: "#112233",
+  alpha: 0.5,
+  unlit: true,
+};
 
 function createSource() {
   const mesh = addPresetMesh(scene, findPreset("cone")!, material);
