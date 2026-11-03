@@ -11,7 +11,11 @@ import type { History } from "../lib/history";
 /*
  * 속성 패널의 값 입력 (머티리얼·씬 설정 공통). 미리보기·커밋은 부모의 usePreviewEdit가 맡고,
  * 여기는 입력 방식별로 언제 미리보고 언제 커밋하는지만 정한다.
+ * mixed: 여러 메쉬의 값이 서로 다르다 → "—"로 보이고, 값을 넣으면 모두 그 값이 된다.
  */
+
+/** 여러 메쉬의 값이 다를 때 보이는 글자 */
+export const MIXED_LABEL = "—";
 
 /** "#abc123" / "abc123" → "#ABC123". 잘못된 값이면 null */
 function normalizeHex(text: string): string | null {
@@ -46,6 +50,7 @@ export function FieldLabel({
 export function ColorField({
   label,
   value,
+  mixed = false,
   history,
   disabled,
   onPreview,
@@ -53,7 +58,9 @@ export function ColorField({
   onCancel,
 }: {
   label: string;
+  /** 색 고르기 창에 보일 값 (mixed면 첫 메쉬의 값) */
   value: string;
+  mixed?: boolean;
   history: History;
   disabled?: boolean;
   onPreview: (color: string) => void;
@@ -72,7 +79,7 @@ export function ColorField({
     return () => input.removeEventListener("change", onCommit);
   });
 
-  const shown = value.toUpperCase();
+  const shown = mixed ? "" : value.toUpperCase();
 
   return (
     <div>
@@ -89,11 +96,12 @@ export function ColorField({
         />
         {/* key: 값이 밖에서 바뀌면(undo·색상 창) 입력 중이던 텍스트를 버리고 새 값을 보인다 */}
         <Input
-          key={value}
+          key={mixed ? MIXED_LABEL : value}
           aria-label={`${label} hex`}
           className="font-mono uppercase tabular-nums"
           disabled={disabled}
           defaultValue={shown}
+          placeholder={MIXED_LABEL}
           spellCheck={false}
           onKeyDown={(event) => {
             const input = event.currentTarget;
@@ -104,7 +112,9 @@ export function ColorField({
             } else if (
               // 입력 중인 글자가 있으면 ⌘Z는 그 글자만 되돌린다 (히스토리 undo가 아니라)
               handleFieldHistoryKey(event, history, () => {
-                if (normalizeHex(input.value) !== shown) {
+                if (
+                  (normalizeHex(input.value) ?? input.value.trim()) !== shown
+                ) {
                   input.value = shown;
                   return true;
                 }
@@ -133,6 +143,7 @@ export function ColorField({
 export function SliderField({
   label,
   value,
+  mixed = false,
   min = 0,
   max = 1,
   step = 0.01,
@@ -141,7 +152,9 @@ export function SliderField({
   onCommit,
 }: {
   label: string;
+  /** 슬라이더 위치 (mixed면 첫 메쉬의 값) */
   value: number;
+  mixed?: boolean;
   min?: number;
   max?: number;
   step?: number;
@@ -151,7 +164,9 @@ export function SliderField({
 }) {
   return (
     <div>
-      <FieldLabel value={value.toFixed(2)}>{label}</FieldLabel>
+      <FieldLabel value={mixed ? MIXED_LABEL : value.toFixed(2)}>
+        {label}
+      </FieldLabel>
       <Slider
         aria-label={label}
         min={min}
@@ -165,4 +180,18 @@ export function SliderField({
       />
     </div>
   );
+}
+
+/** 여러 값 중 첫 값과, 서로 다른 값이 섞였는지 (색은 대소문자 무시) */
+export function sharedValue<T, V>(
+  items: readonly T[],
+  read: (item: T) => V,
+): { value: V; mixed: boolean } {
+  const normalize = (value: V) =>
+    typeof value === "string" ? value.toLowerCase() : value;
+  const value = read(items[0]);
+  const mixed = items.some(
+    (item) => normalize(read(item)) !== normalize(value),
+  );
+  return { value, mixed };
 }

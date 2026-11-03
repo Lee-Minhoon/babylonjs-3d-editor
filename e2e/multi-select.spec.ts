@@ -127,3 +127,38 @@ test("묶음 복제는 서로의 간격을 유지하고, R로 묶음째 돌린�
   expect([d[0] - c[0], d[2] - c[2]]).toEqual([0, -2]);
   await expect(axisInput(page, "Y", "rotation")).toHaveValue("90");
 });
+
+test("여러 개를 함께 편집: 같은 값은 보이고 다른 값은 —, 입력하면 모두 바뀌고 undo 한 번", async ({
+  page,
+}) => {
+  await setPosition(page, "Box 1", -2, 1);
+  await setPosition(page, "Box 2", 3, 1);
+  await selectMesh(page, "Box 1");
+  await addToSelection(page, "Box 2");
+
+  const x = axisInput(page, "X", "position");
+  const z = axisInput(page, "Z", "position");
+  await expect(x).toHaveValue("");
+  await expect(x).toHaveAttribute("placeholder", "—");
+  await expect(z).toHaveValue("1");
+
+  await x.fill("5");
+  await x.press("Enter");
+  await expect(x).toHaveValue("5");
+  expect(await undoMenuText(page)).toContain("메쉬 2개 이동");
+
+  // 머티리얼도 함께: 거칠기만 바꾸면 각자의 색은 그대로
+  const hex = page.getByLabel("기본색 hex");
+  await expect(hex).toHaveValue("");
+  const roughness = page.getByRole("slider", { name: "거칠기" });
+  await roughness.focus();
+  await page.keyboard.press("End");
+  expect(await undoMenuText(page)).toContain("메쉬 2개 머티리얼");
+  await expect(hex).toHaveValue("");
+
+  await page.keyboard.press("Meta+z");
+  await page.keyboard.press("Meta+z");
+  await expect(x).toHaveValue("");
+  expect(await readPosition(page, "Box 1")).toEqual([-2, 0.5, 1]);
+  expect(await readPosition(page, "Box 2")).toEqual([3, 0.5, 1]);
+});

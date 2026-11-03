@@ -32,10 +32,11 @@ export function SceneSettingsSection({
 }) {
   const settings = useSceneSettings(scene);
   const { preview, commit, cancel } = usePreviewEdit({
-    get: () => getSceneSettings(scene),
-    apply: (next) => applySceneSettings(scene, next),
+    targets: [scene],
+    get: getSceneSettings,
+    apply: applySceneSettings,
     isSame: isSameSceneSettings,
-    record: (before, after) =>
+    record: ([{ before, after }]) =>
       history.execute(createSceneSettingsCommand(scene, before, after)),
   });
 

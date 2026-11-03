@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { type ReactNode, useRef } from "react";
 
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { NumberField } from "@base-ui/react/number-field";
@@ -10,9 +10,9 @@ import { Separator } from "@/components/ui/separator";
 
 import { useSelection } from "../hooks/use-editor-state";
 import { useMeshName } from "../hooks/use-mesh-name";
-import { useMeshTransform } from "../hooks/use-mesh-transform";
+import { useMeshTransforms } from "../hooks/use-mesh-transform";
 import { getShortcutKey, handleFieldHistoryKey } from "../lib/editor-shortcuts";
-import type { History } from "../lib/history";
+import { createMacroCommand, type History, macroLabel } from "../lib/history";
 import { MESH_NAME_INPUT_ID } from "../lib/mesh-name";
 import {
   applyTransform,
@@ -26,12 +26,15 @@ import {
   setTransformAxis,
   TRANSFORM_KIND,
   type TransformField,
+  type TransformValues,
 } from "../lib/transform-values";
 import type { EditorRuntime } from "./editor-viewport";
+import { HistoryPanel } from "./history-panel";
 import { MaterialSection } from "./material-section";
 import { MeshNameInput } from "./mesh-name-input";
 import { MeshIcon } from "./preset-icons";
 import { SceneSettingsSection } from "./scene-settings-section";
+import { MIXED_LABEL } from "./value-fields";
 
 const AXES = [
   { axis: 0, label: "X", color: "text-red-400" },
@@ -65,25 +68,40 @@ const FIELDS: {
 
 /** 표시 자릿수. 입력·스크럽 값도 이 자릿수로 반올림된다. */
 const FORMAT: Intl.NumberFormatOptions = { maximumFractionDigits: 3 };
+const roundForDisplay = (n: number) => Math.round(n * 1000) / 1000;
+
+/** 메쉬들의 한 축 값. 보이는 자릿수로 서로 다르면 null ("—") */
+function sharedAxisValue(
+  values: readonly TransformValues[],
+  field: TransformField,
+  axis: Axis,
+): number | null {
+  const first = roundForDisplay(values[0][field][axis]);
+  return values.every((value) => roundForDisplay(value[field][axis]) === first)
+    ? values[0][field][axis]
+    : null;
+}
 
 type AxisFieldProps = {
-  mesh: AbstractMesh;
+  meshes: readonly AbstractMesh[];
   history: History;
   field: TransformField;
   axis: Axis;
   label: string;
   color: string;
-  value: number;
+  /** 메쉬마다 값이 다르면 null — "—"로 보이고, 값을 넣으면 모두 그 값이 된다 */
+  value: number | null;
   steps: Pick<(typeof FIELDS)[number], "step" | "smallStep" | "largeStep">;
 };
 
 /**
  * 한 축 입력. 편집 중(타이핑·스크럽·화살표)에는 메쉬에 바로 적용해 미리보고,
  * 커밋(blur·Enter·스크럽 놓기) 시점에 편집 시작 전 상태와 비교해 Command 하나로 기록한다.
+ * 여러 메쉬면 모두 그 축만 같은 값으로 바꾸고, 달라진 메쉬들을 Command 하나로 묶는다.
  * Esc는 편집 시작 전 값으로 되돌린다.
  */
 function AxisField({
-  mesh,
+  meshes,
   history,
   field,
   axis,
@@ -92,7 +110,7 @@ function AxisField({
   value,
   steps,
 }: AxisFieldProps) {
-  const before = useRef<TransformSnapshot | null>(null);
+  const before = useRef<Map<AbstractMesh, TransformSnapshot> | null>(null);
   /**
    * Esc로 취소 중. Base UI는 blur 때 입력창 글자를 다시 읽어 onValueChange·onValueCommitted를 부르므로,
    * 타이핑 직후 바로 Esc를 누르면(아직 onValueChange 전) 취소한 값이 그대로 커밋될 수 있다 → 그동안 무시한다.
@@ -100,25 +118,27 @@ function AxisField({
   const cancelling = useRef(false);
 
   const commit = () => {
-    if (!before.current) return;
-    const after = captureTransform(mesh);
-    if (!isSameTransform(before.current, after)) {
-      history.execute(
-        createTransformCommand(
-          mesh,
-          TRANSFORM_KIND[field],
-          before.current,
-          after,
-        ),
-      );
-    }
+    const started = before.current;
     before.current = null;
+    if (!started) return;
+    const kind = TRANSFORM_KIND[field];
+    const commands = [...started].flatMap(([mesh, previous]) => {
+      const after = captureTransform(mesh);
+      return isSameTransform(previous, after)
+        ? []
+        : [createTransformCommand(mesh, kind, previous, after)];
+    });
+    if (commands.length > 0) {
+      history.execute(createMacroCommand(macroLabel(commands, kind), commands));
+    }
   };
 
   /** 편집 취소: 시작 전 상태로 되돌리고 기록하지 않는다 */
   const revert = () => {
     if (!before.current) return;
-    applyTransform(mesh, before.current);
+    for (const [mesh, previous] of before.current) {
+      applyTransform(mesh, previous);
+    }
     before.current = null;
   };
 
@@ -143,8 +163,10 @@ function AxisField({
       onValueChange={(next) => {
         if (cancelling.current) return;
         if (next === null || !Number.isFinite(next)) return;
-        before.current ??= captureTransform(mesh);
-        setTransformAxis(mesh, field, axis, next);
+        before.current ??= new Map(
+          meshes.map((mesh) => [mesh, captureTransform(mesh)]),
+        );
+        for (const mesh of meshes) setTransformAxis(mesh, field, axis, next);
       }}
       onValueCommitted={() => {
         if (cancelling.current) {
@@ -165,7 +187,8 @@ function AxisField({
         </NumberField.ScrubArea>
         <NumberField.Input
           aria-label={`${label} ${field}`}
-          className="h-full w-full min-w-0 bg-transparent px-1.5 text-right text-xs tabular-nums outline-none"
+          placeholder={MIXED_LABEL}
+          className="h-full w-full min-w-0 bg-transparent px-1.5 text-right text-xs tabular-nums outline-none placeholder:text-muted-foreground"
           onKeyDown={(event) => {
             const key = getShortcutKey(event);
 
@@ -190,13 +213,13 @@ function AxisField({
 }
 
 function TransformSection({
-  mesh,
+  meshes,
   history,
 }: {
-  mesh: AbstractMesh;
+  meshes: readonly AbstractMesh[];
   history: History;
 }) {
-  const values = useMeshTransform(mesh);
+  const values = useMeshTransforms(meshes);
 
   return (
     <div className="space-y-3">
@@ -209,13 +232,13 @@ function TransformSection({
             {AXES.map(({ axis, label: axisLabel, color }) => (
               <AxisField
                 key={axis}
-                mesh={mesh}
+                meshes={meshes}
                 history={history}
                 field={field}
                 axis={axis}
                 label={axisLabel}
                 color={color}
-                value={values[field][axis]}
+                value={sharedAxisValue(values, field, axis)}
                 steps={steps}
               />
             ))}
@@ -234,16 +257,20 @@ function MeshNameLabel({ mesh }: { mesh: AbstractMesh }) {
   return <span className="truncate">{useMeshName(mesh)}</span>;
 }
 
-/** 여러 개 선택: 목록만 보여준다 (함께 편집은 아직 없음, 기즈모로는 함께 움직인다) */
-function MultiSelectionSummary({
-  meshes,
-}: {
-  meshes: readonly AbstractMesh[];
-}) {
+function SectionTitle({ children }: { children: ReactNode }) {
   return (
-    <div className="space-y-3 p-3">
+    <h3 className="mb-2 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground uppercase">
+      {children}
+    </h3>
+  );
+}
+
+/** 여러 개 선택의 머리: 개수와 메쉬 목록 */
+function MultiSelectionHeader({ meshes }: { meshes: readonly AbstractMesh[] }) {
+  return (
+    <div className="space-y-2">
       <div className="text-sm font-medium">메쉬 {meshes.length}개 선택됨</div>
-      <ul className="space-y-1">
+      <ul className="max-h-28 space-y-1 overflow-y-auto">
         {meshes.map((mesh) => (
           <li key={mesh.uniqueId} className="flex items-center gap-2">
             <MeshIcon mesh={mesh} className="size-3.5 text-muted-foreground" />
@@ -251,18 +278,19 @@ function MultiSelectionSummary({
           </li>
         ))}
       </ul>
-      <p className="text-muted-foreground">
-        기즈모로 함께 이동·회전·크기 조절할 수 있습니다. 값을 직접 입력하려면
-        메쉬 하나만 선택하세요.
-      </p>
     </div>
   );
 }
 
-/** 속성 패널: 메쉬 하나면 변형 · 머티리얼, 여러 개면 목록, 선택이 없으면 씬 설정 */
+/**
+ * 속성 패널: 메쉬를 고르면 변형 · 머티리얼 (여러 개면 함께 편집 — 값이 다른 칸은 "—"),
+ * 선택이 없으면 씬 설정. 아래에는 히스토리 패널.
+ */
 export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
   const selected = useSelection(runtime);
   const mesh = selected.length === 1 ? selected[0] : null;
+  // key: 선택이 바뀌면 편집 중 상태(before)를 버린다
+  const selectionKey = selected.map(({ uniqueId }) => uniqueId).join(",");
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-l border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">
@@ -272,55 +300,52 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
         </h2>
       </div>
       <Separator />
-      {mesh && runtime ? (
+      {runtime && selected.length > 0 ? (
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-4 p-3">
-            <div className="flex items-center gap-2">
-              <MeshIcon
-                mesh={mesh}
-                className="size-4 shrink-0 text-muted-foreground"
-              />
-              <MeshNameInput
-                key={mesh.uniqueId}
-                id={MESH_NAME_INPUT_ID}
-                mesh={mesh}
-                history={runtime.history}
-                className="h-7 text-sm font-medium"
-              />
-            </div>
-            {/* key: 다른 메쉬를 선택하면 편집 중 상태(before)를 버린다 */}
+            {mesh ? (
+              <div className="flex items-center gap-2">
+                <MeshIcon
+                  mesh={mesh}
+                  className="size-4 shrink-0 text-muted-foreground"
+                />
+                <MeshNameInput
+                  key={mesh.uniqueId}
+                  id={MESH_NAME_INPUT_ID}
+                  mesh={mesh}
+                  history={runtime.history}
+                  className="h-7 text-sm font-medium"
+                />
+              </div>
+            ) : (
+              <MultiSelectionHeader meshes={selected} />
+            )}
             <TransformSection
-              key={mesh.uniqueId}
-              mesh={mesh}
+              key={selectionKey}
+              meshes={selected}
               history={runtime.history}
             />
             <p className="text-muted-foreground">
               축 이름(X/Y/Z)을 좌우로 드래그해 값을 조절할 수 있습니다.
+              {!mesh &&
+                ` 여러 개면 입력한 값이 모두에 들어갑니다 (값이 서로 다른 칸은 ${MIXED_LABEL}).`}
             </p>
             <Separator />
             <div>
-              <h3 className="mb-2 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground uppercase">
-                머티리얼
-              </h3>
+              <SectionTitle>머티리얼</SectionTitle>
               <MaterialSection
-                key={mesh.uniqueId}
-                mesh={mesh}
+                key={selectionKey}
+                meshes={selected}
                 history={runtime.history}
               />
             </div>
           </div>
         </ScrollArea>
-      ) : selected.length > 1 ? (
-        <ScrollArea className="min-h-0 flex-1">
-          <MultiSelectionSummary meshes={selected} />
-        </ScrollArea>
       ) : runtime ? (
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-4 p-3">
             <div>
-              <h3 className="mb-2 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground uppercase">
-                씬 설정
-              </h3>
+              <SectionTitle>씬 설정</SectionTitle>
               <SceneSettingsSection
                 scene={runtime.scene}
                 history={runtime.history}
@@ -331,7 +356,10 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
             </p>
           </div>
         </ScrollArea>
-      ) : null}
+      ) : (
+        <div className="flex-1" />
+      )}
+      <HistoryPanel runtime={runtime} />
     </aside>
   );
 }

@@ -28,7 +28,12 @@ import {
 
 const subscribeNoop = () => () => {};
 const getNull = () => null;
-const EMPTY_HISTORY: HistoryState = { undoLabel: null, redoLabel: null };
+const EMPTY_HISTORY: HistoryState = {
+  undoLabel: null,
+  redoLabel: null,
+  entries: [],
+  position: 0,
+};
 const getEmptyHistory = () => EMPTY_HISTORY;
 const getDefaultTool = (): TransformTool => DEFAULT_TOOL;
 const getFalse = () => false;

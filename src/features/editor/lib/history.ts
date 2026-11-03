@@ -18,12 +18,18 @@ export type Command = {
 export type HistoryState = {
   undoLabel: string | null;
   redoLabel: string | null;
+  /** 남아 있는 기록 라벨, 오래된 것부터 (되돌린 것 포함 — 히스토리 패널용) */
+  entries: readonly string[];
+  /** entries 중 적용된 개수. position 뒤의 항목은 되돌린 것(redo 가능) */
+  position: number;
 };
 
 export type History = {
   execute(command: Command): void;
   undo(): void;
   redo(): void;
+  /** position(적용된 개수)까지 한 번에 undo/redo 한다. 알림은 한 번 */
+  goTo(position: number): void;
   getState(): HistoryState;
   /**
    * 지금 히스토리 위치를 나타내는 값. 저장 시점의 값과 비교해(===) 변경 여부를 판단한다.
@@ -53,11 +59,21 @@ export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
   let base: HistoryMark = { base: true };
 
   // useSyncExternalStore용으로 변경 시에만 새 객체를 만든다
-  let state: HistoryState = { undoLabel: null, redoLabel: null };
+  let state: HistoryState = {
+    undoLabel: null,
+    redoLabel: null,
+    entries: [],
+    position: 0,
+  };
   const emit = () => {
     state = {
       undoLabel: undoStack.at(-1)?.label ?? null,
       redoLabel: redoStack.at(-1)?.label ?? null,
+      // redo 스택은 다음 것이 맨 위(끝)라 뒤집어 붙인다
+      entries: [...undoStack, ...redoStack.toReversed()].map(
+        (command) => command.label,
+      ),
+      position: undoStack.length,
     };
     listeners.emit();
   };
@@ -73,6 +89,22 @@ export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
     emit();
   };
 
+  /** 알림 없이 한 단계. 움직였으면 true */
+  const stepBack = () => {
+    const command = undoStack.pop();
+    if (!command) return false;
+    command.undo();
+    redoStack.push(command);
+    return true;
+  };
+  const stepForward = () => {
+    const command = redoStack.pop();
+    if (!command) return false;
+    command.execute();
+    undoStack.push(command);
+    return true;
+  };
+
   return {
     execute(command) {
       command.execute();
@@ -85,17 +117,19 @@ export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
       emit();
     },
     undo() {
-      const command = undoStack.pop();
-      if (!command) return;
-      command.undo();
-      redoStack.push(command);
-      emit();
+      if (stepBack()) emit();
     },
     redo() {
-      const command = redoStack.pop();
-      if (!command) return;
-      command.execute();
-      undoStack.push(command);
+      if (stepForward()) emit();
+    },
+    goTo(position) {
+      const total = undoStack.length + redoStack.length;
+      if (!Number.isInteger(position) || position < 0 || position > total) {
+        return;
+      }
+      if (position === undoStack.length) return;
+      while (undoStack.length > position) stepBack();
+      while (undoStack.length < position) stepForward();
       emit();
     },
     getState: () => state,
