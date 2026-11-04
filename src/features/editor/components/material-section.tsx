@@ -4,17 +4,11 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
 import { Switch } from "@/components/ui/switch";
 
-import { useMeshMaterials } from "../hooks/use-mesh-material";
-import { usePreviewEdit } from "../hooks/use-preview-edit";
+import { usePropertyValues } from "../hooks/use-property";
+import { usePropertyEdit } from "../hooks/use-property-edit";
 import { handleFieldHistoryKey, isTypingTarget } from "../lib/editor-shortcuts";
-import { createMacroCommand, type History, macroLabel } from "../lib/history";
-import {
-  applyMaterialValues,
-  createMaterialCommand,
-  getMaterialValues,
-  isSameMaterial,
-  type MaterialValues,
-} from "../lib/mesh-material";
+import type { History } from "../lib/history";
+import { materialProperty, type MaterialValues } from "../lib/mesh-material";
 import {
   ColorField,
   MIXED_LABEL,
@@ -36,21 +30,12 @@ export function MaterialSection({
   meshes: readonly AbstractMesh[];
   history: History;
 }) {
-  const materials = useMeshMaterials(meshes);
-  const { preview, commit, cancel } = usePreviewEdit({
-    targets: meshes,
-    get: getMaterialValues,
-    apply: applyMaterialValues,
-    isSame: isSameMaterial,
-    record: (changes) => {
-      const commands = changes.map(({ target, before, after }) =>
-        createMaterialCommand(target, before, after),
-      );
-      history.execute(
-        createMacroCommand(macroLabel(commands, "머티리얼"), commands),
-      );
-    },
-  });
+  const materials = usePropertyValues(materialProperty, meshes);
+  const { preview, commit, cancel } = usePropertyEdit(
+    materialProperty,
+    meshes,
+    history,
+  );
 
   if (materials.length === 0) return null;
   const field = <K extends keyof MaterialValues>(key: K) =>

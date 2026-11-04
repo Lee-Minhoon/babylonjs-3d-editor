@@ -4,21 +4,17 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
 import { Switch } from "@/components/ui/switch";
 
-import { useLightValues } from "../hooks/use-light-values";
-import { usePreviewEdit } from "../hooks/use-preview-edit";
+import { usePropertyValues } from "../hooks/use-property";
+import { usePropertyEdit } from "../hooks/use-property-edit";
 import {
-  applyLightValues,
-  createLightCommand,
   getLightKind,
-  getLightValues,
-  isSameLight,
   LIGHT_FIELDS,
   LIGHT_RANGES,
+  lightProperty,
   type LightValues,
 } from "../lib/editor-lights";
 import { handleFieldHistoryKey, isTypingTarget } from "../lib/editor-shortcuts";
-import { createMacroCommand, type History, macroLabel } from "../lib/history";
-import type { LightKind } from "../lib/mesh-presets";
+import type { History } from "../lib/history";
 import {
   ColorField,
   MIXED_LABEL,
@@ -38,26 +34,15 @@ export function LightSection({
   lights: readonly AbstractMesh[];
   history: History;
 }) {
-  const values = useLightValues(lights);
-  const { preview, commit, cancel } = usePreviewEdit({
-    targets: lights,
-    get: getLightValues,
-    apply: applyLightValues,
-    isSame: isSameLight,
-    record: (changes) => {
-      const commands = changes.map(({ target, before, after }) =>
-        createLightCommand(target, before, after),
-      );
-      history.execute(
-        createMacroCommand(macroLabel(commands, "조명"), commands),
-      );
-    },
-  });
+  const values = usePropertyValues(lightProperty, lights);
+  const { preview, commit, cancel } = usePropertyEdit(
+    lightProperty,
+    lights,
+    history,
+  );
 
   if (values.length === 0) return null;
-  const kinds = new Set(
-    lights.flatMap((mesh) => getLightKind(mesh) ?? []),
-  ) as Set<LightKind>;
+  const kinds = new Set(lights.flatMap((mesh) => getLightKind(mesh) ?? []));
   const shows = (field: "range" | "angle") =>
     [...kinds].some((kind) => LIGHT_FIELDS[kind].includes(field));
   // 세기 슬라이더는 고른 종류 중 가장 큰 범위로 (방향광 10, 점광원·스포트 100)

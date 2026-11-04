@@ -2,21 +2,12 @@
 
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
-import { useMeshShapes } from "../hooks/use-mesh-shape";
-import { usePreviewEdit } from "../hooks/use-preview-edit";
+import { usePropertyValues } from "../hooks/use-property";
+import { usePropertyEdit } from "../hooks/use-property-edit";
 import { handleFieldHistoryKey, isTypingTarget } from "../lib/editor-shortcuts";
-import { createMacroCommand, type History, macroLabel } from "../lib/history";
-import {
-  findPreset,
-  getPresetId,
-  getShapeParams,
-  type MeshPreset,
-} from "../lib/mesh-presets";
-import {
-  applyShapeParams,
-  createShapeCommand,
-  isSameShape,
-} from "../lib/mesh-shape";
+import type { History } from "../lib/history";
+import { findPreset, getPresetId, type MeshPreset } from "../lib/mesh-presets";
+import { shapeProperty } from "../lib/mesh-shape";
 import { sharedValue, SliderField } from "./value-fields";
 
 /** 고른 메쉬들이 모두 같은 프리셋이고 그 프리셋에 모양 값이 있으면 그 프리셋 */
@@ -43,21 +34,12 @@ export function ShapeSection({
   meshes: readonly AbstractMesh[];
   history: History;
 }) {
-  const shapes = useMeshShapes(meshes);
-  const { preview, commit, cancel } = usePreviewEdit({
-    targets: meshes,
-    get: getShapeParams,
-    apply: applyShapeParams,
-    isSame: isSameShape,
-    record: (changes) => {
-      const commands = changes.map(({ target, before, after }) =>
-        createShapeCommand(target, before, after),
-      );
-      history.execute(
-        createMacroCommand(macroLabel(commands, "모양"), commands),
-      );
-    },
-  });
+  const shapes = usePropertyValues(shapeProperty, meshes);
+  const { preview, commit, cancel } = usePropertyEdit(
+    shapeProperty,
+    meshes,
+    history,
+  );
 
   if (shapes.length === 0) return null;
 

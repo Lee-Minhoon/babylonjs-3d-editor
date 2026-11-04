@@ -2,16 +2,14 @@ import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imagePro
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
 
-import { createListeners } from "@/lib/listeners";
-
-import type { Command } from "./history";
+import { createEditableProperty } from "./editable-property";
 
 /*
  * 씬 환경 설정: 배경색 · 기본 조명 세기 · 환경광 세기 · 노출 · 톤 매핑. 씬 파일에 저장되고, 바꾸면 undo 대상이다.
  * 속성 패널은 아무것도 선택하지 않았을 때 이 설정을 보여준다.
  *
  * 값을 바꾸는 곳(미리보기·Command·새 씬·열기)은 모두 applySceneSettings를 거친다
- * → 패널은 onSceneSettingsChange 하나만 구독한다 (머티리얼과 같은 방식).
+ * → 패널은 onSceneSettingsChange 하나만 구독한다 (editable-property — 머티리얼과 같은 틀).
  * 노출·톤 매핑은 PBR 머티리얼에만 적용된다 — 배경색과 바닥 격자는 그대로다.
  */
 
@@ -63,53 +61,45 @@ const TONE_MAPPING_TYPES: Record<Exclude<ToneMapping, "none">, number> = {
 
 /** 적용한 값 (색을 Color4에서 다시 계산하면 반올림이 어긋날 수 있어 그대로 기억한다) */
 const appliedSettings = new WeakMap<Scene, SceneSettings>();
-const settingsChanged = createListeners();
 
-export function getSceneSettings(scene: Scene): SceneSettings {
-  return { ...(appliedSettings.get(scene) ?? DEFAULT_SCENE_SETTINGS) };
-}
-
-export function applySceneSettings(scene: Scene, settings: SceneSettings) {
-  const { r, g, b } = Color3.FromHexString(settings.background);
-  scene.clearColor = new Color4(r, g, b, 1);
-  scene.environmentIntensity = settings.environmentIntensity;
-  const ambient = scene.getLightByName(AMBIENT_LIGHT_NAME);
-  if (ambient) ambient.intensity = settings.ambientIntensity;
-  const imaging = scene.imageProcessingConfiguration;
-  imaging.exposure = settings.exposure;
-  imaging.toneMappingEnabled = settings.toneMapping !== "none";
-  if (settings.toneMapping !== "none") {
-    imaging.toneMappingType = TONE_MAPPING_TYPES[settings.toneMapping];
-  }
-  appliedSettings.set(scene, { ...settings });
-  settingsChanged.emit();
-}
-
-/** 씬 설정이 바뀌면 호출된다 */
-export const onSceneSettingsChange = settingsChanged.subscribe;
-
-export function isSameSceneSettings(
-  a: SceneSettings,
-  b: SceneSettings,
-): boolean {
-  return (
+/** 씬의 환경 설정 속성 (대상은 Scene — 적용 전이면 기본값). 편집 한 번 = Command 하나("씬 설정") */
+export const sceneSettingsProperty = createEditableProperty<
+  Scene,
+  SceneSettings
+>({
+  verb: "씬 설정",
+  label: () => "씬 설정",
+  read: (scene) => ({
+    ...(appliedSettings.get(scene) ?? DEFAULT_SCENE_SETTINGS),
+  }),
+  write(scene, settings) {
+    const { r, g, b } = Color3.FromHexString(settings.background);
+    scene.clearColor = new Color4(r, g, b, 1);
+    scene.environmentIntensity = settings.environmentIntensity;
+    const ambient = scene.getLightByName(AMBIENT_LIGHT_NAME);
+    if (ambient) ambient.intensity = settings.ambientIntensity;
+    const imaging = scene.imageProcessingConfiguration;
+    imaging.exposure = settings.exposure;
+    imaging.toneMappingEnabled = settings.toneMapping !== "none";
+    if (settings.toneMapping !== "none") {
+      imaging.toneMappingType = TONE_MAPPING_TYPES[settings.toneMapping];
+    }
+    appliedSettings.set(scene, { ...settings });
+  },
+  isSame: (a, b) =>
     a.background.toLowerCase() === b.background.toLowerCase() &&
     a.ambientIntensity === b.ambientIntensity &&
     a.environmentIntensity === b.environmentIntensity &&
     a.exposure === b.exposure &&
-    a.toneMapping === b.toneMapping
-  );
-}
+    a.toneMapping === b.toneMapping,
+});
 
-/** 편집 한 번 = Command 하나 */
-export function createSceneSettingsCommand(
-  scene: Scene,
-  before: SceneSettings,
-  after: SceneSettings,
-): Command {
-  return {
-    label: "씬 설정",
-    execute: () => applySceneSettings(scene, after),
-    undo: () => applySceneSettings(scene, before),
-  };
-}
+/** 읽기는 늘 값이 있다 (적용 전이면 기본값) */
+export const getSceneSettings = (scene: Scene): SceneSettings =>
+  sceneSettingsProperty.get(scene)!;
+export const {
+  apply: applySceneSettings,
+  onChange: onSceneSettingsChange,
+  isSame: isSameSceneSettings,
+  createCommand: createSceneSettingsCommand,
+} = sceneSettingsProperty;

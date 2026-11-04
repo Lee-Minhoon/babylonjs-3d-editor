@@ -15,9 +15,7 @@ import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
 import { ShadowOnlyMaterial } from "@babylonjs/materials/shadowOnly/shadowOnlyMaterial";
 
-import { createKeyedListeners } from "@/lib/listeners";
-
-import type { Command } from "./history";
+import { createMeshProperty } from "./editable-property";
 import { getMeshFlag, onMeshFlagChange } from "./mesh-flags";
 import type { MaterialValues } from "./mesh-material";
 import {
@@ -36,7 +34,7 @@ import {
  * → 선택·기즈모(이동·회전)·이름·숨기기·잠금·삭제·undo·씬 목록이 메쉬와 같은 경로로 동작한다.
  * 아이콘은 그림자를 드리우지 않고, 스크린샷·glTF·배치 표면·바닥에 붙이기 대상에서 빠진다 (isLightObject).
  *   - 숨기면 조명이 꺼진다. 씬에서 떼면(삭제·undo) 조명도 씬에서 뗀다 (detachFromScene·attachToScene).
- *   - 값을 바꾸는 곳(미리보기·Command·파일 열기)은 모두 applyLightValues를 거치고 패널은 onLightChange로 구독한다.
+ *   - 값을 바꾸는 곳(미리보기·Command·파일 열기)은 모두 applyLightValues를 거치고 패널은 onLightChange로 구독한다 (editable-property).
  *   - 그림자: 켜진 조명마다 ShadowGenerator. 드리우는 쪽은 보이는 에디터 메쉬 전부, 받는 쪽은 에디터 메쉬와
  *     바닥의 그림자 받이(격자 바로 위의 투명한 판 — GridMaterial은 그림자를 받지 못한다).
  * 씬 전체를 밝히는 기본 조명(반구광)은 에디터 객체가 아니라 씬 설정의 "기본 조명 세기"다.
@@ -107,11 +105,7 @@ type EditorLight = {
 };
 
 const editorLights = new WeakMap<AbstractMesh, EditorLight>();
-const lightChanged = createKeyedListeners<AbstractMesh>();
 const syncedScenes = new WeakSet<Scene>();
-
-/** 이 조명의 값이 바뀌면 호출된다 */
-export const onLightChange = lightChanged.subscribe;
 
 /** 조명 아이콘 메쉬의 종류. 조명이 아니면 null */
 export function getLightKind(mesh: AbstractMesh): LightKind | null {
@@ -119,24 +113,9 @@ export function getLightKind(mesh: AbstractMesh): LightKind | null {
   return (presetId && findPreset(presetId)?.light) || null;
 }
 
-export function getLightValues(mesh: AbstractMesh): LightValues | null {
-  const entry = editorLights.get(mesh);
-  return entry ? { ...entry.values } : null;
-}
-
 /** 지금 쓰는 Babylon 조명 (테스트·내보내기용) */
 export function getBabylonLight(mesh: AbstractMesh): ShadowLight | null {
   return editorLights.get(mesh)?.light ?? null;
-}
-
-export function isSameLight(a: LightValues, b: LightValues): boolean {
-  return (
-    a.color.toLowerCase() === b.color.toLowerCase() &&
-    a.intensity === b.intensity &&
-    a.range === b.range &&
-    a.angle === b.angle &&
-    a.shadows === b.shadows
-  );
 }
 
 function createBabylonLight(kind: LightKind, name: string, scene: Scene) {
@@ -204,7 +183,9 @@ function bindLightSync(scene: Scene) {
     const catcher = scene.getMeshByName(SHADOW_CATCHER_NAME);
     if (catcher) {
       catcher.setEnabled(catcherLight !== null);
-      (catcher.material as ShadowOnlyMaterial).activeLight = catcherLight!;
+      if (catcherLight) {
+        (catcher.material as ShadowOnlyMaterial).activeLight = catcherLight;
+      }
     }
   });
 }
@@ -255,12 +236,32 @@ function setValues(
   entry.values = { ...values };
 }
 
-export function applyLightValues(mesh: AbstractMesh, values: LightValues) {
-  const entry = editorLights.get(mesh);
-  if (!entry) return;
-  setValues(mesh, entry, values);
-  lightChanged.emit(mesh);
-}
+/** 조명 객체의 값 속성 (get은 조명이 아니면 null). 편집 한 번 = Command 하나("Point Light 1 조명") */
+export const lightProperty = createMeshProperty<LightValues>({
+  verb: "조명",
+  read(mesh) {
+    const entry = editorLights.get(mesh);
+    return entry ? { ...entry.values } : null;
+  },
+  write(mesh, values) {
+    const entry = editorLights.get(mesh);
+    if (entry) setValues(mesh, entry, values);
+  },
+  isSame: (a, b) =>
+    a.color.toLowerCase() === b.color.toLowerCase() &&
+    a.intensity === b.intensity &&
+    a.range === b.range &&
+    a.angle === b.angle &&
+    a.shadows === b.shadows,
+});
+
+export const {
+  get: getLightValues,
+  apply: applyLightValues,
+  onChange: onLightChange,
+  isSame: isSameLight,
+  createCommand: createLightCommand,
+} = lightProperty;
 
 /** 조명 객체를 원점에 만든다 (아이콘 메쉬 + Babylon 조명). 위치·회전은 호출하는 쪽이 정한다 */
 export function addLightObject(
@@ -287,8 +288,11 @@ export function addLightObject(
   };
   editorLights.set(mesh, entry);
   setValues(mesh, entry, values ?? LIGHT_DEFAULTS[kind]);
-  // 숨기면 조명도 꺼진다
-  onMeshFlagChange(mesh, () => light.setEnabled(!getMeshFlag(mesh, "hidden")));
+  // 숨기면 조명도 꺼진다. 구독은 메쉬와 함께 끝낸다 — 키드 리스너는 강한 참조라 안 풀면 해제된 조명이 메모리에 남는다
+  const unsubscribe = onMeshFlagChange(mesh, () =>
+    light.setEnabled(!getMeshFlag(mesh, "hidden")),
+  );
+  mesh.onDisposeObservable.addOnce(unsubscribe);
   return mesh;
 }
 
@@ -314,17 +318,4 @@ export function addPresetObject(
   return preset.light
     ? addLightObject(scene, preset, light ?? undefined, name)
     : addPresetMesh(scene, preset, material ?? undefined, name, shape);
-}
-
-/** 편집 한 번 = Command 하나 */
-export function createLightCommand(
-  mesh: AbstractMesh,
-  before: LightValues,
-  after: LightValues,
-): Command {
-  return {
-    label: `${mesh.name} 조명`,
-    execute: () => applyLightValues(mesh, after),
-    undo: () => applyLightValues(mesh, before),
-  };
 }

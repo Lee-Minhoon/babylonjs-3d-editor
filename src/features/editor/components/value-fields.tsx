@@ -9,7 +9,7 @@ import { handleFieldHistoryKey } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 
 /*
- * 속성 패널의 값 입력 (머티리얼·씬 설정 공통). 미리보기·커밋은 부모의 usePreviewEdit가 맡고,
+ * 속성 패널의 값 입력 (머티리얼·씬 설정 공통). 미리보기·커밋은 부모의 usePropertyEdit가 맡고,
  * 여기는 입력 방식별로 언제 미리보고 언제 커밋하는지만 정한다.
  * mixed: 여러 메쉬의 값이 서로 다르다 → "—"로 보이고, 값을 넣으면 모두 그 값이 된다.
  */

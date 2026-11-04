@@ -3,9 +3,7 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 
-import { createKeyedListeners } from "@/lib/listeners";
-
-import type { Command } from "./history";
+import { createMeshProperty } from "./editable-property";
 
 /*
  * 에디터 메쉬의 머티리얼 (PBR metallic-roughness 하나만 지원 — glTF와 같은 방식).
@@ -54,7 +52,6 @@ export function randomMaterialValues(): MaterialValues {
  * 머티리얼에서 다시 계산하지 않고 적용한 값을 그대로 기억한다.
  */
 const appliedValues = new WeakMap<PBRMaterial, MaterialValues>();
-const materialChanged = createKeyedListeners<AbstractMesh>();
 
 function getPBRMaterial(mesh: AbstractMesh): PBRMaterial | null {
   return mesh.material instanceof PBRMaterial ? mesh.material : null;
@@ -87,46 +84,31 @@ function setValues(material: PBRMaterial, values: MaterialValues) {
   appliedValues.set(material, { ...values });
 }
 
-/** 에디터 메쉬의 머티리얼 값. PBR 머티리얼이 아니면 null */
-export function getMaterialValues(mesh: AbstractMesh): MaterialValues | null {
-  const material = getPBRMaterial(mesh);
-  const values = material && appliedValues.get(material);
-  return values ? { ...values } : null;
-}
-
-export function applyMaterialValues(
-  mesh: AbstractMesh,
-  values: MaterialValues,
-) {
-  const material = getPBRMaterial(mesh);
-  if (!material) return;
-  setValues(material, values);
-  materialChanged.emit(mesh);
-}
-
-/** 이 메쉬의 머티리얼 값이 바뀌면 호출된다 */
-export const onMaterialChange = materialChanged.subscribe;
-
-export function isSameMaterial(a: MaterialValues, b: MaterialValues): boolean {
-  return (
+/** 메쉬의 머티리얼 속성 (get은 PBR 머티리얼이 아니면 null). 편집 한 번(색 고르기·슬라이더 놓기) = Command 하나 */
+export const materialProperty = createMeshProperty<MaterialValues>({
+  verb: "머티리얼",
+  read(mesh) {
+    const material = getPBRMaterial(mesh);
+    const values = material && appliedValues.get(material);
+    return values ? { ...values } : null;
+  },
+  write(mesh, values) {
+    const material = getPBRMaterial(mesh);
+    if (material) setValues(material, values);
+  },
+  isSame: (a, b) =>
     a.color.toLowerCase() === b.color.toLowerCase() &&
     a.metallic === b.metallic &&
     a.roughness === b.roughness &&
     a.emissive.toLowerCase() === b.emissive.toLowerCase() &&
     a.alpha === b.alpha &&
-    a.unlit === b.unlit
-  );
-}
+    a.unlit === b.unlit,
+});
 
-/** 편집 한 번(색 고르기·슬라이더 놓기) = Command 하나 */
-export function createMaterialCommand(
-  mesh: AbstractMesh,
-  before: MaterialValues,
-  after: MaterialValues,
-): Command {
-  return {
-    label: `${mesh.name} 머티리얼`,
-    execute: () => applyMaterialValues(mesh, after),
-    undo: () => applyMaterialValues(mesh, before),
-  };
-}
+export const {
+  get: getMaterialValues,
+  apply: applyMaterialValues,
+  onChange: onMaterialChange,
+  isSame: isSameMaterial,
+  createCommand: createMaterialCommand,
+} = materialProperty;

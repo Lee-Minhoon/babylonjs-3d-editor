@@ -7,15 +7,12 @@ import {
   NativeSelectOption,
 } from "@/components/ui/native-select";
 
-import { usePreviewEdit } from "../hooks/use-preview-edit";
-import { useSceneSettings } from "../hooks/use-scene-settings";
+import { usePropertyValue } from "../hooks/use-property";
+import { usePropertyEdit } from "../hooks/use-property-edit";
 import { handleFieldHistoryKey, isTypingTarget } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 import {
-  applySceneSettings,
-  createSceneSettingsCommand,
-  getSceneSettings,
-  isSameSceneSettings,
+  sceneSettingsProperty,
   SETTING_RANGES,
   TONE_MAPPINGS,
   type ToneMapping,
@@ -30,15 +27,13 @@ export function SceneSettingsSection({
   scene: Scene;
   history: History;
 }) {
-  const settings = useSceneSettings(scene);
-  const { preview, commit, cancel } = usePreviewEdit({
-    targets: [scene],
-    get: getSceneSettings,
-    apply: applySceneSettings,
-    isSame: isSameSceneSettings,
-    record: ([{ before, after }]) =>
-      history.execute(createSceneSettingsCommand(scene, before, after)),
-  });
+  const settings = usePropertyValue(sceneSettingsProperty, scene);
+  const { preview, commit, cancel } = usePropertyEdit(
+    sceneSettingsProperty,
+    [scene],
+    history,
+  );
+  if (!settings) return null; // 씬 설정은 늘 값이 있다 (적용 전이면 기본값)
 
   return (
     <div

@@ -86,6 +86,15 @@ describe("조명 객체", () => {
     expect(getBabylonLight(point)!.isEnabled()).toBe(true);
   });
 
+  test("해제한 조명은 숨김 알림을 더 받지 않는다 (구독이 남아 메모리에 붙잡히지 않게)", () => {
+    const point = addLightObject(scene, findPreset("point-light")!);
+    const light = getBabylonLight(point)!;
+    const setEnabled = vi.spyOn(light, "setEnabled");
+    point.dispose(false, true);
+    setMeshFlag(point, "hidden", true);
+    expect(setEnabled).not.toHaveBeenCalled();
+  });
+
   test("그림자를 켜면 생성기가 생기고, 끄면 없어진다", () => {
     const sun = addLightObject(scene, findPreset("directional-light")!);
     const light = getBabylonLight(sun)!;

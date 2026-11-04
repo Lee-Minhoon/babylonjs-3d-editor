@@ -38,7 +38,7 @@ describe("씬 설정", () => {
     const scene = createTestScene();
     applySceneSettings(scene, DEFAULT_SCENE_SETTINGS);
     const listener = vi.fn();
-    const unsubscribe = onSceneSettingsChange(listener);
+    const unsubscribe = onSceneSettingsChange(scene, listener);
     const command = createSceneSettingsCommand(
       scene,
       DEFAULT_SCENE_SETTINGS,
