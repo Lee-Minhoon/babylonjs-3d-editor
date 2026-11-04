@@ -99,6 +99,12 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       { action: "숨기기", keys: [L.hide] },
       { action: "숨긴 메쉬 모두 보이기", keys: [L.showAll] },
       { action: "바닥에 붙이기", keys: [L.dropToFloor], note: "맥: fn+→" },
+      {
+        action: "부모 지정",
+        keys: [L.parent],
+        note: "마지막에 고른 것이 부모",
+      },
+      { action: "부모 해제", keys: [L.unparent] },
     ],
   },
   {

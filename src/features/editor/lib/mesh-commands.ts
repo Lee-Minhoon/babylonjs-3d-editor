@@ -3,16 +3,30 @@ import type { Scene } from "@babylonjs/core/scene";
 
 import { attachToScene, detachFromScene } from "./editor-lights";
 import type { Command } from "./history";
+import { getEditorDescendants } from "./mesh-hierarchy";
 
 /*
  * 메쉬 생성/삭제 Command.
  * undo/redo 시 메쉬를 dispose 하지 않고 씬에서 떼었다 붙인다 (detachFromScene·attachToScene — 조명이면 조명도 같이).
  * → 객체가 그대로 유지되어 머티리얼·이후 추가될 속성을 다시 만들 필요가 없다.
  * 떼어둔 상태로 히스토리에서 빠지면(dispose) 그때 실제로 해제한다.
+ * 자식이 있으면 자손까지 함께 떼고 붙인다 (Unity처럼 부모를 지우면 자식도 지워진다).
+ * 함께 뗄 자손은 뗄 때 씬에 있는 것으로 정한다 — 먼저 따로 지운 자식이 부모 undo로 되살아나지 않게.
  */
 
+/** 이 객체와 씬에 있는 자손을 떼고, 뗀 목록을 돌려준다 */
+function detachTree(scene: Scene, mesh: AbstractMesh): AbstractMesh[] {
+  const tree = [mesh, ...getEditorDescendants(mesh)];
+  for (const item of tree) detachFromScene(scene, item);
+  return tree;
+}
+
+function attachTree(scene: Scene, tree: readonly AbstractMesh[]) {
+  for (const item of tree) attachToScene(scene, item);
+}
+
 function disposeMesh(mesh: AbstractMesh) {
-  // 두 번째 인자: 이 메쉬 전용 머티리얼/텍스처도 함께 해제
+  // 첫 인자 false: 자식(자손 객체·조명)도 함께. 두 번째 인자: 이 메쉬 전용 머티리얼/텍스처도 함께 해제
   mesh.dispose(false, true);
 }
 
@@ -32,6 +46,7 @@ export function createSpawnMeshCommand(
   fallbackName: string,
 ): SpawnMeshCommand {
   let mesh: AbstractMesh | null = null;
+  let tree: AbstractMesh[] = [];
   let inScene = false;
 
   return {
@@ -40,12 +55,12 @@ export function createSpawnMeshCommand(
     },
     getMesh: () => mesh,
     execute() {
-      if (mesh) attachToScene(scene, mesh);
+      if (mesh) attachTree(scene, tree);
       else mesh = spawn();
       inScene = true;
     },
     undo() {
-      if (mesh) detachFromScene(scene, mesh);
+      if (mesh) tree = detachTree(scene, mesh);
       inScene = false;
     },
     dispose() {
@@ -61,16 +76,17 @@ export function createRemoveMeshCommand(
   /** 히스토리 라벨 동사 (잘라내기 등) */
   verb = "삭제",
 ): Command {
+  let tree: AbstractMesh[] = [];
   let inScene = true;
 
   return {
     label: `${mesh.name} ${verb}`,
     execute() {
-      detachFromScene(scene, mesh);
+      tree = detachTree(scene, mesh);
       inScene = false;
     },
     undo() {
-      attachToScene(scene, mesh);
+      attachTree(scene, tree);
       inScene = true;
     },
     dispose() {

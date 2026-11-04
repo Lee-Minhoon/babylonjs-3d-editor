@@ -24,6 +24,7 @@ import {
   shapeParamsOf,
 } from "./mesh-presets";
 import { snapValue, type ToolState } from "./tools";
+import { applyTransform } from "./transform-command";
 
 /** 이 값 이상으로 위를 향한 면에만 쌓는다 (옆면/아랫면에 맞으면 바닥 평면으로 폴백) */
 const TOP_FACE_MIN_NORMAL_Y = 0.7;
@@ -186,6 +187,19 @@ export function createPlacementTool(
     return preview;
   }
 
+  /** 복사본의 자식 미리보기 (부모 미리보기의 자식, 원본 자식의 부모 기준 변형). 부모와 함께 켜지고 해제된다 */
+  function addChildPreviews(parent: Mesh, children: readonly MeshSnapshot[]) {
+    for (const child of children) {
+      const preset = findPreset(child.presetId);
+      if (!preset) continue;
+      const preview = createPreview(preset, child.shape);
+      preview.setEnabled(true); // 부모가 꺼져 있으면 같이 꺼진다
+      applyTransform(preview, child.transform);
+      preview.parent = parent;
+      addChildPreviews(preview, child.children);
+    }
+  }
+
   /**
    * 묶음의 오프셋을 정한다: 각 미리보기를 (돌리기 전) 원래 자리에 두고 전체 밑면 높이를 잰 뒤,
    * 기준점 = (첫 항목 X, 묶음 밑면 Y, 첫 항목 Z) 에서 각 메쉬 중심까지.
@@ -199,12 +213,15 @@ export function createPlacementTool(
       preview.position.copyFrom(position);
       preview.rotationQuaternion = null;
       preview.rotation.copyFrom(baseRotation);
-      preview.computeWorldMatrix(true);
-      preview.refreshBoundingInfo();
-      bottom = Math.min(
-        bottom,
-        preview.getBoundingInfo().boundingBox.minimumWorld.y,
-      );
+      // 자식 미리보기까지 (부모부터 계산해야 자식 월드 행렬이 맞다)
+      for (const part of [preview, ...preview.getChildMeshes(false)]) {
+        part.computeWorldMatrix(true);
+        part.refreshBoundingInfo({});
+        bottom = Math.min(
+          bottom,
+          part.getBoundingInfo().boundingBox.minimumWorld.y,
+        );
+      }
     }
     const first = entries[0].position;
     const anchor = new Vector3(first.x, bottom, first.z);
@@ -291,6 +308,7 @@ export function createPlacementTool(
       const preview = createPreview(preset, snapshot.shape);
       // 미리보기에 원본의 크기를 입힌다 (회전은 layoutItems·updatePreview)
       preview.scaling.copyFrom(snapshot.transform.scaling);
+      addChildPreviews(preview, snapshot.children);
       return [
         {
           snapshot,

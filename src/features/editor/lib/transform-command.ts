@@ -1,4 +1,8 @@
-import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
+import {
+  type Matrix,
+  Quaternion,
+  Vector3,
+} from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
 import type { Command } from "./history";
@@ -12,29 +16,41 @@ export type TransformSnapshot = {
 };
 
 /**
- * 항상 월드 기준 값을 담는다. 여러 개 선택 드래그 중에는 메쉬가 피벗의 자식이라 position 등이 로컬 값인데,
- * 그 사이 자동 저장이 직렬화하면 엉뚱한 위치가 남으므로 부모가 있으면 월드 행렬을 분해한다.
+ * 행렬을 이 메쉬의 위치·회전·크기로 분해한다. 회전은 메쉬의 지금 표현(쿼터니언/오일러)을 따른다.
+ * 전단(shear)이 있는 행렬은 TRS로 근사된다.
  */
+export function decomposeTransform(
+  mesh: AbstractMesh,
+  matrix: Matrix,
+): TransformSnapshot {
+  const position = new Vector3();
+  const scaling = new Vector3();
+  const quaternion = new Quaternion();
+  matrix.decompose(scaling, quaternion, position);
+  const usesQuaternion = mesh.rotationQuaternion !== null;
+  return {
+    position,
+    rotation: usesQuaternion ? Vector3.Zero() : quaternion.toEulerAngles(),
+    rotationQuaternion: usesQuaternion ? quaternion : null,
+    scaling,
+  };
+}
+
+/** 메쉬 자신의 값 (부모가 있으면 부모 기준) — 패널·파일·변형 Command가 쓰는 값 */
 export function captureTransform(mesh: AbstractMesh): TransformSnapshot {
-  if (mesh.parent) {
-    const position = new Vector3();
-    const scaling = new Vector3();
-    const quaternion = new Quaternion();
-    mesh.computeWorldMatrix(true).decompose(scaling, quaternion, position);
-    const usesQuaternion = mesh.rotationQuaternion !== null;
-    return {
-      position,
-      rotation: usesQuaternion ? Vector3.Zero() : quaternion.toEulerAngles(),
-      rotationQuaternion: usesQuaternion ? quaternion : null,
-      scaling,
-    };
-  }
   return {
     position: mesh.position.clone(),
     rotation: mesh.rotation.clone(),
     rotationQuaternion: mesh.rotationQuaternion?.clone() ?? null,
     scaling: mesh.scaling.clone(),
   };
+}
+
+/** 월드 기준 값 (복사본을 최상위에 놓을 때) */
+export function captureWorldTransform(mesh: AbstractMesh): TransformSnapshot {
+  return mesh.parent
+    ? decomposeTransform(mesh, mesh.computeWorldMatrix(true))
+    : captureTransform(mesh);
 }
 
 export function applyTransform(
@@ -60,7 +76,7 @@ function toQuaternion(snapshot: TransformSnapshot): Quaternion {
 
 /**
  * 같은 변형인지 — 숫자가 아니라 "같은 자세"로 비교한다.
- * setParent 왕복(여러 개 선택 드래그)이나 오일러↔쿼터니언 변환은 값을 비트 단위로 보존하지 않고,
+ * 행렬 분해(여러 개 선택 드래그·부모 바꾸기)나 오일러↔쿼터니언 변환은 값을 비트 단위로 보존하지 않고,
  * X=180°가 (0, 180, 180)처럼 다른 오일러로 돌아오기도 한다. 그런 차이로 Command를 만들면
  * 클릭만 해도 "이동"이 기록되고 undo 해도 아무것도 안 바뀐다.
  */

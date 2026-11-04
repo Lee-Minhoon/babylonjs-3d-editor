@@ -10,6 +10,11 @@ import {
   getLightValues,
   type LightValues,
 } from "./editor-lights";
+import {
+  getEditorChildren,
+  setMeshParent,
+  topLevelOnly,
+} from "./mesh-hierarchy";
 import { getMaterialValues, type MaterialValues } from "./mesh-material";
 import {
   findPreset,
@@ -21,12 +26,14 @@ import {
 import {
   applyTransform,
   captureTransform,
+  captureWorldTransform,
   type TransformSnapshot,
 } from "./transform-command";
 
 /**
  * 메쉬를 다시 만들 수 있는 데이터. 메쉬 객체가 아니라 데이터를 담아서
  * 잘라낸 원본이 나중에 완전히 해제돼도 붙여넣을 수 있다.
+ * 자식까지 담는다 (복사본도 같은 계층). 맨 위 변형은 월드 기준(복사본은 최상위에 놓인다), 자식은 부모 기준.
  */
 export type MeshSnapshot = {
   presetId: MeshPresetId;
@@ -37,39 +44,61 @@ export type MeshSnapshot = {
   shape: ShapeParams;
   /** 조명 값 (조명 객체만, 메쉬는 null) */
   light: LightValues | null;
+  /** 자식들 (변형은 이 객체 기준) */
+  children: MeshSnapshot[];
 };
 
-export function captureMeshSnapshot(mesh: AbstractMesh): MeshSnapshot | null {
+function capture(
+  mesh: AbstractMesh,
+  transform: TransformSnapshot,
+): MeshSnapshot | null {
   const presetId = getPresetId(mesh);
   if (!presetId) return null;
   return {
     presetId,
-    transform: captureTransform(mesh),
+    transform,
     material: getMaterialValues(mesh),
     shape: getShapeParams(mesh) ?? {},
     light: getLightValues(mesh),
+    children: getEditorChildren(mesh).flatMap(
+      (child) => capture(child, captureTransform(child)) ?? [],
+    ),
   };
 }
 
-/** 스냅샷으로 새 메쉬를 만들고 offset만큼 옮긴다. 이름은 새로 붙는다 ("Box 4" …). */
+export function captureMeshSnapshot(mesh: AbstractMesh): MeshSnapshot | null {
+  return capture(mesh, captureWorldTransform(mesh));
+}
+
+function createObject(scene: Scene, snapshot: MeshSnapshot): Mesh {
+  const preset = findPreset(snapshot.presetId);
+  if (!preset) throw new Error(`Unknown preset: ${snapshot.presetId}`);
+  const mesh = addPresetObject(scene, preset, snapshot);
+  applyTransform(mesh, snapshot.transform);
+  for (const child of snapshot.children) {
+    setMeshParent(createObject(scene, child), mesh);
+  }
+  return mesh;
+}
+
+/** 스냅샷으로 새 메쉬(와 자식들)를 최상위에 만들고 offset만큼 옮긴다. 이름은 새로 붙는다 ("Box 4" …). */
 export function createMeshFromSnapshot(
   scene: Scene,
   snapshot: MeshSnapshot,
   offset: Vector3,
 ): Mesh {
-  const preset = findPreset(snapshot.presetId);
-  if (!preset) throw new Error(`Unknown preset: ${snapshot.presetId}`);
-  const mesh = addPresetObject(scene, preset, snapshot);
-  applyTransform(mesh, snapshot.transform);
+  const mesh = createObject(scene, snapshot);
   mesh.position.addInPlace(offset);
   return mesh;
 }
 
-/** 에디터 메쉬들의 스냅샷 (에디터 메쉬가 아닌 것은 건너뛴다) */
+/** 에디터 메쉬들의 스냅샷 (에디터 메쉬가 아닌 것은 건너뛴다). 조상을 함께 고른 자식은 조상의 스냅샷에 들어간다 */
 export function captureMeshSnapshots(
   meshes: readonly AbstractMesh[],
 ): MeshSnapshot[] {
-  return meshes.flatMap((mesh) => captureMeshSnapshot(mesh) ?? []);
+  return topLevelOnly(meshes).flatMap(
+    (mesh) => captureMeshSnapshot(mesh) ?? [],
+  );
 }
 
 /**

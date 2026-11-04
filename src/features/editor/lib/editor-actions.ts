@@ -23,6 +23,7 @@ import {
   getMeshFlag,
   type MeshFlag,
 } from "./mesh-flags";
+import { createSetParentCommand, topLevelOnly } from "./mesh-hierarchy";
 import { createRenameCommand, MESH_NAME_INPUT_ID } from "./mesh-name";
 import { inCreationOrder, type MeshPreset } from "./mesh-presets";
 import type { PlacementTool } from "./placement-tool";
@@ -82,12 +83,16 @@ export function focusSelected({
   return focusCamera(camera, meshes);
 }
 
-/** 메쉬들을 삭제하는 Command 하나 (여러 개여도 undo 한 번). 비어 있으면 아무것도 하지 않는다 */
+/**
+ * 메쉬들을 삭제하는 Command 하나 (여러 개여도 undo 한 번). 비어 있으면 아무것도 하지 않는다.
+ * 자식은 부모와 함께 지워지므로 조상을 함께 고른 것은 따로 지우지 않는다.
+ */
 function removeMeshes(
   history: History,
-  meshes: readonly AbstractMesh[],
+  selected: readonly AbstractMesh[],
   verb: string,
 ): boolean {
+  const meshes = topLevelOnly(selected);
   if (meshes.length === 0) return false;
   const commands = meshes.map((mesh) =>
     createRemoveMeshCommand(mesh.getScene(), mesh, verb),
@@ -233,6 +238,33 @@ export function distributeSelected(
   axis: AlignAxis,
 ): boolean {
   return run(history, createDistributeCommand(selection.getMeshes(), axis));
+}
+
+/** 객체들을 parent의 자식으로 (null이면 최상위로). 씬 목록 끌어 놓기 — 월드 자세 유지, undo 가능 */
+export function setParentOf(
+  { history }: Pick<ActionContext, "history">,
+  meshes: readonly AbstractMesh[],
+  parent: AbstractMesh | null,
+): boolean {
+  return run(history, createSetParentCommand(meshes, parent));
+}
+
+/** P: 선택 중 마지막에 고른 것을 부모로, 나머지를 그 자식으로 (Blender의 "활성 객체" 방식) */
+export function parentSelected({
+  history,
+  selection,
+}: Pick<ActionContext, "history" | "selection">): boolean {
+  const meshes = selection.getMeshes();
+  if (meshes.length < 2) return false;
+  return setParentOf({ history }, meshes.slice(0, -1), meshes.at(-1)!);
+}
+
+/** ⌥P: 선택한 객체들의 부모를 해제해 최상위로 (월드 자세 유지) */
+export function unparentSelected({
+  history,
+  selection,
+}: Pick<ActionContext, "history" | "selection">): boolean {
+  return setParentOf({ history }, selection.getMeshes(), null);
 }
 
 /** 프리셋 배치 시작 (메뉴·검색형 추가 메뉴). 이미 그 프리셋으로 배치 중이면 그대로 둔다 — toggle과 달리 끄지 않는다 */

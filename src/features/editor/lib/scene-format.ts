@@ -4,18 +4,25 @@ import type { Scene } from "@babylonjs/core/scene";
 
 import type { FileTypeOptions } from "@/lib/file-access";
 
-import { captureMeshSnapshot } from "./clipboard";
 import {
   addPresetObject,
+  getLightValues,
   LIGHT_DEFAULTS,
   LIGHT_RANGES,
   type LightValues,
 } from "./editor-lights";
 import { getMeshFlag, setMeshFlag } from "./mesh-flags";
-import { MATERIAL_DEFAULTS, type MaterialValues } from "./mesh-material";
+import { getEditorParent, setMeshParent } from "./mesh-hierarchy";
+import {
+  getMaterialValues,
+  MATERIAL_DEFAULTS,
+  type MaterialValues,
+} from "./mesh-material";
 import {
   ALL_PRESETS,
   findPreset,
+  getPresetId,
+  getShapeParams,
   inCreationOrder,
   type LightKind,
   type MeshPreset,
@@ -31,6 +38,7 @@ import {
   type SceneSettings,
   TONE_MAPPINGS,
 } from "./scene-settings";
+import { captureTransform } from "./transform-command";
 
 /*
  * 씬 파일(.json) 형식. 에디터 메쉬는 모두 프리셋으로 만들어지므로
@@ -38,7 +46,7 @@ import {
  *
  *   {
  *     "format": "babylonjs-3d-editor/scene",
- *     "version": 5,
+ *     "version": 7,
  *     "settings": { "background": "#1A1A1F", "ambientIntensity": 1, "environmentIntensity": 1,
  *       "exposure": 1, "toneMapping": "none" },
  *     "meshes": [
@@ -46,8 +54,8 @@ import {
  *         "rotation": [0, 45, 0], "scaling": [1, 1, 1],
  *         "material": { "color": "#4F8EF7", "metallic": 0, "roughness": 0.5,
  *           "emissive": "#000000", "alpha": 1, "unlit": false },
- *         "hidden": false, "locked": false, "shape": {}, "light": null },
- *       { "presetId": "point-light", "name": "Point Light 1", …, "material": null,
+ *         "hidden": false, "locked": false, "shape": {}, "light": null, "parent": null },
+ *       { "presetId": "point-light", "name": "Point Light 1", …, "material": null, "parent": 0,
  *         "light": { "color": "#FFFFFF", "intensity": 10, "range": 10, "angle": 60, "shadows": false } }
  *     ]
  *   }
@@ -60,6 +68,8 @@ import {
  * shape는 프리셋 모양 값 (MeshPreset.params, 예: 원뿔 { "diameterTop": 0, "diameterBottom": 1, "tessellation": 24 }).
  * 빠진 키는 기본값, 범위 밖이나 그 프리셋에 없는 키는 오류.
  * 조명(presetId가 *-light)은 light 값을 가진다 (빠진 값은 그 종류의 기본값). 메쉬는 light가 null.
+ * parent는 부모의 meshes 배열 번호 (최상위는 null). 부모가 있으면 position·rotation·scaling은 부모 기준.
+ * 자기 자신·순환·범위 밖 번호는 오류.
  *
  * 버전 기록:
  *   v1  "color": "#RRGGBB" | null (StandardMaterial diffuse) → v2에서 material.color로 옮기고
@@ -68,12 +78,13 @@ import {
  *   v3  settings·material.emissive/alpha/unlit 없음 → v4에서 기본값
  *   v4  shape 없음 → v5에서 기본 모양 (지금까지 만든 모양과 같다)
  *   v5  조명 객체·light·settings.ambientIntensity 없음 → v6 (조명 없음, 기본 조명 세기 1)
+ *   v6  parent 없음 → v7 (모두 최상위)
  * 형식을 바꿀 땐 SCENE_FILE_VERSION을 올리고 parseSceneFile에서 이전 버전을 변환한다.
  * 메쉬에 새 속성을 추가하면 MeshSnapshot과 함께 여기도 넣어야 저장된다.
  */
 
 export const SCENE_FILE_FORMAT = "babylonjs-3d-editor/scene";
-export const SCENE_FILE_VERSION = 6;
+export const SCENE_FILE_VERSION = 7;
 
 export const SCENE_FILE_TYPE: FileTypeOptions = {
   description: "씬 파일",
@@ -94,6 +105,8 @@ export type SceneFileMesh = {
   locked: boolean;
   shape: ShapeParams;
   light: LightValues | null;
+  /** 부모의 meshes 번호. 최상위는 null */
+  parent: number | null;
 };
 
 export type SceneFileData = {
@@ -130,34 +143,34 @@ export function getEditorMeshes(scene: Scene): AbstractMesh[] {
 }
 
 export function serializeScene(scene: Scene): SceneFileData {
-  const meshes = getEditorMeshes(scene).flatMap((mesh): SceneFileMesh[] => {
-    const snapshot = captureMeshSnapshot(mesh);
-    if (!snapshot) return [];
-    const { transform } = snapshot;
+  const editorMeshes = getEditorMeshes(scene).filter(getPresetId);
+  const indexOf = new Map(editorMeshes.map((mesh, index) => [mesh, index]));
+  const meshes = editorMeshes.map((mesh): SceneFileMesh => {
+    // 부모가 있으면 부모 기준 값
+    const transform = captureTransform(mesh);
     // 회전 기즈모를 쓰면 rotationQuaternion이 생긴다 → 오일러로 바꿔 저장
     const rotation =
       transform.rotationQuaternion?.toEulerAngles() ?? transform.rotation;
-    return [
-      {
-        presetId: snapshot.presetId,
-        name: mesh.name,
-        position: toVec3(transform.position),
-        rotation: toVec3(rotation, DEGREES),
-        scaling: toVec3(transform.scaling),
-        material: snapshot.material && {
-          ...snapshot.material,
-          color: snapshot.material.color.toUpperCase(),
-          emissive: snapshot.material.emissive.toUpperCase(),
-        },
-        hidden: getMeshFlag(mesh, "hidden"),
-        locked: getMeshFlag(mesh, "locked"),
-        shape: snapshot.shape,
-        light: snapshot.light && {
-          ...snapshot.light,
-          color: snapshot.light.color.toUpperCase(),
-        },
+    const material = getMaterialValues(mesh);
+    const light = getLightValues(mesh);
+    const parent = getEditorParent(mesh);
+    return {
+      presetId: getPresetId(mesh)!,
+      name: mesh.name,
+      position: toVec3(transform.position),
+      rotation: toVec3(rotation, DEGREES),
+      scaling: toVec3(transform.scaling),
+      material: material && {
+        ...material,
+        color: material.color.toUpperCase(),
+        emissive: material.emissive.toUpperCase(),
       },
-    ];
+      hidden: getMeshFlag(mesh, "hidden"),
+      locked: getMeshFlag(mesh, "locked"),
+      shape: getShapeParams(mesh) ?? {},
+      light: light && { ...light, color: light.color.toUpperCase() },
+      parent: (parent && indexOf.get(parent)) ?? null,
+    };
   });
   const settings = getSceneSettings(scene);
   return {
@@ -264,6 +277,7 @@ function parseMesh(
   value: unknown,
   index: number,
   version: number,
+  count: number,
 ): SceneFileMesh {
   const where = `meshes[${index}]`;
   if (!isRecord(value)) throw new SceneFileError(`${where}가 객체가 아닙니다.`);
@@ -302,6 +316,20 @@ function parseMesh(
   }
 
   const preset = findPreset(presetId as MeshPresetId)!;
+  // v6 이하에는 없다
+  const parent = value.parent ?? null;
+  if (
+    parent !== null &&
+    (typeof parent !== "number" ||
+      !Number.isInteger(parent) ||
+      parent < 0 ||
+      parent >= count ||
+      parent === index)
+  ) {
+    throw new SceneFileError(
+      `${where}: parent는 다른 메쉬의 번호(0~${count - 1}) 또는 null이어야 합니다.`,
+    );
+  }
 
   return {
     presetId: presetId as MeshPresetId,
@@ -314,7 +342,20 @@ function parseMesh(
     locked: flags.locked as boolean,
     shape: parseShape(value.shape, preset, where),
     light: preset.light ? parseLight(value.light, preset.light, where) : null,
+    parent: parent as number | null,
   };
+}
+
+/** 부모를 따라 올라가다 자기에게 돌아오면 오류 */
+function checkParentCycles(meshes: readonly SceneFileMesh[]) {
+  meshes.forEach((_, start) => {
+    let steps = 0;
+    for (let i = meshes[start].parent; i !== null; i = meshes[i].parent) {
+      if (i === start || ++steps > meshes.length) {
+        throw new SceneFileError(`meshes[${start}]: parent가 순환합니다.`);
+      }
+    }
+  });
 }
 
 /** 조명 값. 빠진 값은 그 종류의 기본값 */
@@ -469,13 +510,16 @@ export function parseSceneFile(text: string): SceneFileData {
     throw new SceneFileError("meshes 배열이 없습니다.");
   }
 
+  const count = data.meshes.length;
+  const meshes = data.meshes.map((mesh, index) =>
+    parseMesh(mesh, index, data.version as number, count),
+  );
+  checkParentCycles(meshes);
   return {
     format: SCENE_FILE_FORMAT,
     version: SCENE_FILE_VERSION,
     settings: parseSettings(data.settings),
-    meshes: data.meshes.map((mesh, index) =>
-      parseMesh(mesh, index, data.version as number),
-    ),
+    meshes,
   };
 }
 
@@ -484,16 +528,19 @@ export function parseSceneFile(text: string): SceneFileData {
  * 히스토리를 비운 뒤에만 부른다 — 이 메쉬들을 가리키는 Command가 남아 있으면 안 된다.
  */
 export function clearEditorMeshes(scene: Scene) {
-  for (const mesh of getEditorMeshes(scene)) mesh.dispose(false, true);
+  // 부모를 해제하면 자식도 함께 해제된다
+  for (const mesh of getEditorMeshes(scene)) {
+    if (!mesh.isDisposed()) mesh.dispose(false, true);
+  }
   resetMeshNames(scene);
 }
 
 /** 파일 내용으로 씬 설정을 바꾸고 메쉬를 만든다 (비어 있는 씬에 부른다). 히스토리에는 기록하지 않는다. */
 export function loadSceneFile(scene: Scene, file: SceneFileData) {
   applySceneSettings(scene, file.settings);
-  for (const entry of file.meshes) {
+  const created = file.meshes.map((entry) => {
     const preset = findPreset(entry.presetId);
-    if (!preset) continue;
+    if (!preset) return null;
     const mesh = addPresetObject(scene, preset, entry);
     mesh.position = Vector3.FromArray(entry.position);
     mesh.rotationQuaternion = null;
@@ -501,5 +548,12 @@ export function loadSceneFile(scene: Scene, file: SceneFileData) {
     mesh.scaling = Vector3.FromArray(entry.scaling);
     setMeshFlag(mesh, "hidden", entry.hidden);
     setMeshFlag(mesh, "locked", entry.locked);
-  }
+    return mesh;
+  });
+  // 값은 이미 부모 기준이라 부모만 잇는다 (부모가 뒤에 나와도 되게 다 만든 뒤에)
+  file.meshes.forEach((entry, index) => {
+    const mesh = created[index];
+    const parent = entry.parent === null ? null : created[entry.parent];
+    if (mesh && parent) setMeshParent(mesh, parent);
+  });
 }

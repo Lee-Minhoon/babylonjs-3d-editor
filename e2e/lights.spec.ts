@@ -103,7 +103,7 @@ test("⇧A로 찾아 놓고, 그림자·기본 조명 세기는 파일에 저장
   await page.keyboard.press("Meta+s");
   await expect(page.getByText("scene.json 저장됨")).toBeVisible();
   const saved = JSON.parse(await readMockFile(page, "scene.json"));
-  expect(saved.version).toBe(6);
+  expect(saved.version).toBe(7);
   expect(saved.settings.ambientIntensity).toBe(0);
   expect(saved.meshes[0]).toMatchObject({
     presetId: "directional-light",

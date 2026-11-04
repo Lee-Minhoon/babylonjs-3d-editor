@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
 import { useSelection } from "../hooks/use-editor-state";
+import { useMeshHierarchy } from "../hooks/use-mesh-hierarchy";
 import { useMeshName } from "../hooks/use-mesh-name";
 import { useMeshTransforms } from "../hooks/use-mesh-transform";
 import { getShortcutKey, handleFieldHistoryKey } from "../lib/editor-shortcuts";
@@ -274,6 +275,22 @@ function SectionTitle({ children }: { children: ReactNode }) {
   );
 }
 
+/** 부모가 있으면 변형 값이 부모 기준이라고 알린다 */
+function ParentNote({ mesh }: { mesh: AbstractMesh }) {
+  const parent = useMeshHierarchy().getParent(mesh);
+  return parent ? <ParentNoteText parent={parent} /> : null;
+}
+
+function ParentNoteText({ parent }: { parent: AbstractMesh }) {
+  return (
+    <p className="text-muted-foreground">
+      위치·회전·크기는 부모{" "}
+      <span className="font-medium text-foreground">{useMeshName(parent)}</span>{" "}
+      기준입니다.
+    </p>
+  );
+}
+
 /** 여러 개 선택의 머리: 개수와 메쉬 목록 */
 function MultiSelectionHeader({ meshes }: { meshes: readonly AbstractMesh[] }) {
   return (
@@ -334,6 +351,7 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
             ) : (
               <MultiSelectionHeader meshes={selected} />
             )}
+            {mesh && <ParentNote mesh={mesh} />}
             <TransformSection
               key={selectionKey}
               meshes={selected}

@@ -1,10 +1,11 @@
 import { GizmoManager } from "@babylonjs/core/Gizmos/gizmoManager";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import type { Scene } from "@babylonjs/core/scene";
 
 import { createMacroCommand, type History, macroLabel } from "./history";
+import { getEditorParent, topLevelOnly } from "./mesh-hierarchy";
 import type { PlacementTool } from "./placement-tool";
 import type { Selection } from "./selection";
 import { type GizmoSpace, type ToolState, type TransformTool } from "./tools";
@@ -12,6 +13,7 @@ import {
   applyTransform,
   captureTransform,
   createTransformCommand,
+  decomposeTransform,
   isSameTransform,
   type TransformSnapshot,
 } from "./transform-command";
@@ -19,13 +21,14 @@ import {
 /**
  * 선택된 메쉬에 이동/회전/크기 기즈모를 붙인다.
  * 표시 조건: 선택된 메쉬가 있고, 도구가 move/rotate/scale이고, 배치 모드가 아닐 때.
- * 여러 개를 선택하면 묶음 중심의 피벗(TransformNode)에 기즈모를 붙이고, 드래그하는 동안만
- * 메쉬들을 피벗의 자식으로 만들어 함께 움직인다 (setParent는 월드 변형을 유지한다).
+ * 여러 개를 선택하면 묶음 중심의 피벗(TransformNode)에 기즈모를 붙이고, 드래그하는 동안
+ * 매 프레임 메쉬들을 피벗을 따라 옮긴다 (드래그 시작 때 피벗 기준 자세를 기억해 두고 다시 계산 — 부모는 그대로).
+ * 부모와 자식을 함께 골랐으면 자식은 부모를 따라가므로 부모만 옮긴다 (topLevelOnly).
  * 드래그가 끝날 때마다 변형 Command를 history에 한 번 기록한다 (여러 개면 묶어서 하나).
  *
- * 알려진 한계: 피벗을 회전·크기 조절하면 자식의 월드 행렬에 전단(shear)이 생길 수 있는데
- * (비균일 크기 + 피벗과 다른 축의 회전), 드래그 끝에 setParent(null)로 위치·회전·크기(TRS)만 남기므로
- * 그런 메쉬는 근사된다. 이동은 전단이 생기지 않아 정확하다.
+ * 알려진 한계: 피벗을 회전·크기 조절하면 메쉬의 월드 행렬에 전단(shear)이 생길 수 있는데
+ * (비균일 크기 + 피벗과 다른 축의 회전), 위치·회전·크기(TRS)로 분해하므로 그런 메쉬는 근사된다.
+ * 이동은 전단이 생기지 않아 정확하다.
  */
 export type TransformGizmo = {
   /** 커서가 기즈모 위에 있거나 드래그 중이면 true → 뷰포트 클릭을 기즈모가 가져간다 */
@@ -67,7 +70,9 @@ export function createTransformGizmo(
 
   /** 여러 개 선택용 피벗. 선택이 바뀔 때마다 묶음 중심으로 옮기고 회전·크기를 초기화한다 */
   const pivot = new TransformNode("__selection-pivot", scene);
-  let dragStart: { mesh: AbstractMesh; before: TransformSnapshot }[] | null =
+  /** offset: 드래그 시작 때 메쉬의 피벗 기준 행렬 (여러 개일 때만 쓴다) */
+  let dragStart:
+    { mesh: AbstractMesh; before: TransformSnapshot; offset: Matrix }[] | null =
     null;
   const observed = new WeakSet<DraggableGizmo>();
 
@@ -80,27 +85,26 @@ export function createTransformGizmo(
     observed.add(gizmo);
     gizmo.onDragStartObservable.add(() => {
       const meshes = selection.getMeshes();
-      dragStart = meshes.map((mesh) => ({
-        mesh,
-        before: captureTransform(mesh),
-      }));
-      if (meshes.length > 1) {
-        for (const mesh of meshes) mesh.setParent(pivot);
-      }
+      const pivotInverse = Matrix.Invert(pivot.computeWorldMatrix(true));
+      dragStart = (meshes.length > 1 ? topLevelOnly(meshes) : meshes).map(
+        (mesh) => ({
+          mesh,
+          before: captureTransform(mesh),
+          offset: mesh.computeWorldMatrix(true).multiply(pivotInverse),
+        }),
+      );
     });
     gizmo.onDragEndObservable.add(() => {
       if (!dragStart) return;
+      followPivot();
       const started = dragStart;
       dragStart = null;
-      if (started.length > 1) {
-        for (const { mesh } of started) mesh.setParent(null);
-      }
 
       const kind = KIND_BY_TOOL[tool];
       const commands = started.flatMap(({ mesh, before }) => {
         const after = captureTransform(mesh);
         if (isSameTransform(before, after)) {
-          // 움직이지 않은 드래그(클릭). setParent 왕복이 남긴 미세한 오차·다른 오일러 표현을 원래대로
+          // 움직이지 않은 드래그(클릭). 행렬 분해가 남긴 미세한 오차·다른 오일러 표현을 원래대로
           applyTransform(mesh, before);
           return [];
         }
@@ -112,9 +116,25 @@ export function createTransformGizmo(
         );
       }
       // 다음 드래그를 위해 피벗을 새 중심으로 (크기는 초기화, 회전은 축 방향 설정대로)
-      if (started.length > 1) sync();
+      if (selection.getMeshes().length > 1) sync();
     });
   }
+
+  /** 여러 개 드래그 중: 메쉬들을 피벗의 지금 자세에 맞춰 옮긴다 (부모가 있으면 부모 기준 값으로) */
+  function followPivot() {
+    if (!dragStart || manager.attachedNode !== pivot) return;
+    const pivotWorld = pivot.computeWorldMatrix(true);
+    for (const { mesh, offset } of dragStart) {
+      const world = offset.multiply(pivotWorld);
+      const parent = getEditorParent(mesh);
+      const local = parent
+        ? world.multiply(Matrix.Invert(parent.computeWorldMatrix(true)))
+        : world;
+      applyTransform(mesh, decomposeTransform(mesh, local));
+    }
+  }
+  // 기즈모는 포인터 이벤트에서 피벗을 움직인다 → 그리기 전에 따라간다
+  const followObserver = scene.onBeforeRenderObservable.add(followPivot);
 
   /**
    * 피벗을 메쉬들의 월드 바운딩 박스 중심에 둔다. 크기는 초기화한다.
@@ -198,6 +218,7 @@ export function createTransformGizmo(
     },
     dispose() {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
+      followObserver.remove();
       manager.dispose();
       pivot.dispose();
     },

@@ -11,9 +11,11 @@ import {
   duplicateSelected,
   focusSelected,
   hideSelected,
+  parentSelected,
   paste,
   showAllHidden,
   startRename,
+  unparentSelected,
 } from "./editor-actions";
 import type { History } from "./history";
 import { MESH_PRESETS, type MeshPresetId } from "./mesh-presets";
@@ -34,6 +36,7 @@ import type { TransformGizmo } from "./transform-gizmo";
  *   F                 선택한 메쉬로 카메라 포커스
  *   H / ⌥H            선택한 메쉬 숨기기 / 숨긴 메쉬 모두 보이기
  *   End               선택한 메쉬를 바로 아래 표면에 붙이기
+ *   P / ⌥P            부모 지정 (마지막에 고른 것이 부모) / 부모 해제
  *   F2                이름 바꾸기 (하나만 선택했을 때 속성 패널 이름 칸으로)
  *   Q / W / E / R     선택 / 이동 / 회전 / 크기 도구
  *   1 ~ 8             메쉬 프리셋 배치 모드 토글 (MESH_PRESETS 순서, 상단 숫자열만)
@@ -126,6 +129,8 @@ export const SHORTCUT_LABELS = {
   hide: "H",
   showAll: "⌥H",
   dropToFloor: "End",
+  parent: "P",
+  unparent: "⌥P",
   orthographic: "Num5",
   rename: "F2",
   rotatePlacement: "R",
@@ -222,7 +227,7 @@ export function bindEditorShortcuts({
     const key = getShortcutKey(event);
     const mod = event.metaKey || event.ctrlKey;
 
-    // 기즈모를 끄는 중에는 아무 단축키도 받지 않는다 — 여러 개 선택은 드래그 동안 메쉬가 피벗의 자식이라,
+    // 기즈모를 끄는 중에는 아무 단축키도 받지 않는다 — 드래그 동안 메쉬가 시작 자세를 기준으로 피벗을 따라가므로,
     // 그 사이 undo·삭제가 끼어들면 변형이 어긋난다
     if (gizmo.isDragging()) {
       event.preventDefault();
@@ -320,6 +325,11 @@ export function bindEditorShortcuts({
       return;
     }
 
+    if (key === "p" && event.altKey && !event.shiftKey) {
+      if (unparentSelected({ history, selection })) event.preventDefault();
+      return;
+    }
+
     if (event.shiftKey || event.altKey) return;
 
     const tool = TOOL_KEYS[key];
@@ -343,6 +353,11 @@ export function bindEditorShortcuts({
 
     if (key === "h") {
       hideSelected({ history, selection });
+      return;
+    }
+
+    if (key === "p") {
+      parentSelected({ history, selection });
       return;
     }
 

@@ -1,10 +1,15 @@
 // Ray와 함께 scene.multiPickWithRay를 등록한다
 import { Ray } from "@babylonjs/core/Culling/ray";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
 import { type Command, createMacroCommand, macroLabel } from "./history";
 import { getMeshFlag } from "./mesh-flags";
+import {
+  getEditorDescendants,
+  getEditorParent,
+  topLevelOnly,
+} from "./mesh-hierarchy";
 import { inCreationOrder, isLightObject } from "./mesh-presets";
 import {
   applyTransform,
@@ -16,6 +21,8 @@ import {
 /*
  * 바닥에 붙이기 · 정렬 · 분배. 모두 위치만 옮기고, 메쉬들을 Command 하나로 묶는다 (undo 한 번).
  * 기준은 월드 바운딩 박스(AABB)다 — 돌린 메쉬는 박스가 실제 모양보다 클 수 있다.
+ * 자식은 부모를 따라 움직이므로, 부모와 자식을 함께 고르면 부모만 옮긴다 (topLevelOnly).
+ * 자식의 이동량은 월드 기준으로 재고 부모 기준으로 바꿔 넣는다.
  */
 
 export type AlignAxis = "x" | "y" | "z";
@@ -40,9 +47,35 @@ function worldBounds(mesh: AbstractMesh) {
   return { min: minimumWorld.clone(), max: maximumWorld.clone() };
 }
 
-/** 위치만 delta만큼 옮긴 변형 */
-function shifted(before: TransformSnapshot, delta: Vector3): TransformSnapshot {
-  return { ...before, position: before.position.add(delta) };
+/** 월드 이동량 → 이 메쉬의 position(부모 기준)에 더할 값 */
+function toLocalDelta(mesh: AbstractMesh, delta: Vector3): Vector3 {
+  const parent = getEditorParent(mesh);
+  return parent
+    ? Vector3.TransformNormal(
+        delta,
+        Matrix.Invert(parent.computeWorldMatrix(true)),
+      )
+    : delta;
+}
+
+/** 위치만 월드 기준 delta만큼 옮긴 변형 */
+function shifted(
+  mesh: AbstractMesh,
+  before: TransformSnapshot,
+  delta: Vector3,
+): TransformSnapshot {
+  return {
+    ...before,
+    position: before.position.add(toLocalDelta(mesh, delta)),
+  };
+}
+
+/** 메쉬와 자손의 월드 행렬을 다시 계산한다 (피킹은 캐시된 월드 행렬을 쓴다) */
+function refreshWorld(mesh: AbstractMesh) {
+  mesh.computeWorldMatrix(true);
+  for (const child of getEditorDescendants(mesh)) {
+    child.computeWorldMatrix(true);
+  }
 }
 
 /** 메쉬별 이동량으로 Command 하나 (움직이지 않는 메쉬는 뺀다). 모두 그대로면 null */
@@ -54,7 +87,12 @@ function createShiftCommand(
     .filter(({ delta }) => delta.length() > EPSILON)
     .map(({ mesh, delta }) => {
       const before = captureTransform(mesh);
-      return createTransformCommand(mesh, verb, before, shifted(before, delta));
+      return createTransformCommand(
+        mesh,
+        verb,
+        before,
+        shifted(mesh, before, delta),
+      );
     });
   if (commands.length === 0) return null;
   return createMacroCommand(macroLabel(commands, verb), commands);
@@ -97,13 +135,17 @@ function findFloor(
  * 바닥에 붙이기 (End): 각 메쉬를 바로 아래 표면(다른 메쉬 윗면 또는 바닥)으로 내리거나 올린다.
  * 여러 개면 낮은 것부터 차례로 붙여서, 함께 고른 메쉬끼리 쌓여 있어도 위에 있던 것이 아래 것 위에 놓인다.
  * 숨긴 메쉬·조명 아이콘은 표면이 아니다 (잠근 메쉬는 표면이다).
+ * 옮기는 메쉬의 자손도 같이 움직이므로 표면이 아니다 (자기 자식 위에 올라가지 않게).
  */
 export function createDropToFloorCommand(
-  meshes: readonly AbstractMesh[],
+  selected: readonly AbstractMesh[],
 ): Command | null {
+  const meshes = topLevelOnly(selected);
   if (meshes.length === 0) return null;
   const scene = meshes[0].getScene();
-  const pending = new Set(meshes);
+  const pending = new Set(
+    meshes.flatMap((mesh) => [mesh, ...getEditorDescendants(mesh)]),
+  );
   const obstacles = new Set(
     inCreationOrder(scene.meshes).filter(
       (mesh) =>
@@ -124,14 +166,19 @@ export function createDropToFloorCommand(
       findFloor(mesh, obstacles) - worldBounds(mesh).min.y,
       0,
     );
-    mesh.position.addInPlace(delta);
-    mesh.computeWorldMatrix(true); // 피킹은 캐시된 월드 행렬을 쓴다
+    mesh.position.addInPlace(toLocalDelta(mesh, delta));
+    refreshWorld(mesh);
     obstacles.add(mesh);
+    for (const child of getEditorDescendants(mesh)) {
+      if (!getMeshFlag(child, "hidden") && !isLightObject(child)) {
+        obstacles.add(child);
+      }
+    }
     return { mesh, delta };
   });
   ordered.forEach((mesh, i) => {
     applyTransform(mesh, originals[i]);
-    mesh.computeWorldMatrix(true);
+    refreshWorld(mesh);
   });
 
   return createShiftCommand(moves, "바닥에 붙이기");
@@ -158,10 +205,11 @@ function axisVector(axis: AlignAxis, amount: number): Vector3 {
  * 예: X 최소 = 가장 왼쪽 메쉬의 왼쪽 면에 모두 맞춤.
  */
 export function createAlignCommand(
-  meshes: readonly AbstractMesh[],
+  selected: readonly AbstractMesh[],
   axis: AlignAxis,
   edge: AlignEdge,
 ): Command | null {
+  const meshes = topLevelOnly(selected);
   if (meshes.length < 2) return null;
   const bounds = meshes.map(worldBounds);
   const total = {
@@ -182,9 +230,10 @@ export function createAlignCommand(
  * 분배: 축 방향으로 양 끝 메쉬는 두고, 사이 메쉬들의 중심을 같은 간격으로 놓는다 (3개 이상).
  */
 export function createDistributeCommand(
-  meshes: readonly AbstractMesh[],
+  selected: readonly AbstractMesh[],
   axis: AlignAxis,
 ): Command | null {
+  const meshes = topLevelOnly(selected);
   if (meshes.length < 3) return null;
   const centers = meshes
     .map((mesh) => ({

@@ -220,7 +220,8 @@ export function detachFromScene(scene: Scene, mesh: AbstractMesh) {
 }
 
 export function attachToScene(scene: Scene, mesh: AbstractMesh) {
-  scene.addMesh(mesh);
+  // addMesh는 중복을 막지 않는다
+  if (!scene.meshes.includes(mesh)) scene.addMesh(mesh);
   const entry = editorLights.get(mesh);
   if (entry && !scene.lights.includes(entry.light)) scene.addLight(entry.light);
 }

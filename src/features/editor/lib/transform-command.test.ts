@@ -7,6 +7,7 @@ import { createTestScene } from "./test-scene";
 import {
   applyTransform,
   captureTransform,
+  captureWorldTransform,
   isSameTransform,
 } from "./transform-command";
 
@@ -57,14 +58,17 @@ describe("isSameTransform", () => {
   });
 });
 
-describe("captureTransform", () => {
-  test("피벗의 자식인 동안(드래그 중)에도 월드 기준 값을 담는다", () => {
+describe("captureTransform / captureWorldTransform", () => {
+  test("captureTransform은 부모 기준, captureWorldTransform은 월드 기준", () => {
     const mesh = box(new Vector3(0, Math.PI / 2, 0));
     const pivot = new TransformNode("pivot", scene);
     pivot.position.set(1, 0, 1);
     mesh.setParent(pivot);
-    pivot.position.x += 5; // 드래그로 피벗이 움직임
-    const snapshot = captureTransform(mesh);
+    pivot.position.x += 5; // 부모가 움직임
+    expect(captureTransform(mesh).position.asArray()).toEqual(
+      mesh.position.asArray(),
+    );
+    const snapshot = captureWorldTransform(mesh);
     expect(snapshot.position.asArray().map((n) => +n.toFixed(5))).toEqual([
       7, 0.5, 1,
     ]);

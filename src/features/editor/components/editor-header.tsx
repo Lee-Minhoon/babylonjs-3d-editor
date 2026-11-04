@@ -51,6 +51,7 @@ import {
   useSnap,
 } from "../hooks/use-editor-state";
 import { useMeshFlagCount } from "../hooks/use-mesh-flags";
+import { useMeshHierarchy } from "../hooks/use-mesh-hierarchy";
 import type { ViewName } from "../lib/camera-views";
 import {
   alignSelected,
@@ -62,11 +63,13 @@ import {
   duplicateSelected,
   focusSelected,
   hideSelected,
+  parentSelected,
   paste,
   setSelectedLocked,
   showAllHidden,
   startPresetPlacement,
   startRename,
+  unparentSelected,
 } from "../lib/editor-actions";
 import {
   getPresetShortcut,
@@ -167,7 +170,7 @@ const ALIGN_EDGES: readonly { edge: AlignEdge; label: string }[] = [
 ];
 
 /**
- * 객체 메뉴: 숨기기·잠금 · 바닥에 붙이기 · 정렬(2개 이상) · 분배(3개 이상).
+ * 객체 메뉴: 숨기기·잠금 · 부모 지정(2개 이상)·해제 · 바닥에 붙이기 · 정렬(2개 이상) · 분배(3개 이상).
  * 정렬 기준은 선택 전체의 바운딩 박스 (mesh-align)
  */
 function ObjectMenu({ runtime }: { runtime: EditorRuntime | null }) {
@@ -175,6 +178,8 @@ function ObjectMenu({ runtime }: { runtime: EditorRuntime | null }) {
   const sceneMeshes = inCreationOrder(useSceneMeshes(runtime?.scene ?? null));
   const hiddenCount = useMeshFlagCount(sceneMeshes, "hidden");
   const lockedCount = useMeshFlagCount(selected, "locked");
+  const hierarchy = useMeshHierarchy();
+  const hasParent = selected.some((mesh) => hierarchy.getParent(mesh));
   const count = selected.length;
 
   return (
@@ -207,6 +212,21 @@ function ObjectMenu({ runtime }: { runtime: EditorRuntime | null }) {
           onClick={() => runtime && setSelectedLocked(runtime, false)}
         >
           잠금 풀기
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem
+          disabled={count < 2}
+          onClick={() => runtime && parentSelected(runtime)}
+        >
+          부모 지정 (마지막에 고른 것)
+          <MenubarShortcut>{SHORTCUT_LABELS.parent}</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem
+          disabled={!hasParent}
+          onClick={() => runtime && unparentSelected(runtime)}
+        >
+          부모 해제
+          <MenubarShortcut>{SHORTCUT_LABELS.unparent}</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
         <MenubarItem

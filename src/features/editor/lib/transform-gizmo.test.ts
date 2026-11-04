@@ -1,6 +1,9 @@
-import { describe, expect, test } from "vitest";
+import { GizmoManager } from "@babylonjs/core/Gizmos/gizmoManager";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import { describe, expect, test, vi } from "vitest";
 
 import { createHistory, createMacroCommand } from "./history";
+import { createParentCommand, getEditorParent } from "./mesh-hierarchy";
 import { addPresetMesh, findPreset } from "./mesh-presets";
 import { createPlacementTool } from "./placement-tool";
 import { createSelection } from "./selection";
@@ -88,5 +91,46 @@ describe("transform gizmo", () => {
 
     tools.setGizmoSpace("world");
     expect(yaw()).toBeCloseTo(0);
+  });
+
+  test("여러 개 드래그: 피벗을 따라 움직이고 Command 하나, 자식은 부모 기준 값으로, 부모와 함께면 한 번만", () => {
+    // 기즈모 매니저를 잡아 드래그 시작/끝을 흉내 낸다 (포인터 없이)
+    const spy = vi.spyOn(GizmoManager.prototype, "attachToNode");
+    const { history, tools, selection, gizmo, box } = setup();
+    const parent = box(10);
+    parent.rotation.y = Math.PI / 2;
+    const child = box(0);
+    createParentCommand(child, parent)!.execute();
+    const loner = box(4);
+    const grandchild = box(0);
+    createParentCommand(grandchild, child)!.execute();
+
+    tools.setTool("move");
+    selection.set([child, grandchild, loner]);
+    const manager = spy.mock.contexts.at(-1) as GizmoManager;
+    const positionGizmo = manager.gizmos.positionGizmo!;
+    const pivot = gizmo.getTarget()!;
+    const world = (mesh: AbstractMesh) =>
+      mesh.computeWorldMatrix(true).getTranslation().x;
+    const before = [child, grandchild, loner].map(world);
+    const childLocal = child.position.clone();
+
+    positionGizmo.onDragStartObservable.notifyObservers({} as never);
+    pivot.position.x += 2;
+    positionGizmo.onDragEndObservable.notifyObservers({} as never);
+
+    expect([child, grandchild, loner].map(world)).toEqual(
+      before.map((x) => expect.closeTo(x + 2, 5)),
+    );
+    // 부모가 Y로 90° 돌아 있어 월드 X 이동이 부모 기준으로는 Z
+    expect(child.position.z).toBeCloseTo(childLocal.z + 2);
+    expect(getEditorParent(child)).toBe(parent);
+    expect(history.getState().undoLabel).toBe("메쉬 2개 이동");
+
+    history.undo();
+    expect([child, grandchild, loner].map(world)).toEqual(
+      before.map((x) => expect.closeTo(x, 5)),
+    );
+    spy.mockRestore();
   });
 });

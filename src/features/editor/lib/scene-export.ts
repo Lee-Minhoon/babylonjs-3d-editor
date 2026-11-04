@@ -5,9 +5,11 @@ import type { Scene } from "@babylonjs/core/scene";
 import { type FileTypeOptions, saveFile } from "@/lib/file-access";
 
 import { getMeshFlag } from "./mesh-flags";
+import { getEditorParent } from "./mesh-hierarchy";
 import { isLightObject } from "./mesh-presets";
 import type { SceneFileNotice } from "./scene-file";
 import { getEditorMeshes } from "./scene-format";
+import { applyTransform, captureTransform } from "./transform-command";
 
 /*
  * 내보내기 (파일 메뉴): glTF 바이너리(.glb)와 뷰포트 스크린샷(.png). 씬은 바꾸지 않는다 (히스토리·저장 상태와 무관).
@@ -36,16 +38,43 @@ export function getExportMeshes(scene: Scene): AbstractMesh[] {
 
 /** 씬을 GLB로. 메쉬 이름·변형·PBR 머티리얼이 들어간다 (카메라·조명·환경은 빼고) */
 export async function exportGlb(scene: Scene, baseName: string): Promise<Blob> {
-  const meshes = new Set<Node>(getExportMeshes(scene));
+  const exported = getExportMeshes(scene);
+  const meshes = new Set<Node>(exported);
   const { GLTF2Export } = await import("@babylonjs/serializers/glTF/2.0");
+  const restore = liftOutOfSkippedParents(exported);
   const data = await GLTF2Export.GLBAsync(scene, baseName, {
     shouldExportNode: (node) => meshes.has(node),
     // 왼손 → 오른손 좌표 변환용 빈 루트 노드를 남기지 않는다
     removeNoopRootNodes: true,
-  });
+  }).finally(restore);
   const file = data.files[`${baseName}.glb`];
   if (!(file instanceof Blob)) throw new Error("GLB를 만들지 못했습니다.");
   return file;
+}
+
+/**
+ * 내보내지 않는 부모(숨긴 메쉬·조명 아이콘) 아래의 메쉬는 glTF에서 그 부모의 변형을 잃는다
+ * (직렬화기는 빠진 노드의 자식을 그 위 노드에 바로 붙인다). 그래서 내보내는 동안만 가장 가까운
+ * 내보내는 조상(없으면 최상위)으로 옮겨 둔다 — 월드 자세는 그대로라 화면은 바뀌지 않는다.
+ * 잠깐이라 setMeshParent(씬 목록 알림)를 거치지 않고, 돌려놓는 함수를 돌려준다.
+ */
+function liftOutOfSkippedParents(exported: readonly AbstractMesh[]) {
+  const included = new Set(exported);
+  const moved = exported.flatMap((mesh) => {
+    const parent = getEditorParent(mesh);
+    if (!parent || included.has(parent)) return [];
+    let target = getEditorParent(parent);
+    while (target && !included.has(target)) target = getEditorParent(target);
+    const before = captureTransform(mesh);
+    mesh.setParent(target);
+    return [{ mesh, parent, before }];
+  });
+  return () => {
+    for (const { mesh, parent, before } of moved) {
+      mesh.parent = parent;
+      applyTransform(mesh, before);
+    }
+  };
 }
 
 /**

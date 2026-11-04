@@ -3,7 +3,15 @@
 import { type ReactNode, useState } from "react";
 
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
-import { Eye, EyeOff, Lock, LockOpen, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Lock,
+  LockOpen,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -18,9 +26,17 @@ import {
   useSelection,
 } from "../hooks/use-editor-state";
 import { useMeshFlag } from "../hooks/use-mesh-flags";
+import { useMeshHierarchy } from "../hooks/use-mesh-hierarchy";
 import { useMeshName } from "../hooks/use-mesh-name";
-import { deleteMesh, toggleMeshFlag } from "../lib/editor-actions";
+import { deleteMesh, setParentOf, toggleMeshFlag } from "../lib/editor-actions";
 import { getPresetShortcut, SHORTCUT_LABELS } from "../lib/editor-shortcuts";
+import {
+  buildSceneTree,
+  canSetParent,
+  getEditorAncestors,
+  getEditorParent,
+  type SceneTreeRow,
+} from "../lib/mesh-hierarchy";
 import {
   inCreationOrder,
   LIGHT_PRESETS,
@@ -65,34 +81,92 @@ function RotateHint({ yaw }: { yaw: number }) {
 const ROW_ACTION_CLASS =
   "opacity-0 group-hover:opacity-100 focus-visible:opacity-100";
 
+/** 씬 목록 끌어 놓기: 끄는 객체들과 놓을 곳 (객체 위 = 그 자식으로, 빈 곳 = 최상위로) */
+type SceneListDrag = {
+  dragged: readonly AbstractMesh[] | null;
+  target: AbstractMesh | "root" | null;
+  start(mesh: AbstractMesh): void;
+  over(target: AbstractMesh | "root"): boolean;
+  drop(target: AbstractMesh | "root"): void;
+  end(): void;
+};
+
+/** 들여쓰기 한 단계 (px) */
+const INDENT = 12;
+
 /**
  * 씬 목록 한 줄: 클릭 선택(Shift·⌘/Ctrl은 넣고 빼기), 더블클릭 이름 바꾸기,
  * 잠금·숨기기 토글(undo 가능), 삭제 버튼. 숨긴 메쉬는 흐리게 보이고 선택할 수 없다.
+ * 자식은 들여 쓰고, 자식이 있으면 접기 버튼. 끌어서 다른 줄에 놓으면 그 자식이 된다.
  */
 function SceneListItem({
-  mesh,
+  row: { mesh, depth, childCount },
   runtime,
   isSelected,
+  collapsed,
+  onToggleCollapsed,
+  drag,
 }: {
-  mesh: AbstractMesh;
+  row: SceneTreeRow;
   runtime: EditorRuntime;
   isSelected: boolean;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  drag: SceneListDrag;
 }) {
   const name = useMeshName(mesh);
   const hidden = useMeshFlag(mesh, "hidden");
   const locked = useMeshFlag(mesh, "locked");
   const [editing, setEditing] = useState(false);
+  const isDropTarget = drag.target === mesh;
 
   return (
     <li
-      className={`group flex h-7 items-center rounded-md pr-1 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
-        isSelected
-          ? "bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-sidebar-ring/50"
-          : ""
-      }`}
+      className={cn(
+        "group flex h-7 items-center rounded-md pr-1 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        isSelected &&
+          "bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-sidebar-ring/50",
+        isDropTarget && "bg-primary/15 ring-1 ring-primary",
+        drag.dragged?.includes(mesh) && "opacity-60",
+      )}
+      style={{ paddingLeft: depth * INDENT }}
+      draggable={!editing}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", name);
+        drag.start(mesh);
+      }}
+      onDragEnd={drag.end}
+      // 줄 위의 끌기는 빈 곳(최상위로)으로 넘기지 않는다 — 놓을 수 없는 줄이면 금지 표시
+      onDragOver={(event) => {
+        event.stopPropagation();
+        if (drag.over(mesh)) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        drag.drop(mesh);
+      }}
     >
+      {childCount > 0 ? (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="size-4 shrink-0"
+          aria-label={`${name} ${collapsed ? "펼치기" : "접기"}`}
+          onClick={onToggleCollapsed}
+        >
+          {collapsed ? (
+            <ChevronRight aria-hidden />
+          ) : (
+            <ChevronDown aria-hidden />
+          )}
+        </Button>
+      ) : (
+        <span className="w-4 shrink-0" aria-hidden />
+      )}
       {editing ? (
-        <div className="flex h-full flex-1 items-center gap-2 pl-1.5">
+        <div className="flex h-full flex-1 items-center gap-2 pl-1">
           <MeshIcon mesh={mesh} className="size-3.5 text-muted-foreground" />
           <MeshNameInput
             mesh={mesh}
@@ -105,7 +179,7 @@ function SceneListItem({
       ) : (
         <Button
           variant="ghost"
-          className="h-full flex-1 justify-start gap-2 px-1.5 font-normal hover:bg-transparent dark:hover:bg-transparent"
+          className="h-full min-w-0 flex-1 justify-start gap-2 px-1 font-normal hover:bg-transparent dark:hover:bg-transparent"
           aria-pressed={isSelected}
           onClick={(event) => {
             if (isAdditiveClick(event)) {
@@ -160,6 +234,71 @@ function SceneListItem({
   );
 }
 
+/** 끌어 놓기 상태. 고른 줄을 끌면 고른 것 모두, 아니면 그 줄 하나를 옮긴다 */
+function useSceneListDrag(runtime: EditorRuntime | null): SceneListDrag {
+  const [dragged, setDragged] = useState<readonly AbstractMesh[] | null>(null);
+  const [target, setTarget] = useState<AbstractMesh | "root" | null>(null);
+
+  const canDrop = (to: AbstractMesh | "root") => {
+    if (!dragged) return false;
+    if (to === "root") return dragged.some((mesh) => getEditorParent(mesh));
+    return (
+      !dragged.includes(to) &&
+      dragged.some(
+        (mesh) => getEditorParent(mesh) !== to && canSetParent(mesh, to),
+      )
+    );
+  };
+  const end = () => {
+    setDragged(null);
+    setTarget(null);
+  };
+
+  return {
+    dragged,
+    target,
+    start(mesh) {
+      const selected = runtime?.selection.getMeshes() ?? [];
+      setDragged(selected.includes(mesh) ? selected : [mesh]);
+    },
+    over(to) {
+      const ok = canDrop(to);
+      setTarget(ok ? to : null);
+      return ok;
+    },
+    drop(to) {
+      if (runtime && dragged && canDrop(to)) {
+        setParentOf(runtime, dragged, to === "root" ? null : to);
+      }
+      end();
+    },
+    end,
+  };
+}
+
+/** 고른 객체가 접힌 부모 아래에 있으면 그 부모들을 편다 (뷰포트에서 자식을 골랐을 때) */
+function useCollapsed(selected: readonly AbstractMesh[]) {
+  const [collapsed, setCollapsed] = useState<ReadonlySet<AbstractMesh>>(
+    () => new Set(),
+  );
+  const [revealed, setRevealed] = useState(selected);
+  if (revealed !== selected) {
+    setRevealed(selected);
+    const ancestors = new Set(selected.flatMap(getEditorAncestors));
+    if ([...ancestors].some((mesh) => collapsed.has(mesh))) {
+      setCollapsed(
+        new Set([...collapsed].filter((mesh) => !ancestors.has(mesh))),
+      );
+    }
+  }
+  const toggle = (mesh: AbstractMesh) => {
+    const next = new Set(collapsed);
+    if (!next.delete(mesh)) next.add(mesh);
+    setCollapsed(next);
+  };
+  return { collapsed, toggle };
+}
+
 type MeshSidebarProps = {
   runtime: EditorRuntime | null;
 };
@@ -207,6 +346,10 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
   const activePresetId = useActivePresetId(runtime);
   const placement = usePlacementState(runtime);
   const selected = useSelection(runtime);
+  const hierarchy = useMeshHierarchy();
+  const { collapsed, toggle } = useCollapsed(selected);
+  const rows = buildSceneTree(meshes, hierarchy.getParent, collapsed);
+  const drag = useSceneListDrag(runtime);
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">
@@ -265,18 +408,41 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
             아직 추가된 메쉬가 없습니다.
           </p>
         ) : (
-          <ScrollArea className="min-h-0 flex-1 pr-3">
-            <ul aria-label="씬 메쉬" className="-mx-1 space-y-0.5">
-              {meshes.map((mesh) => (
-                <SceneListItem
-                  key={mesh.uniqueId}
-                  mesh={mesh}
-                  runtime={runtime}
-                  isSelected={selected.includes(mesh)}
-                />
-              ))}
-            </ul>
-          </ScrollArea>
+          // 줄 밖(빈 곳)에 놓으면 최상위로
+          <div
+            className={cn(
+              "flex min-h-0 flex-1 flex-col rounded-md",
+              drag.target === "root" && "bg-primary/10",
+            )}
+            onDragOver={(event) => {
+              if (drag.over("root")) event.preventDefault();
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              drag.drop("root");
+            }}
+          >
+            <ScrollArea className="min-h-0 flex-1 pr-3">
+              <ul aria-label="씬 메쉬" className="-mx-1 space-y-0.5">
+                {rows.map((row) => (
+                  <SceneListItem
+                    key={row.mesh.uniqueId}
+                    row={row}
+                    runtime={runtime}
+                    isSelected={selected.includes(row.mesh)}
+                    collapsed={collapsed.has(row.mesh)}
+                    onToggleCollapsed={() => toggle(row.mesh)}
+                    drag={drag}
+                  />
+                ))}
+              </ul>
+            </ScrollArea>
+            <p className="min-h-4 pt-1 pr-3 text-[0.6875rem] text-muted-foreground">
+              {drag.dragged
+                ? "다른 항목 위에 놓으면 그 자식으로, 빈 곳에 놓으면 최상위로"
+                : "끌어서 다른 항목 위에 놓으면 자식이 됩니다"}
+            </p>
+          </div>
         )}
       </section>
     </aside>
