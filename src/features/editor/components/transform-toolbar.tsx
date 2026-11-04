@@ -38,6 +38,7 @@ import {
   useSnap,
 } from "../hooks/use-editor-state";
 import { TOOL_LABELS } from "../lib/editor-reference";
+import type { EditorRuntime } from "../lib/editor-runtime";
 import { getToolShortcut } from "../lib/editor-shortcuts";
 import {
   formatSnapStep,
@@ -47,7 +48,6 @@ import {
   snapKindForTool,
   type TransformTool,
 } from "../lib/tools";
-import type { EditorRuntime } from "./editor-viewport";
 
 export const TOOL_ITEMS: {
   id: TransformTool;

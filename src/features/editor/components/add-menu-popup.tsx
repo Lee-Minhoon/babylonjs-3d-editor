@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 
 import { type AddMenu, type AddMenuItem, searchAddMenu } from "../lib/add-menu";
 import { startPresetPlacement } from "../lib/editor-actions";
+import type { EditorRuntime } from "../lib/editor-runtime";
 import { getPresetShortcut } from "../lib/editor-shortcuts";
-import type { EditorRuntime } from "./editor-viewport";
 import { PRESET_ICONS } from "./preset-icons";
 
 const WIDTH = 240;

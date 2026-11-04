@@ -5,10 +5,11 @@ import { useState } from "react";
 import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+import type { EditorRuntime } from "../lib/editor-runtime";
 import { AddMenuPopup } from "./add-menu-popup";
 import { DiscardChangesDialog } from "./discard-changes-dialog";
 import { EditorHeader } from "./editor-header";
-import { type EditorRuntime, EditorViewport } from "./editor-viewport";
+import { EditorViewport } from "./editor-viewport";
 import { MeshSidebar } from "./mesh-sidebar";
 import { PropertiesPanel } from "./properties-panel";
 import { RecoveryDialog } from "./recovery-dialog";

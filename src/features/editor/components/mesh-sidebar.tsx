@@ -29,6 +29,7 @@ import { useMeshFlag } from "../hooks/use-mesh-flags";
 import { useMeshHierarchy } from "../hooks/use-mesh-hierarchy";
 import { useMeshName } from "../hooks/use-mesh-name";
 import { deleteMesh, setParentOf, toggleMeshFlag } from "../lib/editor-actions";
+import type { EditorRuntime } from "../lib/editor-runtime";
 import { getPresetShortcut, SHORTCUT_LABELS } from "../lib/editor-shortcuts";
 import {
   buildSceneTree,
@@ -44,7 +45,6 @@ import {
   type MeshPreset,
 } from "../lib/mesh-presets";
 import { isAdditiveClick } from "../lib/selection";
-import type { EditorRuntime } from "./editor-viewport";
 import { MeshNameInput } from "./mesh-name-input";
 import { MeshIcon, PRESET_ICONS } from "./preset-icons";
 

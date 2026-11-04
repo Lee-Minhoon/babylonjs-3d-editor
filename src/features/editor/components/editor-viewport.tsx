@@ -12,32 +12,15 @@ import { BabylonCanvas } from "@/components/babylon-canvas";
 import { toast } from "@/components/ui/toast";
 import { attachInspectorToggle } from "@/lib/babylon/inspector";
 
-import { type AddMenu, createAddMenu } from "../lib/add-menu";
-import {
-  type Autosave,
-  createAutosave,
-  createBrowserAutosaveStorage,
-} from "../lib/autosave";
-import { type BoxSelect, createBoxSelect } from "../lib/box-select";
-import { bindCameraControls } from "../lib/camera-controls";
-import { type CameraView, createCameraView } from "../lib/camera-views";
-import { type Clipboard, createClipboard } from "../lib/clipboard";
+import { createBrowserAutosaveStorage } from "../lib/autosave";
+import { createEditorRuntime, type EditorRuntime } from "../lib/editor-runtime";
 import { bindEditorShortcuts } from "../lib/editor-shortcuts";
 import { createGroundGrid } from "../lib/ground-grid";
-import { createHistory, type History } from "../lib/history";
-import { createPlacementTool, type PlacementTool } from "../lib/placement-tool";
-import { bindPointerRouter } from "../lib/pointer-router";
-import { createSceneExport, type SceneExport } from "../lib/scene-export";
-import { createSceneFile, type SceneFile } from "../lib/scene-file";
 import {
   AMBIENT_LIGHT_NAME,
   applySceneSettings,
   DEFAULT_SCENE_SETTINGS,
 } from "../lib/scene-settings";
-import { createSelection, type Selection } from "../lib/selection";
-import { createShortcutHelp, type ShortcutHelp } from "../lib/shortcut-help";
-import { createToolState, type ToolState } from "../lib/tools";
-import { createTransformGizmo } from "../lib/transform-gizmo";
 
 function setupScene(scene: Scene): ArcRotateCamera {
   const camera = new ArcRotateCamera(
@@ -67,28 +50,15 @@ function setupScene(scene: Scene): ArcRotateCamera {
   return camera;
 }
 
-/** 뷰포트가 만들어 에디터 UI에 넘겨주는 씬과 씬에 붙은 도구들 */
-export type EditorRuntime = {
-  scene: Scene;
-  sceneExport: SceneExport;
-  help: ShortcutHelp;
-  addMenu: AddMenu;
-  cameraView: CameraView;
-  boxSelect: BoxSelect;
-  history: History;
-  placement: PlacementTool;
-  selection: Selection;
-  tools: ToolState;
-  clipboard: Clipboard;
-  sceneFile: SceneFile;
-  autosave: Autosave;
-};
-
 type EditorViewportProps = {
   /** 씬이 준비되면 런타임, 정리되면 null로 호출된다. */
   onRuntimeChange: (runtime: EditorRuntime | null) => void;
 };
 
+/**
+ * 뷰포트: 씬을 꾸미고(카메라·기본 조명·격자) 도구들을 만들어(editor-runtime) UI에 넘긴다.
+ * 브라우저에 붙는 것(키보드 단축키·탭 숨김 때 자동 저장·인스펙터·컨텍스트 메뉴)만 여기서 배선한다.
+ */
 export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
   /** 엔진을 만들지 못한 이유. 콘솔에만 남기면 빈 화면에 비활성 메뉴만 보여서 여기 띄운다 */
   const [engineError, setEngineError] = useState<string | null>(null);
@@ -119,99 +89,28 @@ export function EditorViewport({ onRuntimeChange }: EditorViewportProps) {
         onSceneReady={(scene) => {
           const camera = setupScene(scene);
           const detachInspector = attachInspectorToggle(scene);
-          const history = createHistory();
-          const tools = createToolState();
-          const placement = createPlacementTool(scene, history, tools);
-          const selection = createSelection(scene);
-          const gizmo = createTransformGizmo(scene, {
-            history,
-            selection,
-            tools,
-            placement,
-          });
-          const cameraView = createCameraView(camera);
-          const unbindCamera = bindCameraControls(camera, { tools, placement });
-          const boxSelect = createBoxSelect(scene, selection);
-          const unbindPointer = bindPointerRouter(scene, {
-            gizmo,
-            placement,
-            selection,
-            tools,
-            boxSelect,
-          });
-          const clipboard = createClipboard();
-          const help = createShortcutHelp();
-          const addMenu = createAddMenu();
-          const sceneFile = createSceneFile(scene, {
-            history,
-            selection,
-            placement,
+          const { runtime, dispose } = createEditorRuntime(scene, camera, {
             notify: (notice) => toast.add(notice),
-          });
-          const sceneExport = createSceneExport(scene, {
-            getFileName: () => sceneFile.getState().fileName,
-            notify: (notice) => toast.add(notice),
-          });
-          const autosave = createAutosave({
-            sceneFile,
-            storage: createBrowserAutosaveStorage(),
-            onError: (title, description) =>
-              toast.add({ type: "error", title, description }),
+            autosaveStorage: createBrowserAutosaveStorage(),
           });
           // 탭이 숨겨지면(닫기·전환) 기다리던 자동 저장을 바로 남긴다
           const onVisibilityChange = () => {
-            if (document.visibilityState === "hidden") void autosave.flush();
+            if (document.visibilityState === "hidden") {
+              void runtime.autosave.flush();
+            }
           };
           document.addEventListener("visibilitychange", onVisibilityChange);
-          const unbindShortcuts = bindEditorShortcuts({
-            scene,
-            help,
-            addMenu,
-            cameraView,
-            history,
-            placement,
-            selection,
-            tools,
-            clipboard,
-            sceneFile,
-            gizmo,
-          });
-          onRuntimeChange({
-            scene,
-            sceneExport,
-            help,
-            addMenu,
-            cameraView,
-            boxSelect,
-            history,
-            placement,
-            selection,
-            tools,
-            clipboard,
-            sceneFile,
-            autosave,
-          });
+          const unbindShortcuts = bindEditorShortcuts(runtime);
+          onRuntimeChange(runtime);
 
           return () => {
             onRuntimeChange(null);
             unbindShortcuts();
-            // 내용은 동기로 읽어 두므로 씬이 해제되기 전에 남길 수 있다
-            void autosave.flush();
-            autosave.dispose();
             document.removeEventListener(
               "visibilitychange",
               onVisibilityChange,
             );
-            sceneFile.dispose();
-            unbindPointer();
-            boxSelect.dispose();
-            unbindCamera();
-            cameraView.dispose();
-            gizmo.dispose();
-            selection.dispose();
-            placement.dispose();
-            // undo로 씬에서 떼어둔 메쉬는 scene.dispose()가 모르므로 여기서 해제
-            history.dispose();
+            dispose();
             detachInspector();
           };
         }}

@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 import { useAutosaveState, useSceneFileState } from "../hooks/use-editor-state";
-import type { EditorRuntime } from "./editor-viewport";
+import type { EditorRuntime } from "../lib/editor-runtime";
 
 const SAVED_AT = new Intl.DateTimeFormat("ko-KR", {
   dateStyle: "medium",

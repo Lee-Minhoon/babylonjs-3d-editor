@@ -4,9 +4,9 @@ import { useSyncExternalStore } from "react";
 
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
-import type { EditorRuntime } from "../components/editor-viewport";
 import type { AutosaveState } from "../lib/autosave";
 import type { ScreenRect } from "../lib/box-select";
+import type { EditorRuntime } from "../lib/editor-runtime";
 import type { HistoryState } from "../lib/history";
 import type { MeshPresetId } from "../lib/mesh-presets";
 import type { PlacementState } from "../lib/placement-tool";

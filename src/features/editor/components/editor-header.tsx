@@ -71,6 +71,7 @@ import {
   startRename,
   unparentSelected,
 } from "../lib/editor-actions";
+import type { EditorRuntime } from "../lib/editor-runtime";
 import {
   getPresetShortcut,
   getToolShortcut,
@@ -90,7 +91,6 @@ import {
   type SnapKind,
   type TransformTool,
 } from "../lib/tools";
-import type { EditorRuntime } from "./editor-viewport";
 import { PRESET_ICONS } from "./preset-icons";
 import { GIZMO_SPACE_LABELS, TOOL_ITEMS } from "./transform-toolbar";
 

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-import type { EditorRuntime } from "./editor-viewport";
+import type { EditorRuntime } from "../lib/editor-runtime";
 import { MouseControlsTable, ShortcutGroups } from "./shortcut-reference";
 
 const subscribeNoop = () => () => {};

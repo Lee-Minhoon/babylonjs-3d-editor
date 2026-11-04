@@ -12,6 +12,7 @@ import { useSelection } from "../hooks/use-editor-state";
 import { useMeshHierarchy } from "../hooks/use-mesh-hierarchy";
 import { useMeshName } from "../hooks/use-mesh-name";
 import { useMeshTransforms } from "../hooks/use-mesh-transform";
+import type { EditorRuntime } from "../lib/editor-runtime";
 import { getShortcutKey, handleFieldHistoryKey } from "../lib/editor-shortcuts";
 import { createMacroCommand, type History, macroLabel } from "../lib/history";
 import { MESH_NAME_INPUT_ID } from "../lib/mesh-name";
@@ -30,7 +31,6 @@ import {
   type TransformField,
   type TransformValues,
 } from "../lib/transform-values";
-import type { EditorRuntime } from "./editor-viewport";
 import { HistoryPanel } from "./history-panel";
 import { LightSection } from "./light-section";
 import { MaterialSection } from "./material-section";

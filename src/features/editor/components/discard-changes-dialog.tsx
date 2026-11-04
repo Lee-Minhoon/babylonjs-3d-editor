@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { useSceneFileState } from "../hooks/use-editor-state";
-import type { EditorRuntime } from "./editor-viewport";
+import type { EditorRuntime } from "../lib/editor-runtime";
 
 /** 새 씬·열기 전에 저장 안 된 변경을 버릴지 묻는다 (sceneFile.confirmPending) */
 export function DiscardChangesDialog({

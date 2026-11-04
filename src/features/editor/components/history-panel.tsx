@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 import { useHistoryState } from "../hooks/use-editor-state";
-import type { EditorRuntime } from "./editor-viewport";
+import type { EditorRuntime } from "../lib/editor-runtime";
 
 /** 목록 맨 위 항목 (기록이 하나도 적용되지 않은 지점) */
 export const HISTORY_START_LABEL = "시작";
