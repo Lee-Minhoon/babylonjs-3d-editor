@@ -37,6 +37,8 @@ export type Selection = {
    * additive면 그 메쉬를 넣거나 빼고, 빈 곳이면 그대로 둔다. 아니면 그것만 선택 / 빈 곳이면 해제.
    */
   selectAtPointer(additive: boolean): void;
+  /** 커서 아래의 고를 수 있는 에디터 메쉬 (숨기거나 잠근 메쉬 제외). 없으면 null */
+  meshAtPointer(): AbstractMesh | null;
   subscribe(onChange: () => void): () => void;
   dispose(): void;
 };
@@ -82,6 +84,15 @@ export function createSelection(scene: Scene): Selection {
     );
   }
 
+  function meshAtPointer(): AbstractMesh | null {
+    const hit = scene.pick(
+      scene.pointerX,
+      scene.pointerY,
+      isPickableInViewport,
+    );
+    return hit?.pickedMesh ?? null;
+  }
+
   const removedObserver = scene.onMeshRemovedObservable.add((mesh) => {
     if (selected.includes(mesh)) set(selected.filter((item) => item !== mesh));
   });
@@ -95,13 +106,9 @@ export function createSelection(scene: Scene): Selection {
     selectAll: () =>
       set(inCreationOrder(scene.meshes).filter(isPickableInViewport)),
     toggle,
+    meshAtPointer,
     selectAtPointer(additive) {
-      const hit = scene.pick(
-        scene.pointerX,
-        scene.pointerY,
-        isPickableInViewport,
-      );
-      const mesh = hit?.pickedMesh ?? null;
+      const mesh = meshAtPointer();
       if (additive) {
         if (mesh) toggle(mesh);
       } else {

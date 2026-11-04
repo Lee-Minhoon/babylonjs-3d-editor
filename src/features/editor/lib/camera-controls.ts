@@ -33,6 +33,11 @@ export const MOUSE_CONTROLS: readonly {
     selectTool: "선택에 넣기/빼기",
     otherTools: "선택에 넣기/빼기",
   },
+  {
+    input: "오른쪽 클릭",
+    selectTool: "우클릭 메뉴 (배치 중엔 배치 종료)",
+    otherTools: "우클릭 메뉴 (배치 중엔 배치 종료)",
+  },
   { input: "왼쪽 드래그", selectTool: "박스 선택", otherTools: "카메라 회전" },
   { input: "⌥ + 왼쪽 드래그", selectTool: "카메라 회전", otherTools: "—" },
   {

@@ -6,6 +6,7 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
 import type { AutosaveState } from "../lib/autosave";
 import type { ScreenRect } from "../lib/box-select";
+import type { ContextMenuState } from "../lib/context-menu";
 import type { EditorRuntime } from "../lib/editor-runtime";
 import type { HistoryState } from "../lib/history";
 import type { MeshPresetId } from "../lib/mesh-presets";
@@ -178,5 +179,18 @@ export function useBoxSelectRect(runtime: Runtime): ScreenRect | null {
     boxSelect?.subscribe ?? subscribeNoop,
     boxSelect?.getRect ?? getNull,
     getNull,
+  );
+}
+
+const CLOSED_CONTEXT_MENU: ContextMenuState = { open: false };
+const getClosedContextMenu = () => CLOSED_CONTEXT_MENU;
+
+/** 우클릭 메뉴 상태 */
+export function useContextMenuState(runtime: Runtime): ContextMenuState {
+  const contextMenu = runtime?.contextMenu;
+  return useSyncExternalStore(
+    contextMenu?.subscribe ?? subscribeNoop,
+    contextMenu?.getState ?? getClosedContextMenu,
+    getClosedContextMenu,
   );
 }

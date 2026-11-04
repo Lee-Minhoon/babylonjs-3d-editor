@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import type { EditorRuntime } from "../lib/editor-runtime";
 import { AddMenuPopup } from "./add-menu-popup";
+import { ContextMenuPopup } from "./context-menu-popup";
 import { DiscardChangesDialog } from "./discard-changes-dialog";
 import { EditorHeader } from "./editor-header";
 import { EditorViewport } from "./editor-viewport";
@@ -42,6 +43,7 @@ export function Editor() {
                 </div>
               )}
               {runtime && <AddMenuPopup runtime={runtime} />}
+              {runtime && <ContextMenuPopup runtime={runtime} />}
             </div>
             <PropertiesPanel runtime={runtime} />
           </div>

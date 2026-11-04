@@ -11,6 +11,7 @@ import { type BoxSelect, createBoxSelect } from "./box-select";
 import { bindCameraControls } from "./camera-controls";
 import { type CameraView, createCameraView } from "./camera-views";
 import { type Clipboard, createClipboard } from "./clipboard";
+import { type ContextMenu, createContextMenu } from "./context-menu";
 import { createHistory, type History } from "./history";
 import { createPlacementTool, type PlacementTool } from "./placement-tool";
 import { bindPointerRouter } from "./pointer-router";
@@ -37,6 +38,7 @@ export type EditorRuntime = {
   sceneExport: SceneExport;
   help: ShortcutHelp;
   addMenu: AddMenu;
+  contextMenu: ContextMenu;
   cameraView: CameraView;
   boxSelect: BoxSelect;
   gizmo: TransformGizmo;
@@ -74,12 +76,14 @@ export function createEditorRuntime(
   const cameraView = createCameraView(camera);
   const unbindCamera = bindCameraControls(camera, { tools, placement });
   const boxSelect = createBoxSelect(scene, selection);
+  const contextMenu = createContextMenu();
   const unbindPointer = bindPointerRouter(scene, {
     gizmo,
     placement,
     selection,
     tools,
     boxSelect,
+    contextMenu,
   });
   const clipboard = createClipboard();
   const help = createShortcutHelp();
@@ -107,6 +111,7 @@ export function createEditorRuntime(
       sceneExport,
       help,
       addMenu,
+      contextMenu,
       cameraView,
       boxSelect,
       gizmo,

@@ -97,7 +97,7 @@ const INDENT = 12;
 /**
  * 씬 목록 한 줄: 클릭 선택(Shift·⌘/Ctrl은 넣고 빼기), 더블클릭 이름 바꾸기,
  * 잠금·숨기기 토글(undo 가능), 삭제 버튼. 숨긴 메쉬는 흐리게 보이고 선택할 수 없다.
- * 자식은 들여 쓰고, 자식이 있으면 접기 버튼. 끌어서 다른 줄에 놓으면 그 자식이 된다.
+ * 자식은 들여 쓰고, 자식이 있으면 접기 버튼. 끌어서 다른 줄에 놓으면 그 자식이 된다. 우클릭은 선택 메뉴.
  */
 function SceneListItem({
   row: { mesh, depth, childCount },
@@ -146,6 +146,18 @@ function SceneListItem({
         event.preventDefault();
         event.stopPropagation();
         drag.drop(mesh);
+      }}
+      // 우클릭 메뉴: 안 골라져 있으면 이 줄만 고른 뒤 (뷰포트와 같다)
+      onContextMenu={(event) => {
+        event.preventDefault();
+        if (editing) return;
+        if (!runtime.selection.getMeshes().includes(mesh)) {
+          runtime.selection.select(mesh);
+        }
+        runtime.contextMenu.open("selection", {
+          x: event.clientX,
+          y: event.clientY,
+        });
       }}
     >
       {childCount > 0 ? (
