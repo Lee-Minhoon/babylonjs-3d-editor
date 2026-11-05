@@ -8,7 +8,7 @@ import { NumberField } from "@base-ui/react/number-field";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
-import { useSelection } from "../hooks/use-editor-state";
+import { useAssets, useSelection } from "../hooks/use-editor-state";
 import { useMeshHierarchy } from "../hooks/use-mesh-hierarchy";
 import { useMeshName } from "../hooks/use-mesh-name";
 import { useMeshTransforms } from "../hooks/use-mesh-transform";
@@ -16,7 +16,7 @@ import type { EditorRuntime } from "../lib/editor-runtime";
 import { getShortcutKey, handleFieldHistoryKey } from "../lib/editor-shortcuts";
 import { createMacroCommand, type History, macroLabel } from "../lib/history";
 import { MESH_NAME_INPUT_ID } from "../lib/mesh-name";
-import { isLightObject } from "../lib/mesh-presets";
+import { isLightObject, isModelObject } from "../lib/mesh-presets";
 import {
   applyTransform,
   captureTransform,
@@ -322,6 +322,14 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
   // 조명과 메쉬를 함께 골랐으면 각자의 칸에 각자만 (구독 훅에 넘기므로 선택이 바뀔 때만 새 배열)
   const lights = useMemo(() => selected.filter(isLightObject), [selected]);
   const hasMeshes = lights.length < selected.length;
+  // 가져온 모델은 glTF 머티리얼 그대로라 머티리얼 칸에서 뺀다
+  const models = selected.filter(isModelObject);
+  const images = useAssets(runtime).filter((asset) => asset.type === "image");
+  const materialMeshes = useMemo(
+    () =>
+      selected.filter((item) => !isLightObject(item) && !isModelObject(item)),
+    [selected],
+  );
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-l border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">
@@ -395,11 +403,22 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
                 <Separator />
                 <div>
                   <SectionTitle>머티리얼</SectionTitle>
-                  <MaterialSection
-                    key={selectionKey}
-                    meshes={selected}
-                    history={runtime.history}
-                  />
+                  {materialMeshes.length > 0 && (
+                    <MaterialSection
+                      key={selectionKey}
+                      meshes={materialMeshes}
+                      history={runtime.history}
+                      library={runtime.materials}
+                      images={images}
+                      onImportImage={runtime.assetImport.importImage}
+                    />
+                  )}
+                  {models.length > 0 && (
+                    <p className="text-muted-foreground">
+                      가져온 모델은 파일에 든 머티리얼을 그대로 씁니다 (편집할
+                      수 없음).
+                    </p>
+                  )}
                 </div>
               </>
             )}

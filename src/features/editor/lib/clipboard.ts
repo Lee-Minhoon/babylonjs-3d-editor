@@ -11,6 +11,11 @@ import {
   type LightValues,
 } from "./editor-lights";
 import {
+  getLibraryId,
+  getMaterialLibrary,
+  linkMaterial,
+} from "./material-library";
+import {
   getEditorChildren,
   setMeshParent,
   topLevelOnly,
@@ -40,6 +45,8 @@ export type MeshSnapshot = {
   transform: TransformSnapshot;
   /** null이면 새 메쉬처럼 랜덤 값 */
   material: MaterialValues | null;
+  /** 쓰던 공유 머티리얼 id — 붙여넣을 때 아직 라이브러리에 있으면 같은 머티리얼에 연결한다 (없으면 material 값으로) */
+  materialRef: string | null;
   /** 모양 값 (프리셋 파라미터) */
   shape: ShapeParams;
   /** 조명 값 (조명 객체만, 메쉬는 null) */
@@ -58,6 +65,7 @@ function capture(
     presetId,
     transform,
     material: getMaterialValues(mesh),
+    materialRef: getLibraryId(mesh),
     shape: getShapeParams(mesh) ?? {},
     light: getLightValues(mesh),
     children: getEditorChildren(mesh).flatMap(
@@ -74,6 +82,10 @@ function createObject(scene: Scene, snapshot: MeshSnapshot): Mesh {
   const preset = findPreset(snapshot.presetId);
   if (!preset) throw new Error(`Unknown preset: ${snapshot.presetId}`);
   const mesh = addPresetObject(scene, preset, snapshot);
+  const shared =
+    snapshot.materialRef &&
+    getMaterialLibrary(scene)?.find(snapshot.materialRef);
+  if (shared) linkMaterial(mesh, shared);
   applyTransform(mesh, snapshot.transform);
   for (const child of snapshot.children) {
     setMeshParent(createObject(scene, child), mesh);

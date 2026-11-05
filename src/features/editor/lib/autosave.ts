@@ -1,7 +1,8 @@
-import { createKeyValueStore } from "@/lib/kv-store";
+import { createKeyValueStore, type KeyValueStore } from "@/lib/kv-store";
 import { createListeners } from "@/lib/listeners";
 
-import type { SceneFile } from "./scene-file";
+import type { Asset } from "./asset-store";
+import type { SceneContent, SceneFile } from "./scene-file";
 import { SceneFileError } from "./scene-format";
 
 /*
@@ -10,12 +11,12 @@ import { SceneFileError } from "./scene-format";
  * 다음 실행 때 기록이 있으면 pending으로 알리고, UI(RecoveryDialog)가 복구/버리기를 묻는다.
  * 답을 받기 전에는 아무것도 쓰지 않는다 — 시작 직후의 빈 씬이 기록을 지우면 안 되기 때문.
  *
+ * 에셋(모델·이미지 바이트)도 함께 남긴다 — 브라우저 저장소는 에셋을 id별로 한 번만 쓴다.
+ *
  * 저장소는 하나뿐이라 여러 탭에서 동시에 편집하면 마지막에 쓴 탭의 내용만 남는다.
  */
 
-export type AutosaveRecord = {
-  /** 씬 파일 텍스트 (scene-format) */
-  text: string;
+export type AutosaveRecord = SceneContent & {
   fileName: string | null;
   /** Date.now() */
   savedAt: number;
@@ -33,7 +34,8 @@ export type AutosaveState = {
 };
 
 export type Autosave = {
-  recover(): void;
+  /** 기록으로 씬을 바꾼다 (모델을 불러오느라 비동기) */
+  recover(): Promise<void>;
   discard(): void;
   /** 기다리는 저장을 바로 실행 (탭이 숨겨질 때) */
   flush(): Promise<void>;
@@ -65,6 +67,8 @@ export function createAutosave({
   let stored = false;
   /** 저장소 오류는 다시 성공할 때까지 한 번만 알린다 (매 변경마다 토스트가 뜨지 않게) */
   let reportedError = false;
+  /** 복구 중 (모델을 불러오는 동안 버튼을 다시 눌러도 한 번만) */
+  let recovering = false;
 
   const listeners = createListeners();
   const setPending = (next: AutosaveRecord | null) => {
@@ -81,7 +85,7 @@ export function createAutosave({
     try {
       if (dirty) {
         await storage.save({
-          text: sceneFile.serialize(),
+          ...sceneFile.serialize(),
           fileName,
           savedAt: Date.now(),
         });
@@ -130,15 +134,18 @@ export function createAutosave({
     });
 
   return {
-    recover() {
-      if (!record) return;
+    async recover() {
+      if (!record || recovering) return;
+      recovering = true;
       try {
-        sceneFile.restore(record.text, record.fileName);
+        await sceneFile.restore(record, record.fileName);
       } catch (error) {
         if (!(error instanceof SceneFileError)) throw error;
         onError("자동 저장 기록을 복구하지 못했습니다", error.message);
         void storage.clear();
         stored = false;
+      } finally {
+        recovering = false;
       }
       setPending(null);
       startWatching();
@@ -165,13 +172,58 @@ export function createAutosave({
   };
 }
 
-/** 브라우저(IndexedDB)에 저장하는 기본 저장소 */
-export function createBrowserAutosaveStorage(): AutosaveStorage {
-  const store = createKeyValueStore("babylonjs-3d-editor");
+/** 저장소에 남기는 모양: 에셋은 id만 (바이트는 "asset:<id>" 키에 따로) */
+type StoredRecord = Omit<AutosaveRecord, "assets"> & {
+  /** 이전 버전 기록에는 없다 */
+  assetIds?: string[];
+};
+
+/**
+ * 브라우저(IndexedDB)에 저장하는 기본 저장소. 1초마다 몇 MB짜리 모델을 다시 쓰지 않게
+ * 에셋은 id(내용 해시)별 키에 한 번만 쓰고, 기록에서 빠진 에셋 키는 지운다.
+ */
+export function createBrowserAutosaveStorage(
+  store: KeyValueStore = createKeyValueStore("babylonjs-3d-editor"),
+): AutosaveStorage {
   const KEY = "autosave";
+  const assetKey = (id: string) => `asset:${id}`;
+  /** 저장소에 있는 에셋 id (load·save가 맞춰 둔다) */
+  let storedIds = new Set<string>();
+
   return {
-    load: async () => (await store.get<AutosaveRecord>(KEY)) ?? null,
-    save: (record) => store.set(KEY, record),
-    clear: () => store.delete(KEY),
+    async load() {
+      const stored = await store.get<StoredRecord>(KEY);
+      if (!stored) return null;
+      const { assetIds = [], ...rest } = stored;
+      const assets = await Promise.all(
+        assetIds.map((id) => store.get<Asset>(assetKey(id))),
+      );
+      storedIds = new Set(assetIds);
+      return {
+        ...rest,
+        assets: assets.filter((asset): asset is Asset => asset !== undefined),
+      };
+    },
+    async save({ assets, ...rest }) {
+      for (const asset of assets) {
+        if (!storedIds.has(asset.id)) {
+          await store.set(assetKey(asset.id), asset);
+          storedIds.add(asset.id);
+        }
+      }
+      const ids = assets.map((asset) => asset.id);
+      await store.set(KEY, { ...rest, assetIds: ids } satisfies StoredRecord);
+      for (const id of storedIds) {
+        if (!ids.includes(id)) {
+          await store.delete(assetKey(id));
+          storedIds.delete(id);
+        }
+      }
+    },
+    async clear() {
+      await store.delete(KEY);
+      for (const id of storedIds) await store.delete(assetKey(id));
+      storedIds.clear();
+    },
   };
 }

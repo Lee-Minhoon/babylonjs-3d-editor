@@ -21,13 +21,15 @@ export type FileTypeOptions = {
   /** 피커에 보일 설명 (예: "씬 파일") */
   description: string;
   mimeType: string;
-  /** 점 포함 (예: ".json") */
+  /** 점 포함 (예: ".json"). 저장할 때 붙는 확장자 */
   extension: string;
+  /** 열 때 함께 받는 확장자 (예: ".jpeg") */
+  otherExtensions?: readonly string[];
 };
 
 export type OpenedFile = {
   name: string;
-  text: string;
+  bytes: Uint8Array;
   handle: FileSystemFileHandle | null;
 };
 
@@ -36,8 +38,16 @@ export type SavedFile = {
   handle: FileSystemFileHandle | null;
 };
 
-function pickerTypes({ description, mimeType, extension }: FileTypeOptions) {
-  return [{ description, accept: { [mimeType]: [extension] } }];
+const extensionsOf = (type: FileTypeOptions) => [
+  type.extension,
+  ...(type.otherExtensions ?? []),
+];
+
+function pickerTypes(types: readonly FileTypeOptions[]): FilePickerType[] {
+  return types.map((type) => ({
+    description: type.description,
+    accept: { [type.mimeType]: extensionsOf(type) },
+  }));
 }
 
 /** 사용자가 피커를 닫은 경우 */
@@ -56,29 +66,36 @@ function pickWithInput(accept: string): Promise<File | null> {
   });
 }
 
-/** 파일 하나를 골라 텍스트로 읽는다. 취소하면 null */
-export async function openTextFile(
-  type: FileTypeOptions,
+const readBytes = async (file: File) =>
+  new Uint8Array(await file.arrayBuffer());
+
+/** 파일 하나를 골라 바이트로 읽는다 (types 중 하나). 취소하면 null */
+export async function openFile(
+  types: FileTypeOptions | readonly FileTypeOptions[],
 ): Promise<OpenedFile | null> {
+  const list = Array.isArray(types) ? types : [types as FileTypeOptions];
   const picker = (window as FilePickerWindow).showOpenFilePicker;
   if (picker) {
     try {
-      const [handle] = await picker({ types: pickerTypes(type) });
+      const [handle] = await picker({ types: pickerTypes(list) });
       const file = await handle.getFile();
-      return { name: file.name, text: await file.text(), handle };
+      return { name: file.name, bytes: await readBytes(file), handle };
     } catch (error) {
       if (isAbort(error)) return null;
       throw error;
     }
   }
 
-  const file = await pickWithInput(`${type.extension},${type.mimeType}`);
+  const accept = list
+    .flatMap((type) => [...extensionsOf(type), type.mimeType])
+    .join(",");
+  const file = await pickWithInput(accept);
   return file
-    ? { name: file.name, text: await file.text(), handle: null }
+    ? { name: file.name, bytes: await readBytes(file), handle: null }
     : null;
 }
 
-/** 저장할 내용: 텍스트(씬 파일) 또는 바이너리(GLB·PNG) */
+/** 저장할 내용: 텍스트(씬 파일) 또는 바이너리(GLB·PNG·zip) */
 export type FileContent = string | Blob;
 
 async function writeToHandle(
@@ -126,7 +143,10 @@ export async function saveFile(
   const picker = (window as FilePickerWindow).showSaveFilePicker;
   if (picker) {
     try {
-      const picked = await picker({ suggestedName, types: pickerTypes(type) });
+      const picked = await picker({
+        suggestedName,
+        types: pickerTypes([type]),
+      });
       await writeToHandle(picked, content);
       return { name: picked.name, handle: picked };
     } catch (error) {

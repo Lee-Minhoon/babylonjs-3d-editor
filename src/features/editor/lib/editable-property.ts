@@ -34,6 +34,8 @@ type PropertyOptions<K, T> = {
   /** 대상에 값을 쓴다 (read가 null이 아닌 대상만 불린다) */
   write: (target: K, values: T) => void;
   isSame: (a: T, b: T) => boolean;
+  /** 값을 같이 쓰는 다른 대상들 (공유 머티리얼을 쓰는 메쉬들) — 바뀌면 함께 알린다 */
+  related?: (target: K) => readonly K[];
 };
 
 export function createEditableProperty<K, T>({
@@ -42,13 +44,15 @@ export function createEditableProperty<K, T>({
   read,
   write,
   isSame,
+  related,
 }: PropertyOptions<K, T>): EditableProperty<K, T> {
   const changed = createKeyedListeners<K>();
 
   const apply = (target: K, values: T) => {
     if (read(target) === null) return;
     write(target, values);
-    changed.emit(target);
+    const targets = new Set([target, ...(related?.(target) ?? [])]);
+    for (const item of targets) changed.emit(item);
   };
 
   return {
@@ -66,6 +70,7 @@ export function createEditableProperty<K, T>({
 }
 
 /** 메쉬 속성: Command 라벨은 "메쉬 이름 + 동사" */
+
 export function createMeshProperty<T>(
   options: Omit<PropertyOptions<AbstractMesh, T>, "label">,
 ): EditableProperty<AbstractMesh, T> {

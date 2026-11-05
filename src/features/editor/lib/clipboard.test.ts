@@ -19,6 +19,10 @@ const material = {
   emissive: "#112233",
   alpha: 0.5,
   unlit: true,
+  colorMap: null,
+  normalMap: null,
+  roughnessMap: null,
+  uvScale: 2,
 };
 
 function createSource() {

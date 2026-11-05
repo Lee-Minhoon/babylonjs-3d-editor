@@ -1,19 +1,26 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { openTextFile, saveFile } from "@/lib/file-access";
+import { openFile, saveFile } from "@/lib/file-access";
 
+import {
+  type AssetStore,
+  createAssetStore,
+  MODEL_MIME_TYPE,
+  modelPresetId,
+} from "./asset-store";
 import { createHistory } from "./history";
 import { createSpawnMeshCommand } from "./mesh-commands";
-import { addPresetMesh, findPreset } from "./mesh-presets";
+import { addPresetMesh, findPreset, isModelObject } from "./mesh-presets";
 import type { PlacementTool } from "./placement-tool";
 import { createSceneFile, type SceneFileNotice } from "./scene-file";
 import { clearEditorMeshes, getEditorMeshes } from "./scene-format";
+import { packScene, readSceneBytes } from "./scene-package";
 import type { Selection } from "./selection";
-import { createTestScene } from "./test-scene";
+import { createTestScene, fakeModelLoader } from "./test-scene";
 
 // 브라우저 파일 창 대신 메모리로
 vi.mock("@/lib/file-access", () => ({
-  openTextFile: vi.fn(),
+  openFile: vi.fn(),
   saveFile: vi.fn(),
 }));
 
@@ -22,10 +29,12 @@ const scene = createTestScene();
 function setup({ historyLimit }: { historyLimit?: number } = {}) {
   const history = createHistory({ limit: historyLimit });
   const notify = vi.fn<(notice: SceneFileNotice) => void>();
+  const assets = createAssetStore(scene, { loadModel: fakeModelLoader });
   const sceneFile = createSceneFile(scene, {
     history,
     selection: { select: () => {} } as unknown as Selection,
     placement: { cancel: () => {} } as unknown as PlacementTool,
+    assets,
     notify,
   });
   const addBox = () =>
@@ -37,7 +46,32 @@ function setup({ historyLimit }: { historyLimit?: number } = {}) {
         "Box",
       ),
     );
-  return { history, sceneFile, notify, addBox };
+  const addModel = async () => {
+    const asset = await assets.add({
+      name: "chair.glb",
+      type: "model",
+      mimeType: MODEL_MIME_TYPE,
+      bytes: new Uint8Array([4, 2]),
+    });
+    const preset = findPreset(modelPresetId(asset.id))!;
+    history.execute(
+      createSpawnMeshCommand(
+        scene,
+        () => addPresetMesh(scene, preset),
+        "추가",
+        preset.label,
+      ),
+    );
+  };
+  return { history, sceneFile, notify, addBox, addModel, assets };
+}
+
+/** saveFile에 넘긴 마지막 내용을 바이트로 */
+async function savedBytes(): Promise<Uint8Array> {
+  const content = vi.mocked(saveFile).mock.lastCall![0];
+  return content instanceof Blob
+    ? new Uint8Array(await content.arrayBuffer())
+    : new TextEncoder().encode(content);
 }
 
 const meshCount = (text: string) =>
@@ -118,9 +152,9 @@ describe("열기 · 새 씬", () => {
     const { sceneFile, notify, addBox } = setup();
     addBox();
     await sceneFile.save();
-    vi.mocked(openTextFile).mockResolvedValue({
+    vi.mocked(openFile).mockResolvedValue({
       name: "bad.json",
-      text: "{broken",
+      bytes: new TextEncoder().encode("{broken"),
       handle: null,
     });
 
@@ -150,5 +184,99 @@ describe("열기 · 새 씬", () => {
     await creatingAgain;
     expect(getEditorMeshes(scene)).toHaveLength(0);
     expect(sceneFile.getState().dirty).toBe(false);
+  });
+});
+
+describe("에셋이 있는 씬 (.zip 묶음)", () => {
+  let assets: AssetStore | null = null;
+  afterEach(() => assets?.dispose());
+
+  test("모델이 있으면 .zip으로 저장하고, 그 파일을 열면 모델이 돌아온다", async () => {
+    const setupResult = setup();
+    assets = setupResult.assets;
+    const { sceneFile, addModel, addBox } = setupResult;
+    addBox();
+    await addModel();
+    vi.mocked(saveFile).mockResolvedValue({ name: "scene.zip", handle: null });
+
+    await sceneFile.save();
+    const [, options] = vi.mocked(saveFile).mock.lastCall!;
+    expect(options).toMatchObject({
+      suggestedName: "scene.zip",
+      type: { extension: ".zip" },
+    });
+    const bytes = await savedBytes();
+    expect(readSceneBytes(bytes).files.size).toBe(2); // scene.json + 모델
+
+    await sceneFile.newScene();
+    expect(getEditorMeshes(scene)).toHaveLength(0);
+    vi.mocked(openFile).mockResolvedValue({
+      name: "scene.zip",
+      bytes,
+      handle: null,
+    });
+    await sceneFile.open();
+    const opened = getEditorMeshes(scene);
+    expect(opened.map((mesh) => mesh.name)).toEqual(["Box 1", "chair 1"]);
+    expect(isModelObject(opened[1])).toBe(true);
+    expect(sceneFile.getState()).toMatchObject({
+      fileName: "scene.zip",
+      dirty: false,
+    });
+  });
+
+  test(".json으로 저장한 씬에 모델이 생기면 같은 파일에 덮어쓰지 않고 .zip 위치를 묻는다", async () => {
+    const setupResult = setup();
+    assets = setupResult.assets;
+    const { sceneFile, addModel, addBox } = setupResult;
+    const handle = { name: "level.json" } as FileSystemFileHandle;
+    vi.mocked(saveFile).mockResolvedValue({ name: "level.json", handle });
+    addBox();
+    await sceneFile.save();
+    addBox();
+    await sceneFile.save(); // 에셋이 없으면 같은 파일에 덮어쓴다
+    expect(vi.mocked(saveFile).mock.lastCall![1].handle).toBe(handle);
+
+    await addModel();
+    await sceneFile.save();
+    expect(vi.mocked(saveFile).mock.lastCall![1]).toMatchObject({
+      handle: null,
+      suggestedName: "level.zip",
+    });
+  });
+
+  test("묶음에 모델 파일이 빠져 있으면 알리고 씬은 그대로", async () => {
+    const setupResult = setup();
+    assets = setupResult.assets;
+    const { sceneFile, addModel, notify } = setupResult;
+    await addModel();
+    await sceneFile.save();
+    const bytes = await savedBytes();
+    // 모델을 모르는 새 탭에서, 모델 파일이 빠진 묶음을 연다
+    const { text } = readSceneBytes(bytes);
+    const tampered = packScene(text, []);
+    vi.mocked(openFile).mockResolvedValue({
+      name: "broken.zip",
+      bytes: tampered,
+      handle: null,
+    });
+    assets.dispose();
+    assets = createAssetStore(scene, { loadModel: fakeModelLoader });
+    const fresh = createSceneFile(scene, {
+      history: createHistory(),
+      selection: { select: () => {} } as unknown as Selection,
+      placement: { cancel: () => {} } as unknown as PlacementTool,
+      assets,
+      notify,
+    });
+    await fresh.open();
+    expect(notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "error",
+        description: expect.stringContaining("파일에 없습니다"),
+      }),
+    );
+    expect(getEditorMeshes(scene)).toHaveLength(1);
+    fresh.dispose();
   });
 });

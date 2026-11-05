@@ -107,7 +107,8 @@ export async function mockFileSystem(page: Page) {
     const handle = (name: string) => ({
       name,
       kind: "file",
-      getFile: async () => new File([w.__files[name] ?? ""], name),
+      getFile: async () =>
+        new File([w.__blobs[name] ?? w.__files[name] ?? ""], name),
       createWritable: async () => {
         let buffer = "";
         let blob: Blob | null = null;
@@ -172,6 +173,48 @@ export function writeMockFile(page: Page, name: string, text: string) {
     },
     [name, text] as const,
   );
+}
+
+/** 다음 "열기" 창이 이 바이너리 파일을 고르게 한다 (모델·이미지·zip) */
+export function writeMockBytes(page: Page, name: string, bytes: Uint8Array) {
+  return page.evaluate(
+    ([fileName, base64]) => {
+      const w = window as unknown as {
+        __blobs: Record<string, Blob>;
+        __nextOpen: string | null;
+      };
+      const binary = atob(base64);
+      w.__blobs[fileName] = new Blob([
+        Uint8Array.from(binary, (char) => char.charCodeAt(0)),
+      ]);
+      w.__nextOpen = fileName;
+    },
+    [name, Buffer.from(bytes).toString("base64")] as const,
+  );
+}
+
+/** 저장된 바이너리 파일 내용 (없으면 null) */
+export async function readMockBytes(
+  page: Page,
+  name: string,
+): Promise<Uint8Array | null> {
+  const base64 = await page.evaluate(async (fileName) => {
+    const blob = (window as unknown as { __blobs: Record<string, Blob> })
+      .__blobs[fileName];
+    if (!blob) return null;
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary);
+  }, name);
+  return base64 === null ? null : new Uint8Array(Buffer.from(base64, "base64"));
+}
+
+/** 다음 "열기" 창이 이미 저장된 파일을 고르게 한다 */
+export function setNextOpen(page: Page, name: string) {
+  return page.evaluate((fileName) => {
+    (window as unknown as { __nextOpen: string | null }).__nextOpen = fileName;
+  }, name);
 }
 
 /** 한글 입력 상태의 키 입력 (key는 한글, code는 물리 키) */

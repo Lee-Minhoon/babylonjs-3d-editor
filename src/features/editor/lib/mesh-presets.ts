@@ -16,6 +16,12 @@ import {
 } from "./mesh-material";
 
 export type MeshPresetId =
+  | BuiltInPresetId
+  /** 가져온 모델 (asset-store가 에셋마다 등록한다) */
+  | `model:${string}`;
+
+/** 에디터에 들어 있는 프리셋 (메쉬·조명) */
+export type BuiltInPresetId =
   | "box"
   | "sphere"
   | "ico-sphere"
@@ -63,6 +69,8 @@ export type MeshPreset = {
   light?: LightKind;
   /** 배치할 때 표면에서 이만큼 띄운다 (조명) */
   lift?: number;
+  /** 가져온 모델이면 그 에셋 id. create는 모델 원본을 복제한다 (머티리얼은 glTF 그대로, 편집 안 함) */
+  model?: string;
 };
 
 const tessellation = (defaultValue: number, max = 64): ShapeParamDef => ({
@@ -286,8 +294,20 @@ export function shapeParamsOf(
   );
 }
 
+/** 가져온 모델 프리셋 ("model:<에셋 id>"). 에셋이 들어올 때 asset-store가 등록한다 */
+const modelPresets = new Map<MeshPresetId, MeshPreset>();
+
+export function registerModelPreset(preset: MeshPreset) {
+  modelPresets.set(preset.id, preset);
+}
+
 export function findPreset(id: MeshPresetId): MeshPreset | undefined {
-  return ALL_PRESETS.find((preset) => preset.id === id);
+  return ALL_PRESETS.find((preset) => preset.id === id) ?? modelPresets.get(id);
+}
+
+/** 가져온 모델 객체인가 (머티리얼은 glTF 그대로 — 머티리얼 편집·모양 값 없음) */
+export function isModelObject(mesh: AbstractMesh): boolean {
+  return getPresetId(mesh)?.startsWith("model:") ?? false;
 }
 
 /** 조명 아이콘 메쉬인가 (에디터 객체지만 메쉬처럼 그려지거나 내보내지지 않는다) */
@@ -388,9 +408,11 @@ export function addPresetMesh(
   const params = shapeParamsOf(preset, shape);
   const mesh = preset.create(name, scene, params);
 
-  // 조명 아이콘의 머티리얼은 editor-lights가 붙인다 (PBR이 아니라 조명 색의 단색)
+  // 조명 아이콘의 머티리얼은 editor-lights가 붙인다 (PBR이 아니라 조명 색의 단색). 모델은 원본의 glTF 머티리얼
   if (!preset.light) {
-    mesh.material = createMeshMaterial(`${name} Material`, scene, material);
+    if (!preset.model) {
+      mesh.material = createMeshMaterial(`${name} Material`, scene, material);
+    }
     mesh.receiveShadows = true;
   }
 

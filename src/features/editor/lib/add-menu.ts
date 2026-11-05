@@ -1,10 +1,11 @@
 import { createListeners } from "@/lib/listeners";
 
-import { ALL_PRESETS, type MeshPreset } from "./mesh-presets";
+import { type Asset, modelPresetId } from "./asset-store";
+import { ALL_PRESETS, findPreset, type MeshPreset } from "./mesh-presets";
 
 /*
  * 검색형 추가 메뉴 (⇧A, Blender 방식): 커서 위치에 검색창을 띄워 추가할 것을 고른다.
- * 메쉬·조명 프리셋 — 가져온 모델이 생기면 ADD_MENU_ITEMS에 더한다.
+ * 메쉬·조명 프리셋(ADD_MENU_ITEMS)과 가져온 모델(modelMenuItems — 에셋 저장소에 있는 것).
  * 고르면 배치 모드가 시작된다 (startPresetPlacement).
  */
 
@@ -28,6 +29,25 @@ export const ADD_MENU_ITEMS: readonly AddMenuItem[] = ALL_PRESETS.map(
     preset,
   }),
 );
+
+/** 가져온 모델 항목 (에셋 저장소의 모델 에셋마다) */
+export function modelMenuItems(assets: readonly Asset[]): AddMenuItem[] {
+  return assets.flatMap((asset) => {
+    const preset =
+      asset.type === "model" ? findPreset(modelPresetId(asset.id)) : undefined;
+    return preset
+      ? [
+          {
+            id: preset.id,
+            label: preset.label,
+            kind: "모델",
+            keywords: preset.keywords,
+            preset,
+          },
+        ]
+      : [];
+  });
+}
 
 /**
  * 검색: 이름·검색어(한글 이름 등)에 글자가 들어 있으면 보인다. 대소문자·공백 무시.

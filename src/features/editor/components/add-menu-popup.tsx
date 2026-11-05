@@ -6,11 +6,18 @@ import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 
-import { type AddMenu, type AddMenuItem, searchAddMenu } from "../lib/add-menu";
+import { useAssets } from "../hooks/use-editor-state";
+import {
+  ADD_MENU_ITEMS,
+  type AddMenu,
+  type AddMenuItem,
+  modelMenuItems,
+  searchAddMenu,
+} from "../lib/add-menu";
 import { startPresetPlacement } from "../lib/editor-actions";
 import type { EditorRuntime } from "../lib/editor-runtime";
 import { getPresetShortcut } from "../lib/editor-shortcuts";
-import { PRESET_ICONS } from "./preset-icons";
+import { PresetIcon } from "./preset-icons";
 
 const WIDTH = 240;
 /** 뷰포트 가장자리와의 최소 간격 */
@@ -52,7 +59,11 @@ function AddMenuPanel({
   const [active, setActive] = useState(0);
   const panel = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ left: number; top: number }>();
-  const items = searchAddMenu(query);
+  const assets = useAssets(runtime);
+  const items = searchAddMenu(query, [
+    ...ADD_MENU_ITEMS,
+    ...modelMenuItems(assets),
+  ]);
   const activeIndex = Math.min(active, items.length - 1);
 
   // 뷰포트 밖으로 나가지 않게 (커서가 오른쪽·아래 끝이면 안쪽으로)
@@ -142,7 +153,6 @@ function AddMenuPanel({
           </li>
         )}
         {items.map((item, index) => {
-          const Icon = PRESET_ICONS[item.preset.id];
           const shortcut = getPresetShortcut(item.preset.id);
           return (
             <li
@@ -159,7 +169,12 @@ function AddMenuPanel({
               onPointerDown={(event) => event.preventDefault()}
               onClick={() => choose(item)}
             >
-              <Icon strokeWidth={1.75} aria-hidden className="size-3.5" />
+              <PresetIcon
+                preset={item.preset.id}
+                strokeWidth={1.75}
+                aria-hidden
+                className="size-3.5"
+              />
               <span className="flex-1">{item.label}</span>
               <span className="text-muted-foreground">{item.kind}</span>
               {shortcut && <Kbd>{shortcut}</Kbd>}

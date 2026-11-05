@@ -7,6 +7,7 @@ import type { BaseUIEvent } from "@base-ui/react/types";
 import {
   Box as BoxIcon,
   ExternalLink,
+  FileUp,
   type LucideIcon,
   Redo2,
   Search,
@@ -42,6 +43,7 @@ import { useSceneMeshes } from "@/hooks/use-scene-meshes";
 
 import {
   useActiveTool,
+  useAssets,
   useClipboardHasContent,
   useGizmoSpace,
   useHistoryState,
@@ -52,6 +54,7 @@ import {
 } from "../hooks/use-editor-state";
 import { useMeshFlagCount } from "../hooks/use-mesh-flags";
 import { useMeshHierarchy } from "../hooks/use-mesh-hierarchy";
+import { modelMenuItems } from "../lib/add-menu";
 import type { ViewName } from "../lib/camera-views";
 import {
   alignSelected,
@@ -91,7 +94,7 @@ import {
   type SnapKind,
   type TransformTool,
 } from "../lib/tools";
-import { PRESET_ICONS } from "./preset-icons";
+import { PresetIcon } from "./preset-icons";
 import { GIZMO_SPACE_LABELS, TOOL_ITEMS } from "./transform-toolbar";
 
 const SNAP_MENU_LABELS: Record<SnapKind, string> = {
@@ -327,6 +330,7 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
   const orthographic = useOrthographic(runtime);
   const canPaste = useClipboardHasContent(runtime);
   const file = useSceneFileState(runtime);
+  const models = modelMenuItems(useAssets(runtime));
   const isWebGPU = runtime?.scene.getEngine().isWebGPU;
 
   return (
@@ -372,6 +376,12 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
               <MenubarShortcut>{SHORTCUT_LABELS.saveAs}</MenubarShortcut>
             </MenubarItem>
             <MenubarSeparator />
+            <MenubarItem
+              disabled={!runtime}
+              onClick={() => void runtime?.assetImport.importModel()}
+            >
+              모델 가져오기(.glb)…
+            </MenubarItem>
             <MenubarItem
               disabled={!runtime}
               onClick={() => void runtime?.sceneExport.exportGlb()}
@@ -498,7 +508,6 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
                 {index > 0 && <MenubarSeparator />}
                 <MenubarLabel>{group}</MenubarLabel>
                 {presets.map((preset) => {
-                  const Icon = PRESET_ICONS[preset.id];
                   const shortcut = getPresetShortcut(preset.id);
                   return (
                     <MenubarItem
@@ -511,7 +520,11 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
                         }
                       }}
                     >
-                      <Icon strokeWidth={1.75} aria-hidden />
+                      <PresetIcon
+                        preset={preset.id}
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
                       {preset.label}
                       {shortcut && (
                         <MenubarShortcut>{shortcut}</MenubarShortcut>
@@ -521,6 +534,36 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
                 })}
               </MenubarGroup>
             ))}
+            <MenubarSeparator />
+            <MenubarGroup>
+              <MenubarLabel>모델</MenubarLabel>
+              {models.map((item) => {
+                return (
+                  <MenubarItem
+                    key={item.id}
+                    onClick={() => {
+                      if (runtime) {
+                        startPresetPlacement(runtime.placement, item.preset);
+                      }
+                    }}
+                  >
+                    <PresetIcon
+                      preset={item.preset.id}
+                      strokeWidth={1.75}
+                      aria-hidden
+                    />
+                    {item.label}
+                  </MenubarItem>
+                );
+              })}
+              <MenubarItem
+                disabled={!runtime}
+                onClick={() => void runtime?.assetImport.importModel()}
+              >
+                <FileUp strokeWidth={1.75} aria-hidden />
+                모델 가져오기…
+              </MenubarItem>
+            </MenubarGroup>
           </MenubarContent>
         </MenubarMenu>
 

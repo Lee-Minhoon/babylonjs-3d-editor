@@ -4,6 +4,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import { attachToScene, detachFromScene } from "./editor-lights";
 import type { Command } from "./history";
 import { getEditorDescendants } from "./mesh-hierarchy";
+import { isSharedMaterial } from "./mesh-material";
 
 /*
  * 메쉬 생성/삭제 Command.
@@ -25,8 +26,14 @@ function attachTree(scene: Scene, tree: readonly AbstractMesh[]) {
   for (const item of tree) attachToScene(scene, item);
 }
 
-function disposeMesh(mesh: AbstractMesh) {
-  // 첫 인자 false: 자식(자손 객체·조명)도 함께. 두 번째 인자: 이 메쉬 전용 머티리얼/텍스처도 함께 해제
+/**
+ * 에디터 객체를 실제로 해제한다 (자손 객체·조명과 이 객체 전용 머티리얼/텍스처까지).
+ * 같이 쓰는 머티리얼(모델 원본의 것 등)은 떼어 내고 해제한다 — Babylon은 다른 메쉬가 쓰는지 보지 않는다.
+ */
+export function disposeEditorObject(mesh: AbstractMesh) {
+  for (const item of [mesh, ...mesh.getChildMeshes(false)]) {
+    if (isSharedMaterial(item.material)) item.material = null;
+  }
   mesh.dispose(false, true);
 }
 
@@ -65,7 +72,7 @@ export function createSpawnMeshCommand(
     },
     dispose() {
       // undo된 상태(씬 밖)로 버려질 때만 해제. 씬에 있으면 씬이 소유한다.
-      if (mesh && !inScene) disposeMesh(mesh);
+      if (mesh && !inScene) disposeEditorObject(mesh);
     },
   };
 }
@@ -90,7 +97,7 @@ export function createRemoveMeshCommand(
       inScene = true;
     },
     dispose() {
-      if (!inScene) disposeMesh(mesh);
+      if (!inScene) disposeEditorObject(mesh);
     },
   };
 }

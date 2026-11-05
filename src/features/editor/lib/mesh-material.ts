@@ -1,14 +1,21 @@
+import type { Material } from "@babylonjs/core/Materials/material";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
+import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 
+import { getAssetStore } from "./asset-registry";
 import { createMeshProperty } from "./editable-property";
 
 /*
  * 에디터 메쉬의 머티리얼 (PBR metallic-roughness 하나만 지원 — glTF와 같은 방식).
  * 기본색·메탈릭·거칠기에 발광색·불투명도·조명 무시를 더한다 (모두 glTF로 내보낼 수 있는 값).
- * 메쉬마다 머티리얼을 하나씩 가진다 (공유 머티리얼 없음).
+ * 텍스처는 이미지 에셋 id로 가리킨다 (asset-store가 바이트·주소를 갖고, 파일에는 묶음 .zip으로 들어간다).
+ *   기본색 맵(값에 기본색이 곱해짐) · 노멀 맵 · 거칠기·메탈릭 맵(glTF 방식: G = 거칠기, B = 메탈릭, 값이 곱해짐).
+ *   UV는 프리셋 메쉬의 기본 UV이고 uvScale만큼 반복한다.
+ * 메쉬마다 전용 머티리얼을 하나씩 갖거나, 공유 머티리얼 라이브러리(material-library)의 것을 같이 쓴다.
+ * 공유 머티리얼을 고치면 그것을 쓰는 메쉬가 모두 바뀌고 모두에게 알린다 (related).
  *
  * 값을 바꾸는 곳(미리보기·Command·파일 열기)은 모두 applyMaterialValues를 거친다
  * → 속성 패널은 onMaterialChange 하나만 구독하면 어디서 바뀌든 반영된다.
@@ -28,7 +35,41 @@ export type MaterialValues = {
   alpha: number;
   /** 조명 무시: 조명·환경과 상관없이 기본색 그대로 보인다 (glTF KHR_materials_unlit) */
   unlit: boolean;
+  /** 기본색 텍스처 (이미지 에셋 id). 기본색이 곱해진다 — 흰색이면 이미지 그대로 */
+  colorMap: string | null;
+  /** 노멀 맵 (이미지 에셋 id) */
+  normalMap: string | null;
+  /** 거칠기·메탈릭 맵 (이미지 에셋 id). G 채널 = 거칠기, B 채널 = 메탈릭 (glTF metallicRoughness) */
+  roughnessMap: string | null;
+  /** 텍스처 반복 횟수 (UV 배율). 1 = 면마다 한 번 */
+  uvScale: number;
 };
+
+/** 텍스처 칸 (속성 패널·파일 검증이 같이 쓴다) */
+export const TEXTURE_SLOTS = [
+  { key: "colorMap", label: "기본색 맵" },
+  { key: "normalMap", label: "노멀 맵" },
+  { key: "roughnessMap", label: "거칠기·메탈릭 맵" },
+] as const satisfies readonly { key: keyof MaterialValues; label: string }[];
+
+export type TextureSlot = (typeof TEXTURE_SLOTS)[number]["key"];
+
+/** 텍스처 반복 범위 (속성 패널 슬라이더·파일 검증) */
+export const UV_SCALE_RANGE = { min: 0.1, max: 20, step: 0.1 } as const;
+
+/**
+ * 여러 메쉬가 같이 쓰는 머티리얼 (가져온 모델의 glTF 머티리얼 등). 메쉬를 해제할 때 함께 해제하면 안 된다
+ * — mesh-commands의 disposeEditorObject가 이 표시를 보고 떼어 낸 뒤 해제한다.
+ */
+const sharedMaterials = new WeakSet<Material>();
+
+export function markSharedMaterial(material: Material) {
+  sharedMaterials.add(material);
+}
+
+export function isSharedMaterial(material: Material | null): boolean {
+  return material !== null && sharedMaterials.has(material);
+}
 
 /** 색 외의 기본값 (새 메쉬, 이 값이 없는 이전 버전 파일) */
 export const MATERIAL_DEFAULTS = {
@@ -37,6 +78,10 @@ export const MATERIAL_DEFAULTS = {
   emissive: "#000000",
   alpha: 1,
   unlit: false,
+  colorMap: null,
+  normalMap: null,
+  roughnessMap: null,
+  uvScale: 1,
 } as const satisfies Omit<MaterialValues, "color">;
 
 /** 새 메쉬 기본값: 랜덤 색의 무광 플라스틱 느낌 */
@@ -67,6 +112,42 @@ export function createMeshMaterial(
   return material;
 }
 
+/** 텍스처가 가리키는 이미지 에셋 id (같은 에셋이면 텍스처를 다시 만들지 않는다) */
+const textureAssets = new WeakMap<Texture, string>();
+
+const TEXTURE_PROPERTIES = {
+  colorMap: "albedoTexture",
+  normalMap: "bumpTexture",
+  roughnessMap: "metallicTexture",
+} as const satisfies Record<TextureSlot, keyof PBRMaterial>;
+
+/** 칸의 텍스처를 에셋 id에 맞춘다. 저장소에 없는 에셋이면 비운다 (머티리얼 값에는 id가 남는다) */
+function setTexture(
+  material: PBRMaterial,
+  slot: TextureSlot,
+  assetId: string | null,
+  uvScale: number,
+) {
+  const property = TEXTURE_PROPERTIES[slot];
+  const current = material[property];
+  const currentId =
+    current instanceof Texture ? textureAssets.get(current) : null;
+  if ((currentId ?? null) !== assetId) {
+    // 텍스처는 머티리얼마다 따로 (같은 주소면 엔진이 이미지는 공유한다)
+    current?.dispose();
+    const scene = material.getScene();
+    const url = assetId && getAssetStore(scene)?.getUrl(assetId);
+    let texture: Texture | null = null;
+    if (url) {
+      texture = new Texture(url, scene);
+      textureAssets.set(texture, assetId);
+    }
+    material[property] = texture;
+  }
+  const texture = material[property];
+  if (texture instanceof Texture) texture.uScale = texture.vScale = uvScale;
+}
+
 function setValues(material: PBRMaterial, values: MaterialValues) {
   material.albedoColor = Color3.FromHexString(values.color).toLinearSpace();
   material.metallic = values.metallic;
@@ -81,6 +162,13 @@ function setValues(material: PBRMaterial, values: MaterialValues) {
       ? PBRMaterial.PBRMATERIAL_ALPHABLEND
       : PBRMaterial.PBRMATERIAL_OPAQUE;
   material.unlit = values.unlit;
+  for (const { key } of TEXTURE_SLOTS) {
+    setTexture(material, key, values[key], values.uvScale);
+  }
+  // 거칠기·메탈릭 맵은 glTF처럼 G·B 채널을 읽는다
+  material.useRoughnessFromMetallicTextureAlpha = false;
+  material.useRoughnessFromMetallicTextureGreen = true;
+  material.useMetallnessFromMetallicTextureBlue = true;
   appliedValues.set(material, { ...values });
 }
 
@@ -102,7 +190,16 @@ export const materialProperty = createMeshProperty<MaterialValues>({
     a.roughness === b.roughness &&
     a.emissive.toLowerCase() === b.emissive.toLowerCase() &&
     a.alpha === b.alpha &&
-    a.unlit === b.unlit,
+    a.unlit === b.unlit &&
+    a.colorMap === b.colorMap &&
+    a.normalMap === b.normalMap &&
+    a.roughnessMap === b.roughnessMap &&
+    a.uvScale === b.uvScale,
+  // 같이 쓰는 머티리얼이면 그것을 쓰는 다른 메쉬들의 패널도 다시 읽게
+  related: (mesh) =>
+    mesh.material && isSharedMaterial(mesh.material)
+      ? mesh.material.getBindedMeshes()
+      : [],
 });
 
 export const {

@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
+import type { Asset } from "../lib/asset-store";
 import type { AutosaveState } from "../lib/autosave";
 import type { ScreenRect } from "../lib/box-select";
 import type { ContextMenuState } from "../lib/context-menu";
@@ -192,5 +193,18 @@ export function useContextMenuState(runtime: Runtime): ContextMenuState {
     contextMenu?.subscribe ?? subscribeNoop,
     contextMenu?.getState ?? getClosedContextMenu,
     getClosedContextMenu,
+  );
+}
+
+const NO_ASSETS: readonly Asset[] = [];
+const getNoAssets = () => NO_ASSETS;
+
+/** 에셋 저장소의 에셋 목록 (가져온 모델·이미지) */
+export function useAssets(runtime: Runtime): readonly Asset[] {
+  const assets = runtime?.assets;
+  return useSyncExternalStore(
+    assets?.subscribe ?? subscribeNoop,
+    assets?.list ?? getNoAssets,
+    getNoAssets,
   );
 }

@@ -46,7 +46,7 @@ import {
 } from "../lib/mesh-presets";
 import { isAdditiveClick } from "../lib/selection";
 import { MeshNameInput } from "./mesh-name-input";
-import { MeshIcon, PRESET_ICONS } from "./preset-icons";
+import { MeshIcon, PresetIcon } from "./preset-icons";
 
 function SectionTitle({
   children,
@@ -327,7 +327,6 @@ function PresetButton({
   active: boolean;
   label?: string;
 }) {
-  const Icon = PRESET_ICONS[preset.id];
   const shortcut = getPresetShortcut(preset.id);
   return (
     <Button
@@ -341,7 +340,7 @@ function PresetButton({
       aria-keyshortcuts={shortcut ?? undefined}
       onClick={() => runtime?.placement.toggle(preset)}
     >
-      <Icon strokeWidth={1.75} aria-hidden />
+      <PresetIcon preset={preset.id} strokeWidth={1.75} aria-hidden />
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
       {shortcut && (
         <Kbd className={active ? "bg-primary-foreground/15 text-current" : ""}>

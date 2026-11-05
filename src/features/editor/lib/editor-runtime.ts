@@ -2,6 +2,8 @@ import type { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import type { Scene } from "@babylonjs/core/scene";
 
 import { type AddMenu, createAddMenu } from "./add-menu";
+import { type AssetImport, createAssetImport } from "./asset-import";
+import { type AssetStore, createAssetStore } from "./asset-store";
 import {
   type Autosave,
   type AutosaveStorage,
@@ -13,6 +15,10 @@ import { type CameraView, createCameraView } from "./camera-views";
 import { type Clipboard, createClipboard } from "./clipboard";
 import { type ContextMenu, createContextMenu } from "./context-menu";
 import { createHistory, type History } from "./history";
+import {
+  createMaterialLibrary,
+  type MaterialLibrary,
+} from "./material-library";
 import { createPlacementTool, type PlacementTool } from "./placement-tool";
 import { bindPointerRouter } from "./pointer-router";
 import { createSceneExport, type SceneExport } from "./scene-export";
@@ -35,6 +41,9 @@ import { createTransformGizmo, type TransformGizmo } from "./transform-gizmo";
 /** 뷰포트가 만들어 에디터 UI에 넘겨주는 씬과 씬에 붙은 도구들 */
 export type EditorRuntime = {
   scene: Scene;
+  assets: AssetStore;
+  assetImport: AssetImport;
+  materials: MaterialLibrary;
   sceneExport: SceneExport;
   help: ShortcutHelp;
   addMenu: AddMenu;
@@ -63,6 +72,8 @@ export function createEditorRuntime(
     autosaveStorage: AutosaveStorage;
   },
 ): { runtime: EditorRuntime; dispose(): void } {
+  const assets = createAssetStore(scene);
+  const materials = createMaterialLibrary(scene);
   const history = createHistory();
   const tools = createToolState();
   const placement = createPlacementTool(scene, history, tools);
@@ -92,12 +103,14 @@ export function createEditorRuntime(
     history,
     selection,
     placement,
+    assets,
     notify,
   });
   const sceneExport = createSceneExport(scene, {
     getFileName: () => sceneFile.getState().fileName,
     notify,
   });
+  const assetImport = createAssetImport({ assets, placement, notify });
   const autosave = createAutosave({
     sceneFile,
     storage: autosaveStorage,
@@ -108,6 +121,9 @@ export function createEditorRuntime(
   return {
     runtime: {
       scene,
+      assets,
+      assetImport,
+      materials,
       sceneExport,
       help,
       addMenu,
@@ -137,6 +153,9 @@ export function createEditorRuntime(
       placement.dispose();
       // undo로 씬에서 떼어둔 메쉬는 scene.dispose()가 모르므로 여기서 해제
       history.dispose();
+      // 공유 머티리얼·모델 원본(과 그 머티리얼)은 쓰던 객체들이 다 해제된 뒤에
+      materials.dispose();
+      assets.dispose();
     },
   };
 }

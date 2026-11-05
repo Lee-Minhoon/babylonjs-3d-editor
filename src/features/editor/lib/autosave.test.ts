@@ -1,10 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+import type { KeyValueStore } from "@/lib/kv-store";
+
+import {
+  createAssetStore,
+  MODEL_MIME_TYPE,
+  modelPresetId,
+} from "./asset-store";
 import {
   AUTOSAVE_DELAY,
   type AutosaveRecord,
   type AutosaveStorage,
   createAutosave,
+  createBrowserAutosaveStorage,
 } from "./autosave";
 import { createHistory } from "./history";
 import { createSpawnMeshCommand } from "./mesh-commands";
@@ -13,9 +21,11 @@ import type { PlacementTool } from "./placement-tool";
 import { createSceneFile } from "./scene-file";
 import { clearEditorMeshes, getEditorMeshes } from "./scene-format";
 import type { Selection } from "./selection";
-import { createTestScene } from "./test-scene";
+import { createTestScene, fakeModelLoader } from "./test-scene";
 
 const scene = createTestScene();
+/** 테스트가 모두 같은 저장소를 쓴다 (모델 원본이 씬마다 하나) */
+const sharedAssets = createAssetStore(scene, { loadModel: fakeModelLoader });
 
 /** 메모리 저장소 + 호출 기록 */
 function memoryStorage(initial: AutosaveRecord | null = null) {
@@ -34,6 +44,7 @@ function setup(initial: AutosaveRecord | null = null) {
     history,
     selection: { select: () => {} } as unknown as Selection,
     placement: { cancel: () => {} } as unknown as PlacementTool,
+    assets: sharedAssets,
     notify: () => {},
   });
   const { storage, current } = memoryStorage(initial);
@@ -115,9 +126,9 @@ describe("복구", () => {
     await settle();
     addBox();
     addBox();
-    const text = sceneFile.serialize();
+    const content = sceneFile.serialize();
     clearEditorMeshes(scene);
-    return { text, fileName: "level.json", savedAt: 1 };
+    return { ...content, fileName: "level.json", savedAt: 1 };
   }
 
   test("기록이 있으면 묻는 동안 아무것도 쓰지 않는다 (빈 씬이 기록을 지우면 안 됨)", async () => {
@@ -141,7 +152,7 @@ describe("복구", () => {
     const { autosave, sceneFile, history } = setup(record);
     await settle();
 
-    autosave.recover();
+    await autosave.recover();
     expect(getEditorMeshes(scene).map((mesh) => mesh.name)).toEqual([
       "Box 1",
       "Box 2",
@@ -170,6 +181,7 @@ describe("복구", () => {
   test("기록이 깨졌으면 알리고 지운다", async () => {
     const { autosave, onError, current } = setup({
       text: "{broken",
+      assets: [],
       fileName: null,
       savedAt: 1,
     });
@@ -181,5 +193,96 @@ describe("복구", () => {
       expect.any(String),
     );
     expect(current()).toBeNull();
+  });
+});
+
+describe("에셋이 있는 기록", () => {
+  test("모델 객체를 복구하면 에셋을 다시 불러와 모델이 돌아온다", async () => {
+    const { sceneFile, history } = setup();
+    await settle();
+    const asset = await sharedAssets.add({
+      name: "chair.glb",
+      type: "model",
+      mimeType: MODEL_MIME_TYPE,
+      bytes: new Uint8Array([3, 1, 4]),
+    });
+    const preset = findPreset(modelPresetId(asset.id))!;
+    history.execute(
+      createSpawnMeshCommand(
+        scene,
+        () => addPresetMesh(scene, preset),
+        "추가",
+        "chair",
+      ),
+    );
+    const content = sceneFile.serialize();
+    expect(content.assets).toEqual([asset]);
+    clearEditorMeshes(scene);
+
+    const restored = setup({ ...content, fileName: null, savedAt: 1 });
+    await settle();
+    await restored.autosave.recover();
+    expect(getEditorMeshes(scene).map((mesh) => mesh.name)).toEqual([
+      "chair 1",
+    ]);
+  });
+
+  test("브라우저 저장소는 에셋을 id별 키에 한 번만 쓰고, 빠진 에셋은 지운다", async () => {
+    const data = new Map<string, unknown>();
+    const kv: KeyValueStore = {
+      get: async <T>(key: string) => data.get(key) as T | undefined,
+      set: vi.fn(
+        async (key: string, value: unknown) => void data.set(key, value),
+      ),
+      delete: async (key: string) => void data.delete(key),
+    };
+    const storage = createBrowserAutosaveStorage(kv);
+    const a = {
+      id: "aaaaaaaaaaaaaaaa",
+      name: "a.png",
+      type: "image" as const,
+      mimeType: "image/png",
+      bytes: new Uint8Array([1]),
+    };
+    const b = { ...a, id: "bbbbbbbbbbbbbbbb", name: "b.png" };
+    const record = (assets: (typeof a)[]) => ({
+      text: "{}",
+      assets,
+      fileName: null,
+      savedAt: 1,
+    });
+
+    await storage.save(record([a, b]));
+    await storage.save(record([a, b]));
+    expect(
+      vi.mocked(kv.set).mock.calls.filter(([key]) => key.startsWith("asset:")),
+    ).toHaveLength(2);
+
+    await storage.save(record([a]));
+    expect([...data.keys()].sort()).toEqual([
+      "asset:aaaaaaaaaaaaaaaa",
+      "autosave",
+    ]);
+    expect(await storage.load()).toMatchObject({ assets: [a] });
+
+    await storage.clear();
+    expect(data.size).toBe(0);
+  });
+
+  test("에셋 목록이 없는 이전 기록도 읽는다", async () => {
+    const data = new Map<string, unknown>([
+      ["autosave", { text: "{}", fileName: null, savedAt: 1 }],
+    ]);
+    const storage = createBrowserAutosaveStorage({
+      get: async <T>(key: string) => data.get(key) as T | undefined,
+      set: async () => {},
+      delete: async () => {},
+    });
+    expect(await storage.load()).toEqual({
+      text: "{}",
+      fileName: null,
+      savedAt: 1,
+      assets: [],
+    });
   });
 });

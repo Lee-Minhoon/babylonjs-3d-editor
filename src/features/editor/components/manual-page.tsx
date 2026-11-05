@@ -29,7 +29,7 @@ import {
   SNAP_STEPS,
   type SnapKind,
 } from "../lib/tools";
-import { PRESET_ICONS } from "./preset-icons";
+import { PresetIcon } from "./preset-icons";
 import { MouseControlsTable, ShortcutGroups } from "./shortcut-reference";
 import { MIXED_LABEL } from "./value-fields";
 
@@ -41,6 +41,7 @@ import { MIXED_LABEL } from "./value-fields";
 const SECTIONS = [
   { id: "layout", title: "화면 구성" },
   { id: "add", title: "메쉬 추가" },
+  { id: "models", title: "모델 가져오기" },
   { id: "select", title: "선택" },
   { id: "camera", title: "카메라" },
   { id: "transform", title: "변형 (위치·회전·크기)" },
@@ -165,14 +166,14 @@ export function ManualPage() {
             </p>
             <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {MESH_PRESETS.map((preset) => {
-                const Icon = PRESET_ICONS[preset.id];
                 const shortcut = getPresetShortcut(preset.id);
                 return (
                   <li
                     key={preset.id}
                     className="flex items-center gap-2 rounded-md border px-2.5 py-2"
                   >
-                    <Icon
+                    <PresetIcon
+                      preset={preset.id}
                       className="size-4 text-muted-foreground"
                       aria-hidden
                     />
@@ -200,6 +201,31 @@ export function ManualPage() {
               </li>
               <li>
                 새 메쉬는 이름에 번호가 붙고(Box 1, Box 2 …) 색은 무작위입니다.
+              </li>
+            </List>
+          </Section>
+
+          <Section id="models">
+            <p>
+              Blender 등에서 만든 glTF 바이너리(.glb) 모델을 씬에 놓습니다. 파일
+              메뉴나 추가 메뉴의 <Term>모델 가져오기</Term>로 파일을 고르면 그
+              모델의 배치 모드가 시작됩니다 (클릭할 때마다 놓고{" "}
+              <Kbd>{SHORTCUT_LABELS.deselect}</Kbd>로 끝).
+            </p>
+            <List>
+              <li>
+                가져온 모델은 추가 메뉴와 <Kbd>{SHORTCUT_LABELS.addMenu}</Kbd>{" "}
+                검색에 남아 다시 놓을 수 있습니다. 이름은 파일 이름을 따릅니다
+                (chair.glb → chair 1, chair 2 …).
+              </li>
+              <li>
+                모델 하나가 객체 하나입니다 — 선택·이동·회전·크기·복사·숨기기·
+                부모 지정이 메쉬와 같습니다. 머티리얼은 파일에 든 것을 그대로
+                쓰고 편집할 수 없습니다. 애니메이션·뼈대는 빠지고 기본 자세로
+                놓입니다.
+              </li>
+              <li>
+                모델이 있는 씬은 묶음 파일(.zip)로 저장됩니다 (아래 저장·열기).
               </li>
             </List>
           </Section>
@@ -368,6 +394,15 @@ export function ManualPage() {
             </p>
             <List>
               <li>
+                <Term>공유 머티리얼</Term>: 머티리얼 칸 맨 위에서 &quot;새 공유
+                머티리얼로 만들기&quot;를 고르면 고른 메쉬들이 머티리얼 하나를
+                같이 씁니다 (첫 메쉬의 값으로). 그 뒤 하나를 고치면 같은
+                머티리얼을 쓰는 메쉬가 모두 바뀝니다. 다른 메쉬도 목록에서 골라
+                연결하고, 이름을 붙일 수 있습니다 (예: 빨간 플라스틱).
+                &quot;공유 안 함&quot;을 고르면 지금 모습 그대로 그 메쉬만의
+                머티리얼이 됩니다. 복사본도 같은 머티리얼에 연결됩니다.
+              </li>
+              <li>
                 <Term>기본색</Term>: 색 고르기 창 또는 hex(#RRGGBB) 입력.
               </li>
               <li>
@@ -391,6 +426,16 @@ export function ManualPage() {
                 <Term>조명 무시</Term>: 켜면 조명·환경 반사와 상관없이 기본색
                 그대로 보입니다 (표지판·단색 표시물용). 메탈릭·거칠기는 쓰이지
                 않습니다.
+              </li>
+              <li>
+                <Term>텍스처</Term>: 기본색 맵 · 노멀 맵 · 거칠기·메탈릭 맵(glTF
+                방식: 초록 채널 = 거칠기, 파랑 채널 = 메탈릭)에 이미지(PNG·JPEG·
+                WebP)를 넣습니다. 칸의 목록에서 &quot;이미지 가져오기…&quot;로
+                파일을 고르고, 한 번 가져온 이미지는 다른 칸·메쉬의 목록에도
+                보입니다. 텍스처 값에는 기본색·메탈릭·거칠기가 곱해집니다 — 처음
+                기본색 맵을 넣으면 기본색이 흰색으로 바뀌어 이미지가 그대로
+                보입니다. <Term>텍스처 반복</Term>으로 면마다 몇 번 반복할지
+                정합니다.
               </li>
               <li>
                 슬라이더를 놓거나 색 창을 닫을 때 실행 취소 한 번으로
@@ -589,6 +634,13 @@ export function ManualPage() {
                 저장하지 않습니다.
               </li>
               <li>
+                가져온 모델이나 텍스처 이미지가 있으면{" "}
+                <Term>묶음 파일(.zip)</Term>로 저장합니다 — 씬
+                파일(scene.json)과 그 씬이 쓰는 모델·이미지가 한 파일에
+                들어갑니다. .json으로 저장하던 씬에 모델·이미지가 생기면 저장할
+                때 .zip 위치를 새로 묻습니다. 열기는 .json·.zip 둘 다 됩니다.
+              </li>
+              <li>
                 <Kbd>{SHORTCUT_LABELS.save}</Kbd> 저장 ·{" "}
                 <Kbd>{SHORTCUT_LABELS.saveAs}</Kbd> 다른 이름으로 저장 ·{" "}
                 <Kbd>{SHORTCUT_LABELS.open}</Kbd> 열기. 새 씬은 파일 메뉴에서
@@ -613,7 +665,7 @@ export function ManualPage() {
                 머티리얼(색·메탈릭·거칠기·발광색·불투명도·조명 무시)이
                 들어갑니다. 숨긴 메쉬, 바닥 격자, 카메라·조명, 씬 설정은
                 빠집니다. 조명도 아직 내보내지 않습니다. 이 파일은 에디터로 다시
-                열 수 없습니다 — 편집은 씬 파일(.json)로 이어 갑니다.
+                열 수 없습니다 — 편집은 씬 파일(.json·.zip)로 이어 갑니다.
               </li>
               <li>
                 <Term>스크린샷 저장</Term>: 지금 시점을 PNG로 저장합니다. 바닥
