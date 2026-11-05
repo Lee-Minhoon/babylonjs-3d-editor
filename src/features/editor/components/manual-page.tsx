@@ -189,8 +189,8 @@ export function ManualPage() {
               </li>
               <li>
                 배치 중 <Kbd>{SHORTCUT_LABELS.rotatePlacement}</Kbd>/
-                <Kbd>⇧{SHORTCUT_LABELS.rotatePlacement}</Kbd>로 미리보기를 90°씩
-                돌립니다.
+                <Kbd>{SHORTCUT_LABELS.rotatePlacementBack}</Kbd>로 미리보기를
+                90°씩 돌립니다.
               </li>
               <li>
                 <Term>검색해서 추가</Term> (<Kbd>{SHORTCUT_LABELS.addMenu}</Kbd>

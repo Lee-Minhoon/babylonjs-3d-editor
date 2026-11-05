@@ -47,13 +47,13 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
     title: "편집",
     items: [
       { action: "실행 취소", keys: [L.undo] },
-      { action: "다시 실행", keys: [L.redo, "⌃Y"] },
+      { action: "다시 실행", keys: [L.redo, L.redoAlt] },
       { action: "잘라내기", keys: [L.cut] },
       { action: "복사", keys: [L.copy] },
       { action: "붙여넣기", keys: [L.paste], note: "놓을 위치를 클릭" },
       { action: "복제", keys: [L.duplicate], note: "놓을 위치를 클릭" },
       { action: "이름 바꾸기", keys: [L.rename] },
-      { action: "삭제", keys: [L.delete, "Delete"] },
+      { action: "삭제", keys: [L.delete, L.deleteForward] },
     ],
   },
   {
@@ -88,7 +88,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       }),
       {
         action: "배치 미리보기 90° 회전",
-        keys: [L.rotatePlacement, `⇧${L.rotatePlacement}`],
+        keys: [L.rotatePlacement, L.rotatePlacementBack],
         note: "배치 중일 때만",
       },
     ],

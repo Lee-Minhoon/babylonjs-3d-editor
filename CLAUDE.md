@@ -136,14 +136,14 @@ src/
     - GLB: `@babylonjs/serializers`(버전은 core와 같게 고정)를 처음 내보낼 때 동적 import. `shouldExportNode`로 격자·피벗·카메라·조명을 뺀다. Babylon 규칙대로 X가 반전돼 나간다(왼손→오른손, Babylon 로더로 열면 원래 자리). 이 파일은 에디터로 다시 열지 않는다.
     - 스크린샷: 자체 `RenderTargetTexture`(renderList = 내보낼 메쉬)를 그려 `readPixels` → 2D 캔버스로 PNG 인코딩. 기즈모(유틸리티 레이어)·선택 외곽선(효과 레이어)은 렌더 타깃에 안 그려진다. 렌더 타깃 픽셀은 WebGL·WebGPU 모두 아래 줄부터라 뒤집는다. Babylon `CreateScreenshotUsingRenderTargetAsync`는 쓰지 않는다 — 딥 import에선 인코딩용 셰이더·엔진 확장이 빠져 하얀 이미지가 나오거나 Promise가 끝나지 않는다. E2E가 두 엔진에서 픽셀(배경색·위아래)을 확인한다.
   - 형식을 바꾸면 `SCENE_FILE_VERSION`을 올리고 이전 버전 변환을 `parseSceneFile`에 넣는다. 메쉬에 새 속성을 추가하면 `MeshSnapshot`과 씬 파일 둘 다에 넣는다.
-- **키보드 단축키는 `lib/editor-shortcuts.ts` 한 곳에서만 등록**한다. 도구에서 `window.addEventListener("keydown")`을 직접 달지 않는다 (같은 키의 우선순위가 등록 순서에 묶이기 때문). 현재 키 목록은 그 파일 상단 주석이 기준이다.
+- **키보드 단축키는 `lib/editor-shortcuts.ts`의 키맵 표(`SHORTCUTS`) 한 곳에서만 등록**한다. 도구에서 `window.addEventListener("keydown")`을 직접 달지 않는다 (같은 키의 우선순위가 등록 순서에 묶이기 때문). 표의 한 줄 = `{ id, 키 조합(key/code·mod·ctrl·shift·alt), label, run }`이고, 배열 순서가 우선순위다 — `run`이 `false`를 돌려주면 "하지 않음"으로 같은 키의 다음 줄로 넘어간다 (배치 중 R은 회전, 아니면 크기 도구). 새 단축키는 `NAMED_SHORTCUTS`에 줄을 추가한다 (`preventDefault: false`는 글자 키·Esc처럼 막을 기본 동작이 없을 때). 매칭은 순수 함수 `shortcutCandidates(event)`라 Node에서 검사한다.
   - 사용 중: Esc · Delete/Backspace · Q/W/E/R(도구) · R/⇧R(배치 중일 때만 미리보기 90° 회전 — 크기 도구보다 우선, `placement.rotate`) · 1~8(메쉬 프리셋, `MESH_PRESETS` 순서, 상단 숫자열만) · ⌘Z/⌘⇧Z/Ctrl+Y · ⌘C/⌘X/⌘V(복사/잘라내기/붙여넣기) · ⌘D(복제, 브라우저 북마크는 항상 막음) · F(선택 메쉬로 카메라 포커스) · ⌘A(전체 선택, 숨기거나 잠근 메쉬 제외) · H/⌥H(숨기기/모두 보이기) · End(바닥에 붙이기) · P/⌥P(부모 지정/해제) · 숫자패드 1/3/7(⌃와 함께 반대편)·5(시점·직교) · F2(이름 바꾸기) · ⌘S/⌘⇧S(저장/다른 이름으로 저장) · ⌘O(열기) · ⇧A(검색형 추가 메뉴) · ?(도움말). 새 씬은 단축키 없음(⌘N은 브라우저가 가로챔).
-  - 키를 누르고 있을 때의 반복 입력(`event.repeat`)은 undo/redo와 배치 회전(R)만 받는다 (숫자 키를 누르고 있으면 배치가 켜졌다 꺼지는 것을 막는다). 누르고 있는 동안 반복돼야 하는 새 단축키는 `repeatable`에 추가한다.
+  - 키를 누르고 있을 때의 반복 입력(`event.repeat`)은 undo/redo와 배치 회전(R)만 받는다 (숫자 키를 누르고 있으면 배치가 켜졌다 꺼지는 것을 막는다). 누르고 있는 동안 반복돼야 하는 새 단축키는 그 줄에 `repeatable: true`를 준다.
   - **키 판정은 `getShortcutKey(event)`로 한다** (`event.key` 직접 비교 금지). 글자 키를 `event.code`(물리 키 위치)로 봐서 한글 입력 상태(Q → "ㅂ")에서도 같은 단축키가 동작한다. 입력창 안에서 ⌘Z 등을 직접 처리하는 컴포넌트도 같은 함수를 쓴다.
-  - 단축키를 UI에 보여줄 땐 하드코딩하지 말고 `editor-shortcuts.ts`에서 가져온다: `getPresetShortcut`, `getToolShortcut`, `SHORTCUT_LABELS`(undo/redo/delete/save/open/selectAll/focus/hide/dropToFloor/orthographic 등), 시점은 `VIEW_SHORTCUTS`.
+  - 단축키를 UI에 보여줄 땐 하드코딩하지 말고 `editor-shortcuts.ts`에서 가져온다: `getPresetShortcut`, `getToolShortcut`, `SHORTCUT_LABELS`(표의 `id` → `label`: undo/redo/redoAlt/delete/deleteForward/save/open/selectAll/focus/hide/dropToFloor/orthographic/rotatePlacement(Back) 등), 시점은 `VIEW_SHORTCUTS`. 모두 표에서 파생되므로 처리기와 어긋날 수 없다.
   - 메뉴의 라디오·체크박스 항목엔 `closeOnClick`을 준다 (Base UI 기본값은 안 닫힘 → 다음 키 입력이 메뉴로 빨려 들어간다).
 - 도움말: `?`·도움말 메뉴의 단축키 창(`shortcut-help-dialog.tsx`, 상태는 `runtime.help`)과 사용 설명서 페이지(`/manual` → `ManualPage`). 둘 다 단축키 목록 `SHORTCUT_GROUPS`(`lib/editor-reference.ts`)와 마우스 조작표 `MOUSE_CONTROLS`(`lib/camera-controls.ts`)를 같이 쓴다. 메쉬 종류·스냅 단위·도구 이름도 에디터 값에서 가져온다 — 손으로 다시 적지 않는다.
-  - 단축키를 추가하면 `SHORTCUT_GROUPS`에도 넣는다 (`editor-reference.test`가 `SHORTCUT_LABELS`·`VIEW_SHORTCUTS`·프리셋 키가 다 있는지 확인). 마우스 규칙을 바꾸면 `MOUSE_CONTROLS`도 고친다.
+  - 단축키를 추가하면 `SHORTCUT_GROUPS`에도 넣는다 (`editor-reference.test`가 표의 라벨 — `SHORTCUT_LABELS`·`VIEW_SHORTCUTS`·프리셋 키 — 이 다 있는지 확인). 목록은 짝(정면/뒤 …)과 순서를 사람이 정하므로 표에서 자동으로 만들지 않는다. 마우스 규칙을 바꾸면 `MOUSE_CONTROLS`도 고친다.
   - 사용자가 보는 동작을 바꾸면 `manual-page.tsx`의 설명 글도 고친다.
 - 뷰포트 클릭은 `POINTERTAP`으로 처리한다 (드래그 = 카메라 조작·기즈모 드래그와 구분).
 

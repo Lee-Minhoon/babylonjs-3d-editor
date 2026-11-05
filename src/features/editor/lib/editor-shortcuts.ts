@@ -27,35 +27,20 @@ import type { ToolState, TransformTool } from "./tools";
 import type { TransformGizmo } from "./transform-gizmo";
 
 /*
- * 에디터 키보드 단축키를 한 곳에서 처리한다.
+ * 에디터 키보드 단축키를 한 곳에서 처리한다 — 키 목록의 기준은 아래 SHORTCUTS 표다.
  * 도구마다 keydown을 따로 달면 같은 키(Esc 등)의 우선순위가 등록 순서에 묶이므로 여기서 결정한다.
  *
- *   Esc               배치 모드 종료 → (배치 중이 아니면) 선택 해제
- *   R / Shift+R       (배치 중일 때만) 미리보기 90° 회전 / 반대로. 배치 중이 아니면 R은 크기 도구
- *   Delete/Backspace  선택한 메쉬 삭제 (undo 가능)
- *   F                 선택한 메쉬로 카메라 포커스
- *   H / ⌥H            선택한 메쉬 숨기기 / 숨긴 메쉬 모두 보이기
- *   End               선택한 메쉬를 바로 아래 표면에 붙이기
- *   P / ⌥P            부모 지정 (마지막에 고른 것이 부모) / 부모 해제
- *   F2                이름 바꾸기 (하나만 선택했을 때 속성 패널 이름 칸으로)
- *   Q / W / E / R     선택 / 이동 / 회전 / 크기 도구
- *   1 ~ 8             메쉬 프리셋 배치 모드 토글 (MESH_PRESETS 순서, 상단 숫자열만)
- *   ⌘/Ctrl+Z          undo
- *   ⌘/Ctrl+Shift+Z    redo  (Ctrl+Y도 redo)
- *   ⌘/Ctrl+C / X / V  복사 / 잘라내기 / 붙여넣기 (에디터 내부 클립보드)
- *   ⌘/Ctrl+D          복제
- *   ⌘/Ctrl+A          전체 선택 (숨기거나 잠근 메쉬 제외)
- *   ⌘/Ctrl+S          저장 (⌘/Ctrl+Shift+S 다른 이름으로 저장)
- *   ⌘/Ctrl+O          열기
- *   ?                 단축키 도움말 창
- *   Shift+A           검색형 추가 메뉴 (커서가 뷰포트 위면 그 자리, 아니면 가운데)
- *   (새 씬은 단축키 없음 — ⌘N은 브라우저가 가로채 막을 수 없다)
+ * 표의 한 줄이 단축키 하나: 키 조합 + UI 라벨 + 동작. 메뉴·툴팁·도움말이 보여주는 라벨(SHORTCUT_LABELS,
+ * VIEW_SHORTCUTS, getPresetShortcut, getToolShortcut)은 모두 이 표에서 나오므로 처리기와 어긋날 수 없다.
+ * 새 단축키 = 줄 하나 추가 (+ editor-reference의 도움말 목록). 같은 키 조합이 여럿이면 앞의 것이 먼저고,
+ * run이 false("하지 않음")를 돌려주면 다음 줄로 넘어간다 (배치 중 R은 회전, 아니면 크기 도구).
  *
- *   숫자패드 1 / 3 / 7  정면 / 오른쪽 / 위 시점 (⌃와 함께: 뒤 / 왼쪽 / 아래) — Blender 방식
- *   숫자패드 5          원근 ↔ 직교
+ * 표에 앞서 처리기가 먼저 보는 것: 입력창·열린 팝업 안의 키는 무시(isTypingTarget), 기즈모를 끄는 중엔 모두 무시,
+ * 키를 누르고 있을 때의 반복 입력은 repeatable인 줄만 받는다.
+ * (새 씬은 단축키 없음 — ⌘N은 브라우저가 가로채 막을 수 없다)
  */
 
-type EditorShortcutTargets = {
+export type EditorShortcutTargets = {
   scene: Scene;
   help: ShortcutHelp;
   addMenu: AddMenu;
@@ -69,74 +54,298 @@ type EditorShortcutTargets = {
   gizmo: TransformGizmo;
 };
 
-const TOOL_KEYS: Record<string, TransformTool> = {
-  q: "select",
-  w: "move",
-  e: "rotate",
-  r: "scale",
+/** 단축키 판정에 쓰는 키 이벤트 부분 (KeyboardEvent의 부분집합 — 테스트는 이 모양의 객체를 넘긴다) */
+export type ShortcutKeyEvent = {
+  key: string;
+  code: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
 };
 
-/** 숫자패드 시점: [그냥, ⌃와 함께] */
-const NUMPAD_VIEWS: Record<string, [ViewName, ViewName]> = {
-  "1": ["front", "back"],
-  "3": ["right", "left"],
-  "7": ["top", "bottom"],
+/** 키 조합. 적지 않은 보조키는 "안 눌려 있어야 한다" */
+type KeyCombo = {
+  /** getShortcutKey 결과 (글자는 소문자, 그 외는 event.key 소문자) */
+  key?: string;
+  /** 물리 키 — 숫자열(Digit1)·숫자패드(Numpad1)처럼 자판 위치로 보는 키 */
+  code?: string;
+  /** ⌘ 또는 Ctrl */
+  mod?: boolean;
+  /** Ctrl만 (⌘는 안 됨) — 숫자패드 시점의 반대편 */
+  ctrl?: boolean;
+  /** "any"면 Shift 여부를 보지 않는다 */
+  shift?: boolean | "any";
+  alt?: boolean;
 };
+
+type ShortcutBinding = KeyCombo & {
+  id: string;
+  /** UI 표시 ("⌘Z") */
+  label: string;
+  /** 키를 누르고 있을 때의 반복 입력도 받는다 (undo/redo·배치 회전) */
+  repeatable?: boolean;
+  /** 처리했을 때 브라우저 기본 동작을 막는다 (기본 true). 글자 키·Esc처럼 막을 게 없으면 false */
+  preventDefault?: boolean;
+  /** false면 "하지 않음" → 같은 키의 다음 줄로. void는 처리한 것 */
+  run: (targets: EditorShortcutTargets) => boolean | void;
+};
+
+/** 도구 키 (툴바 순서) */
+const TOOL_KEYS: Record<TransformTool, string> = {
+  select: "q",
+  move: "w",
+  rotate: "e",
+  scale: "r",
+};
+
+/** 숫자패드 시점 — Blender 방식. ctrl이면 반대편 */
+const VIEW_KEYS: Record<ViewName, { numpad: string; ctrl?: boolean }> = {
+  front: { numpad: "1" },
+  back: { numpad: "1", ctrl: true },
+  right: { numpad: "3" },
+  left: { numpad: "3", ctrl: true },
+  top: { numpad: "7" },
+  bottom: { numpad: "7", ctrl: true },
+};
+
+/** 프리셋 단축키: MESH_PRESETS 순서대로 1, 2, 3 … (상단 숫자열, 최대 9개) */
+const PRESET_DIGITS = MESH_PRESETS.slice(0, 9).map(
+  (preset, index) => [preset, `${index + 1}`] as const,
+);
+
+/** 이름 있는 단축키 (메뉴·설명서가 SHORTCUT_LABELS.<id>로 라벨을 가져간다) */
+const NAMED_SHORTCUTS = [
+  // 편집
+  {
+    id: "undo",
+    key: "z",
+    mod: true,
+    label: "⌘Z",
+    repeatable: true,
+    run: ({ history }) => history.undo(),
+  },
+  {
+    id: "redo",
+    key: "z",
+    mod: true,
+    shift: true,
+    label: "⌘⇧Z",
+    repeatable: true,
+    run: ({ history }) => history.redo(),
+  },
+  {
+    id: "redoAlt",
+    key: "y",
+    mod: true,
+    shift: "any",
+    label: "⌃Y",
+    repeatable: true,
+    run: ({ history }) => history.redo(),
+  },
+  { id: "copy", key: "c", mod: true, label: "⌘C", run: copySelected },
+  { id: "cut", key: "x", mod: true, label: "⌘X", run: cutSelected },
+  { id: "paste", key: "v", mod: true, label: "⌘V", run: paste },
+  {
+    id: "duplicate",
+    key: "d",
+    mod: true,
+    label: "⌘D",
+    // 브라우저 북마크(⌘D)는 에디터 안에서 항상 막는다 → 선택이 없어도 "처리한 것"으로
+    run: (targets) => {
+      duplicateSelected(targets);
+    },
+  },
+  {
+    id: "selectAll",
+    key: "a",
+    mod: true,
+    label: "⌘A",
+    // 페이지 글자 전체 선택 대신
+    run: ({ selection }) => selection.selectAll(),
+  },
+  { id: "rename", key: "f2", label: "F2", run: startRename },
+  {
+    id: "delete",
+    key: "backspace",
+    label: "⌫",
+    run: deleteSelected,
+  },
+  { id: "deleteForward", key: "delete", label: "Delete", run: deleteSelected },
+  {
+    id: "deselect",
+    key: "escape",
+    label: "Esc",
+    preventDefault: false,
+    // 배치 중이면 배치 종료, 아니면 선택 해제
+    run: ({ placement, selection }) => {
+      if (placement.isActive()) placement.cancel();
+      else selection.select(null);
+    },
+  },
+  // 파일 (브라우저의 "페이지 저장"·"열기" 대신)
+  {
+    id: "save",
+    key: "s",
+    mod: true,
+    label: "⌘S",
+    run: (t) => void t.sceneFile.save(),
+  },
+  {
+    id: "saveAs",
+    key: "s",
+    mod: true,
+    shift: true,
+    label: "⌘⇧S",
+    run: (t) => void t.sceneFile.saveAs(),
+  },
+  {
+    id: "open",
+    key: "o",
+    mod: true,
+    label: "⌘O",
+    run: (t) => void t.sceneFile.open(),
+  },
+  // 추가·배치
+  {
+    id: "addMenu",
+    key: "a",
+    shift: true,
+    label: "⇧A",
+    // 커서가 캔버스 위에 있으면 그 자리에 (scene.pointerX/Y는 캔버스 기준 CSS 픽셀)
+    run: ({ scene, addMenu }) => {
+      const canvas = scene.getEngine().getRenderingCanvas();
+      addMenu.open(
+        canvas?.matches(":hover")
+          ? { x: scene.pointerX, y: scene.pointerY }
+          : null,
+      );
+    },
+  },
+  {
+    id: "rotatePlacement",
+    key: "r",
+    label: "R",
+    repeatable: true,
+    preventDefault: false,
+    // 배치 중에만 — 아니면 false → 아래의 크기 도구(R)로
+    run: ({ placement }) => placement.rotate(1),
+  },
+  {
+    id: "rotatePlacementBack",
+    key: "r",
+    shift: true,
+    label: "⇧R",
+    repeatable: true,
+    preventDefault: false,
+    run: ({ placement }) => placement.rotate(-1),
+  },
+  // 객체
+  { id: "focus", key: "f", label: "F", run: focusSelected },
+  {
+    id: "hide",
+    key: "h",
+    label: "H",
+    preventDefault: false,
+    run: hideSelected,
+  },
+  { id: "showAll", key: "h", alt: true, label: "⌥H", run: showAllHidden },
+  { id: "dropToFloor", key: "end", label: "End", run: dropSelectedToFloor },
+  // 마지막에 고른 것이 부모
+  {
+    id: "parent",
+    key: "p",
+    label: "P",
+    preventDefault: false,
+    run: parentSelected,
+  },
+  { id: "unparent", key: "p", alt: true, label: "⌥P", run: unparentSelected },
+  // 보기
+  {
+    id: "orthographic",
+    code: "Numpad5",
+    ctrl: false,
+    label: "Num5",
+    run: ({ cameraView }) =>
+      cameraView.setOrthographic(!cameraView.isOrthographic()),
+  },
+  // ?는 Shift+/ — 글자 키가 아니라 event.key로 본다 (한글 입력 상태에서도 "?")
+  {
+    id: "help",
+    key: "?",
+    shift: "any",
+    label: "?",
+    run: ({ help }) => help.setOpen(true),
+  },
+] as const satisfies readonly ShortcutBinding[];
+
+export type ShortcutId = (typeof NAMED_SHORTCUTS)[number]["id"];
+
+/** 숫자패드 시점 (⌃와 함께 반대편). 숫자패드는 물리 키로 본다 — Num Lock이 꺼지면 event.key가 "End"·"Home"이다 */
+const VIEW_SHORTCUT_BINDINGS: ShortcutBinding[] = (
+  Object.entries(VIEW_KEYS) as [ViewName, { numpad: string; ctrl?: boolean }][]
+).map(([view, { numpad, ctrl = false }]) => ({
+  id: `view:${view}`,
+  code: `Numpad${numpad}`,
+  ctrl,
+  label: `${ctrl ? "⌃" : ""}Num${numpad}`,
+  run: ({ cameraView }) => cameraView.setView(view),
+}));
+
+const TOOL_SHORTCUT_BINDINGS: ShortcutBinding[] = (
+  Object.entries(TOOL_KEYS) as [TransformTool, string][]
+).map(([tool, key]) => ({
+  id: `tool:${tool}`,
+  key,
+  label: key.toUpperCase(),
+  preventDefault: false,
+  run: ({ tools }) => tools.setTool(tool),
+}));
+
+/** 상단 숫자열만 (Digit1). 숫자패드(Numpad1)는 시점 */
+const PRESET_SHORTCUT_BINDINGS: ShortcutBinding[] = PRESET_DIGITS.map(
+  ([preset, digit]) => ({
+    id: `preset:${preset.id}`,
+    code: `Digit${digit}`,
+    label: digit,
+    preventDefault: false,
+    run: ({ placement }) => placement.toggle(preset),
+  }),
+);
+
+/**
+ * 모든 단축키, 우선순위 순. 숫자패드(물리 키)가 가장 먼저 — Num Lock이 꺼진 Windows에선 Numpad1의 key가
+ * "End"라 바닥에 붙이기로 새지 않게. 배치 회전(R)은 이름 있는 줄에 있고 크기 도구(R)는 그 뒤라 배치 중이 아닐 때만 도구가 된다.
+ */
+const SHORTCUTS: readonly ShortcutBinding[] = [
+  ...VIEW_SHORTCUT_BINDINGS,
+  ...NAMED_SHORTCUTS,
+  ...TOOL_SHORTCUT_BINDINGS,
+  ...PRESET_SHORTCUT_BINDINGS,
+];
+
+/** UI(메뉴·툴팁·설명서) 표시용 단축키 라벨 — 표에서 나오므로 처리기와 늘 같다 */
+export const SHORTCUT_LABELS = Object.fromEntries(
+  NAMED_SHORTCUTS.map(({ id, label }) => [id, label]),
+) as Record<ShortcutId, string>;
 
 /** UI 표시용 시점 단축키 */
-export const VIEW_SHORTCUTS: Record<ViewName, string> = {
-  front: "Num1",
-  back: "⌃Num1",
-  right: "Num3",
-  left: "⌃Num3",
-  top: "Num7",
-  bottom: "⌃Num7",
-};
-
-/** 프리셋 단축키: MESH_PRESETS 순서대로 1, 2, 3 … (최대 9개) */
-const PRESET_SHORTCUTS = new Map(
-  MESH_PRESETS.slice(0, 9).map((preset, index) => [preset.id, `${index + 1}`]),
-);
+export const VIEW_SHORTCUTS = Object.fromEntries(
+  VIEW_SHORTCUT_BINDINGS.map(({ id, label }) => [
+    id.slice("view:".length),
+    label,
+  ]),
+) as Record<ViewName, string>;
 
 /** UI 표시용 프리셋 단축키 ("1" …). 없으면 null */
 export function getPresetShortcut(presetId: MeshPresetId): string | null {
-  return PRESET_SHORTCUTS.get(presetId) ?? null;
+  return PRESET_DIGITS.find(([preset]) => preset.id === presetId)?.[1] ?? null;
 }
 
 /** UI 표시용 도구 단축키 ("Q" …) */
 export function getToolShortcut(tool: TransformTool): string {
-  const key = Object.keys(TOOL_KEYS).find((k) => TOOL_KEYS[k] === tool);
-  return key?.toUpperCase() ?? "";
+  return TOOL_KEYS[tool].toUpperCase();
 }
-
-/**
- * UI(메뉴·툴팁) 표시용 단축키 라벨. 실제 처리는 아래 onKeyDown이 기준이며 여기와 맞춰야 한다.
- */
-export const SHORTCUT_LABELS = {
-  undo: "⌘Z",
-  redo: "⌘⇧Z",
-  delete: "⌫",
-  deselect: "Esc",
-  save: "⌘S",
-  saveAs: "⌘⇧S",
-  open: "⌘O",
-  copy: "⌘C",
-  paste: "⌘V",
-  cut: "⌘X",
-  duplicate: "⌘D",
-  selectAll: "⌘A",
-  focus: "F",
-  hide: "H",
-  showAll: "⌥H",
-  dropToFloor: "End",
-  parent: "P",
-  unparent: "⌥P",
-  orthographic: "Num5",
-  rename: "F2",
-  rotatePlacement: "R",
-  help: "?",
-  addMenu: "⇧A",
-} as const;
 
 /**
  * 단축키 판정용 키 이름 (소문자). 글자 키는 event.code(물리 키 위치)로 본다
@@ -147,6 +356,30 @@ export const SHORTCUT_LABELS = {
 export function getShortcutKey(event: { key: string; code: string }): string {
   const letter = /^Key([A-Z])$/.exec(event.code)?.[1];
   return letter ? letter.toLowerCase() : event.key.toLowerCase();
+}
+
+function matches(combo: KeyCombo, event: ShortcutKeyEvent): boolean {
+  const keyMatches =
+    combo.code !== undefined
+      ? event.code === combo.code
+      : getShortcutKey(event) === combo.key;
+  if (!keyMatches) return false;
+  if (combo.ctrl !== undefined) {
+    if (event.ctrlKey !== combo.ctrl || event.metaKey) return false;
+  } else if ((event.metaKey || event.ctrlKey) !== (combo.mod ?? false)) {
+    return false;
+  }
+  if (combo.shift !== "any" && event.shiftKey !== (combo.shift ?? false)) {
+    return false;
+  }
+  return event.altKey === (combo.alt ?? false);
+}
+
+/** 이 키 이벤트에 맞는 단축키 id들 (우선순위 순). 처리기는 앞에서부터 run이 false가 아닌 첫 줄에서 멈춘다 */
+export function shortcutCandidates(event: ShortcutKeyEvent): string[] {
+  return SHORTCUTS.filter((binding) => matches(binding, event)).map(
+    ({ id }) => id,
+  );
 }
 
 /**
@@ -208,177 +441,30 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return target.closest(POPUP_ZONE)?.closest("[data-open]") != null;
 }
 
-export function bindEditorShortcuts({
-  scene,
-  help,
-  addMenu,
-  cameraView,
-  history,
-  placement,
-  selection,
-  tools,
-  clipboard,
-  sceneFile,
-  gizmo,
-}: EditorShortcutTargets): () => void {
+export function bindEditorShortcuts(
+  targets: EditorShortcutTargets,
+): () => void {
   const onKeyDown = (event: KeyboardEvent) => {
     if (isTypingTarget(event.target)) return;
 
-    const key = getShortcutKey(event);
-    const mod = event.metaKey || event.ctrlKey;
-
     // 기즈모를 끄는 중에는 아무 단축키도 받지 않는다 — 드래그 동안 메쉬가 시작 자세를 기준으로 피벗을 따라가므로,
     // 그 사이 undo·삭제가 끼어들면 변형이 어긋난다
-    if (gizmo.isDragging()) {
+    if (targets.gizmo.isDragging()) {
       event.preventDefault();
       return;
     }
 
-    // 키를 누르고 있을 때의 반복 입력은 undo/redo와 배치 회전(R)만 받는다.
-    // 나머지(프리셋 토글·붙여넣기·저장 …)는 한 번만 — 숫자 키를 누르고 있으면 배치가 켜졌다 꺼졌다 한다
-    const repeatable = (mod && (key === "z" || key === "y")) || key === "r";
-    if (event.repeat && !repeatable) {
-      if (mod) event.preventDefault(); // ⌘S 등의 브라우저 동작은 계속 막는다
-      return;
-    }
-
-    // 숫자패드는 물리 키(event.code)로 본다 — Num Lock이 꺼진 Windows에선 event.key가 "End"·"Home"이라
-    // 바닥에 붙이기(End) 등으로 새지 않게 다른 키보다 먼저 처리한다
-    const numpad = /^Numpad(\d)$/.exec(event.code)?.[1];
-    if (numpad !== undefined) {
-      if (event.shiftKey || event.altKey || event.metaKey) return;
-      const views = NUMPAD_VIEWS[numpad];
-      if (views) {
-        event.preventDefault();
-        cameraView.setView(views[event.ctrlKey ? 1 : 0]);
-      } else if (numpad === "5" && !event.ctrlKey) {
-        event.preventDefault();
-        cameraView.setOrthographic(!cameraView.isOrthographic());
+    for (const binding of SHORTCUTS) {
+      if (!matches(binding, event)) continue;
+      // 키를 누르고 있을 때의 반복 입력은 repeatable인 줄만 — 숫자 키를 누르고 있으면 배치가 켜졌다 꺼졌다 한다.
+      // ⌘S 등의 브라우저 동작은 반복 중에도 계속 막는다
+      if (event.repeat && !binding.repeatable) {
+        if (event.metaKey || event.ctrlKey) event.preventDefault();
+        return;
       }
+      if (binding.run(targets) === false) continue;
+      if (binding.preventDefault !== false) event.preventDefault();
       return;
-    }
-
-    if (mod && !event.altKey) {
-      const context = { history, selection, clipboard, placement };
-      if (key === "z" && !event.shiftKey) {
-        event.preventDefault();
-        history.undo();
-      } else if ((key === "z" && event.shiftKey) || key === "y") {
-        event.preventDefault();
-        history.redo();
-      } else if (key === "c" && !event.shiftKey) {
-        if (copySelected(context)) event.preventDefault();
-      } else if (key === "x" && !event.shiftKey) {
-        if (cutSelected(context)) event.preventDefault();
-      } else if (key === "v" && !event.shiftKey) {
-        if (paste(context)) event.preventDefault();
-      } else if (key === "d" && !event.shiftKey) {
-        // 브라우저 북마크(⌘D)는 에디터 안에서 항상 막는다
-        event.preventDefault();
-        duplicateSelected(context);
-      } else if (key === "a" && !event.shiftKey) {
-        // 페이지 글자 전체 선택 대신
-        event.preventDefault();
-        selection.selectAll();
-      } else if (key === "s") {
-        // 브라우저 "페이지 저장" 대화상자 대신
-        event.preventDefault();
-        void (event.shiftKey ? sceneFile.saveAs() : sceneFile.save());
-      } else if (key === "o" && !event.shiftKey) {
-        event.preventDefault();
-        void sceneFile.open();
-      }
-      return;
-    }
-
-    // 배치 중에는 R이 미리보기 회전 (크기 도구 전환보다 우선)
-    if (
-      key === "r" &&
-      !event.altKey &&
-      placement.rotate(event.shiftKey ? -1 : 1)
-    ) {
-      return;
-    }
-
-    // ?는 Shift+/ — 글자 키가 아니라 event.key로 본다 (한글 입력 상태에서도 "?")
-    if (key === "?" && !event.altKey) {
-      event.preventDefault();
-      help.setOpen(true);
-      return;
-    }
-
-    // ⇧A: 커서가 캔버스 위에 있으면 그 자리에 (scene.pointerX/Y는 캔버스 기준 CSS 픽셀)
-    if (key === "a" && event.shiftKey && !event.altKey) {
-      event.preventDefault();
-      const canvas = scene.getEngine().getRenderingCanvas();
-      addMenu.open(
-        canvas?.matches(":hover")
-          ? { x: scene.pointerX, y: scene.pointerY }
-          : null,
-      );
-      return;
-    }
-
-    // ⌥H: 맥에서는 event.key가 "˙"지만 getShortcutKey는 물리 키(KeyH)로 본다
-    if (key === "h" && event.altKey && !event.shiftKey) {
-      if (showAllHidden({ scene, history })) event.preventDefault();
-      return;
-    }
-
-    if (key === "p" && event.altKey && !event.shiftKey) {
-      if (unparentSelected({ history, selection })) event.preventDefault();
-      return;
-    }
-
-    if (event.shiftKey || event.altKey) return;
-
-    const tool = TOOL_KEYS[key];
-    if (tool) {
-      tools.setTool(tool);
-      return;
-    }
-
-    // 상단 숫자열만 (event.code: "Digit1"). 숫자패드("Numpad1")는 카메라 시점용으로 남겨둔다.
-    const digit = /^Digit([1-9])$/.exec(event.code)?.[1];
-    const preset = digit ? MESH_PRESETS[Number(digit) - 1] : undefined;
-    if (preset) {
-      placement.toggle(preset);
-      return;
-    }
-
-    if (key === "f") {
-      if (focusSelected({ selection })) event.preventDefault();
-      return;
-    }
-
-    if (key === "h") {
-      hideSelected({ history, selection });
-      return;
-    }
-
-    if (key === "p") {
-      parentSelected({ history, selection });
-      return;
-    }
-
-    if (key === "end") {
-      if (dropSelectedToFloor({ history, selection })) event.preventDefault();
-      return;
-    }
-
-    if (key === "f2") {
-      if (startRename({ selection })) event.preventDefault();
-      return;
-    }
-
-    if (key === "escape") {
-      if (placement.isActive()) placement.cancel();
-      else selection.select(null);
-      return;
-    }
-
-    if (key === "delete" || key === "backspace") {
-      if (deleteSelected({ history, selection })) event.preventDefault();
     }
   };
 
