@@ -104,6 +104,34 @@ describe("조명 객체", () => {
     expect(light.getShadowGenerator()).toBeNull();
   });
 
+  test("매 프레임 동기화: 그림자 조명이 켜져 있을 때만 드리우는 목록·바닥 받이를 쓴다", () => {
+    const own = createTestScene();
+    const box = addPresetMesh(own, findPreset("box")!);
+    const sun = addLightObject(own, findPreset("directional-light")!);
+    const frame = () => own.onBeforeRenderObservable.notifyObservers(own);
+    applyLightValues(sun, { ...LIGHT_DEFAULTS.directional, shadows: true });
+    frame();
+    const shadowMap = getBabylonLight(sun)!
+      .getShadowGenerator()!
+      .getShadowMap()!;
+    expect(shadowMap.renderList).toContain(box);
+    expect(shadowMap.renderList).not.toContain(sun); // 아이콘은 그림자를 드리우지 않는다
+    const catcher = own.getMeshByName("__shadow-catcher")!;
+    expect(catcher.isEnabled()).toBe(true);
+
+    setMeshFlag(sun, "hidden", true);
+    frame();
+    expect(catcher.isEnabled()).toBe(false);
+    setMeshFlag(sun, "hidden", false);
+    frame();
+    expect(catcher.isEnabled()).toBe(true);
+
+    sun.dispose(false, true);
+    frame();
+    expect(catcher.isEnabled()).toBe(false);
+    own.dispose();
+  });
+
   test("Command undo/redo", () => {
     const spot = addLightObject(scene, spotPreset);
     const before = getLightValues(spot)!;

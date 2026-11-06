@@ -75,12 +75,12 @@ export function startRename({
 
 /** 선택한 메쉬들로 카메라 포커스 (F·메뉴). 선택이 없으면 아무것도 하지 않는다 */
 export function focusSelected({
+  scene,
   selection,
-}: Pick<ActionContext, "selection">): boolean {
-  const meshes = selection.getMeshes();
-  const camera = meshes[0]?.getScene().activeCamera;
+}: Pick<ActionContext, "scene" | "selection">): boolean {
+  const camera = scene.activeCamera;
   if (!(camera instanceof ArcRotateCamera)) return false;
-  return focusCamera(camera, meshes);
+  return focusCamera(camera, selection.getMeshes());
 }
 
 /**

@@ -206,9 +206,13 @@ function usedAssetIds(meshes: readonly AbstractMesh[]): string[] {
 }
 
 export function serializeScene(scene: Scene): SceneFileData {
-  const editorMeshes = getEditorMeshes(scene).filter(getPresetId);
-  const indexOf = new Map(editorMeshes.map((mesh, index) => [mesh, index]));
-  const meshes = editorMeshes.map((mesh): SceneFileMesh => {
+  // 에디터 메쉬는 모두 프리셋 id를 가진다 (inCreationOrder가 에디터 메쉬만 남긴다) — 타입 때문에 한 번 더 확인
+  const entries = getEditorMeshes(scene).flatMap((mesh) => {
+    const presetId = getPresetId(mesh);
+    return presetId ? [{ mesh, presetId }] : [];
+  });
+  const indexOf = new Map(entries.map(({ mesh }, index) => [mesh, index]));
+  const meshes = entries.map(({ mesh, presetId }): SceneFileMesh => {
     // 부모가 있으면 부모 기준 값
     const transform = captureTransform(mesh);
     // 회전 기즈모를 쓰면 rotationQuaternion이 생긴다 → 오일러로 바꿔 저장
@@ -218,7 +222,7 @@ export function serializeScene(scene: Scene): SceneFileData {
     const light = getLightValues(mesh);
     const parent = getEditorParent(mesh);
     return {
-      presetId: getPresetId(mesh)!,
+      presetId,
       name: mesh.name,
       position: toVec3(transform.position),
       rotation: toVec3(rotation, DEGREES),
@@ -246,16 +250,18 @@ export function serializeScene(scene: Scene): SceneFileData {
     }
   });
   const settings = getSceneSettings(scene);
-  const assets = usedAssetIds(editorMeshes).map((id): SceneFileAsset => {
-    const asset = getAssetStore(scene)?.get(id);
-    if (!asset) throw new Error(`Unknown asset: ${id}`);
-    return {
-      id,
-      name: asset.name,
-      type: asset.type,
-      mimeType: asset.mimeType,
-    };
-  });
+  const assets = usedAssetIds(entries.map(({ mesh }) => mesh)).map(
+    (id): SceneFileAsset => {
+      const asset = getAssetStore(scene)?.get(id);
+      if (!asset) throw new Error(`Unknown asset: ${id}`);
+      return {
+        id,
+        name: asset.name,
+        type: asset.type,
+        mimeType: asset.mimeType,
+      };
+    },
+  );
   return {
     format: SCENE_FILE_FORMAT,
     version: SCENE_FILE_VERSION,

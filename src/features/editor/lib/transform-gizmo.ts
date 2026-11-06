@@ -111,12 +111,14 @@ export function createTransformGizmo(
         return [createTransformCommand(mesh, kind, before, after)];
       });
       if (commands.length > 0) {
+        // 히스토리 구독(sync)이 피벗을 새 중심으로 옮긴다 (크기는 초기화, 회전은 축 방향 설정대로)
         history.execute(
           createMacroCommand(macroLabel(commands, kind), commands),
         );
+      } else {
+        // 움직이지 않은 드래그: 기즈모가 건드린 피벗만 제자리로
+        sync();
       }
-      // 다음 드래그를 위해 피벗을 새 중심으로 (크기는 초기화, 회전은 축 방향 설정대로)
-      if (selection.getMeshes().length > 1) sync();
     });
   }
 

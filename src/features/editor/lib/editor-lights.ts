@@ -106,6 +106,15 @@ type EditorLight = {
 
 const editorLights = new WeakMap<AbstractMesh, EditorLight>();
 const syncedScenes = new WeakSet<Scene>();
+/** 그림자를 켠 조명 아이콘 (씬별) — 매 프레임 씬 전체를 뒤지지 않으려고 기억한다 */
+const shadowLights = new WeakMap<Scene, Set<AbstractMesh>>();
+const shadowCatchers = new WeakMap<Scene, Mesh>();
+
+function shadowLightsOf(scene: Scene): Set<AbstractMesh> {
+  let set = shadowLights.get(scene);
+  if (!set) shadowLights.set(scene, (set = new Set()));
+  return set;
+}
 
 /** 조명 아이콘 메쉬의 종류. 조명이 아니면 null */
 export function getLightKind(mesh: AbstractMesh): LightKind | null {
@@ -142,8 +151,8 @@ function shadowCasters(scene: Scene): AbstractMesh[] {
 }
 
 function getShadowCatcher(scene: Scene): Mesh {
-  const existing = scene.getMeshByName(SHADOW_CATCHER_NAME);
-  if (existing) return existing as Mesh;
+  const existing = shadowCatchers.get(scene);
+  if (existing) return existing;
   const catcher = CreateGround(
     SHADOW_CATCHER_NAME,
     { width: 100, height: 100 },
@@ -159,12 +168,14 @@ function getShadowCatcher(scene: Scene): Mesh {
   material.shadowColor = new Color3(0, 0, 0);
   material.alpha = 0.5;
   catcher.material = material;
+  shadowCatchers.set(scene, catcher);
   return catcher;
 }
 
 /**
  * 씬마다 한 번: 매 프레임 그림자 드리우는 목록 갱신.
- * 그림자 받이는 한 조명의 그림자만 그리므로 켜져 있는 첫 그림자 조명을 쓴다.
+ * 그림자 받이는 한 조명의 그림자만 그리므로 켜져 있는(숨기지 않았고 씬에 붙어 있는) 첫 그림자 조명을 쓴다.
+ * 그림자 조명이 없으면 아무것도 뒤지지 않는다 (흔한 경우).
  */
 function bindLightSync(scene: Scene) {
   if (syncedScenes.has(scene)) return;
@@ -173,14 +184,19 @@ function bindLightSync(scene: Scene) {
   scene.onBeforeRenderObservable.add(() => {
     let catcherLight: ShadowLight | null = null;
     let casters: AbstractMesh[] | null = null;
-    for (const mesh of inCreationOrder(scene.meshes)) {
-      const entry = editorLights.get(mesh);
-      if (!entry?.shadow || !entry.light.isEnabled()) continue;
+    const active = [...(shadowLights.get(scene) ?? [])]
+      .filter((mesh) => {
+        const light = editorLights.get(mesh)?.light;
+        return light?.isEnabled() && scene.lights.includes(light);
+      })
+      .toSorted((a, b) => a.uniqueId - b.uniqueId);
+    for (const mesh of active) {
+      const entry = editorLights.get(mesh)!;
       casters ??= shadowCasters(scene);
-      entry.shadow.getShadowMap()!.renderList = casters;
+      entry.shadow!.getShadowMap()!.renderList = casters;
       catcherLight ??= entry.light;
     }
-    const catcher = scene.getMeshByName(SHADOW_CATCHER_NAME);
+    const catcher = shadowCatchers.get(scene);
     if (catcher) {
       catcher.setEnabled(catcherLight !== null);
       if (catcherLight) {
@@ -228,10 +244,12 @@ function setValues(
     shadow.bias = 0.0005;
     shadow.normalBias = 0.01;
     entry.shadow = shadow;
+    shadowLightsOf(mesh.getScene()).add(mesh);
     getShadowCatcher(mesh.getScene());
   } else if (!values.shadows && entry.shadow) {
     entry.shadow.dispose();
     entry.shadow = null;
+    shadowLights.get(mesh.getScene())?.delete(mesh);
   }
   entry.values = { ...values };
 }
@@ -292,7 +310,10 @@ export function addLightObject(
   const unsubscribe = onMeshFlagChange(mesh, () =>
     light.setEnabled(!getMeshFlag(mesh, "hidden")),
   );
-  mesh.onDisposeObservable.addOnce(unsubscribe);
+  mesh.onDisposeObservable.addOnce(() => {
+    unsubscribe();
+    shadowLights.get(scene)?.delete(mesh);
+  });
   return mesh;
 }
 

@@ -5,7 +5,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 
-import { handleFieldHistoryKey } from "../lib/editor-shortcuts";
+import { getShortcutKey, handleFieldHistoryKey } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 
 /*
@@ -105,8 +105,9 @@ export function ColorField({
           spellCheck={false}
           onKeyDown={(event) => {
             const input = event.currentTarget;
-            if (event.key === "Enter") input.blur();
-            else if (event.key === "Escape") {
+            const key = getShortcutKey(event);
+            if (key === "enter") input.blur();
+            else if (key === "escape") {
               input.value = shown;
               input.blur();
             } else if (
