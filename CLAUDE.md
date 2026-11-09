@@ -150,7 +150,7 @@ src/
 - 도움말: `?`·도움말 메뉴의 단축키 창(`shortcut-help-dialog.tsx`, 상태는 `runtime.help`)과 사용 설명서 페이지(`/manual` → `ManualPage`). 둘 다 단축키 목록 `SHORTCUT_GROUPS`(`lib/editor-reference.ts`)와 마우스 조작표 `MOUSE_CONTROLS`(`lib/camera-controls.ts`)를 같이 쓴다. 메쉬 종류·스냅 단위·도구 이름도 에디터 값에서 가져온다 — 손으로 다시 적지 않는다.
   - 단축키를 추가하면 `SHORTCUT_GROUPS`에도 넣는다 (`editor-reference.test`가 표의 라벨 — `SHORTCUT_LABELS`·`VIEW_SHORTCUTS`·프리셋 키 — 이 다 있는지 확인). 목록은 짝(정면/뒤 …)과 순서를 사람이 정하므로 표에서 자동으로 만들지 않는다. 마우스 규칙을 바꾸면 `MOUSE_CONTROLS`도 고친다.
   - 사용자가 보는 동작을 바꾸면 `manual-page.tsx`의 설명 글도 고친다.
-- 뷰포트 클릭은 `POINTERTAP`으로 처리한다 (드래그 = 카메라 조작·기즈모 드래그와 구분).
+- 뷰포트 클릭(탭)은 `pointer-router`가 직접 판정한다: `POINTERDOWN`의 자리·버튼을 기억했다가 `POINTERUP`에서 같은 버튼이고 이동이 `InputManager.DragMovementThreshold` 안이면 탭, 넘었으면 드래그(카메라 조작). **Babylon의 `POINTERTAP`/`POINTERDOUBLETAP`은 쓰지 않는다** — 앞 클릭과의 간격이 정확히 `DoubleClickDelay`(300ms)면 둘 다 발생하지 않아 클릭이 사라진다 (E2E 간헐 실패로 발견).
 
 ## UI 규칙 (shadcn / Base UI)
 

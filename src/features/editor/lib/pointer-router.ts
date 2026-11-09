@@ -1,4 +1,5 @@
 import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
+import { InputManager } from "@babylonjs/core/Inputs/scene.inputManager";
 import type { Scene } from "@babylonjs/core/scene";
 
 import type { BoxSelect } from "./box-select";
@@ -20,8 +21,10 @@ import type { TransformGizmo } from "./transform-gizmo";
  *   4. 그 외                  → 좌클릭으로 선택 / 빈 곳이면 해제. Shift·⌘/Ctrl+클릭은 선택에 넣고 빼기
  *                               우클릭은 우클릭 메뉴: 객체 위면 (안 골라져 있으면 그것만 골라) 선택 메뉴, 빈 곳이면 씬 메뉴
  *
- * 클릭은 POINTERTAP(거의 움직이지 않은 클릭)만 본다 — 그 외 드래그는 카메라 조작이다.
- * 박스 선택은 탭 판정 거리를 넘게 움직여야 시작되므로 같은 누름이 탭과 박스로 두 번 처리되지 않는다.
+ * 클릭(탭)은 여기서 직접 판정한다: 누른 자리에서 탭 판정 거리(DragMovementThreshold) 안에 같은 버튼을 떼면 탭,
+ * 더 움직였으면 드래그(카메라 조작). Babylon의 POINTERTAP/DOUBLETAP은 쓰지 않는다 — 앞 클릭과의 간격이
+ * 정확히 DoubleClickDelay(300ms)면 둘 다 발생하지 않아 클릭이 사라진다 (scene.inputManager의 `>`/`<` 경계).
+ * 박스 선택은 같은 거리를 넘게 움직여야 시작되므로 같은 누름이 탭과 박스로 두 번 처리되지 않는다.
  */
 
 const LEFT_BUTTON = 0;
@@ -40,6 +43,9 @@ export function bindPointerRouter(
   scene: Scene,
   { gizmo, placement, selection, tools, boxSelect, contextMenu }: Targets,
 ): () => void {
+  /** 마지막으로 누른 버튼과 자리 (캔버스 기준 CSS 픽셀). 떼면 비운다 */
+  let press: { button: number; x: number; y: number } | null = null;
+
   const observer = scene.onPointerObservable.add((info) => {
     const isPlacing = placement.isActive();
 
@@ -52,6 +58,7 @@ export function bindPointerRouter(
 
     if (info.type === PointerEventTypes.POINTERDOWN) {
       const event = info.event as PointerEvent;
+      press = { button: event.button, x: scene.pointerX, y: scene.pointerY };
       const startsBox =
         !gizmo.isPointerOver() &&
         isBoxSelectDrag(event, {
@@ -64,18 +71,20 @@ export function bindPointerRouter(
       return;
     }
 
-    if (info.type === PointerEventTypes.POINTERUP) {
-      if (boxSelect.isPending()) boxSelect.end();
-      return;
-    }
-
-    const isTap =
-      info.type === PointerEventTypes.POINTERTAP ||
-      // 300ms 안의 두 번째 클릭은 위치와 무관하게 DOUBLETAP으로만 온다 (연속 클릭 누락 방지)
-      info.type === PointerEventTypes.POINTERDOUBLETAP;
-    if (!isTap || gizmo.isPointerOver()) return;
-
+    if (info.type !== PointerEventTypes.POINTERUP) return;
     const event = info.event as PointerEvent;
+    const pressed = press;
+    press = null;
+    // 박스가 됐으면 탭이 아니다
+    if (boxSelect.isPending() && boxSelect.end()) return;
+    if (!pressed || pressed.button !== event.button) return;
+    const moved = Math.hypot(
+      scene.pointerX - pressed.x,
+      scene.pointerY - pressed.y,
+    );
+    if (moved > InputManager.DragMovementThreshold) return;
+    if (gizmo.isPointerOver()) return;
+
     const button = event.button;
     if (isPlacing) {
       if (button === LEFT_BUTTON) placement.place();
