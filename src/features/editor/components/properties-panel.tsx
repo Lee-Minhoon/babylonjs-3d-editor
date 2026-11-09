@@ -56,17 +56,25 @@ function ParentNoteText({ parent }: { parent: AbstractMesh }) {
 }
 
 /** 여러 개 선택의 머리: 개수와 메쉬 목록 */
+/** 여러 개 선택 목록에 이름을 보이는 수 (수천 개를 고르면 나머지는 개수만) */
+const MULTI_SELECTION_LIST_LIMIT = 50;
+
 function MultiSelectionHeader({ meshes }: { meshes: readonly AbstractMesh[] }) {
   return (
     <div className="space-y-2">
       <div className="text-sm font-medium">메쉬 {meshes.length}개 선택됨</div>
       <ul className="max-h-28 space-y-1 overflow-y-auto">
-        {meshes.map((mesh) => (
+        {meshes.slice(0, MULTI_SELECTION_LIST_LIMIT).map((mesh) => (
           <li key={mesh.uniqueId} className="flex items-center gap-2">
             <MeshIcon mesh={mesh} className="size-3.5 text-muted-foreground" />
             <MeshNameLabel mesh={mesh} />
           </li>
         ))}
+        {meshes.length > MULTI_SELECTION_LIST_LIMIT && (
+          <li className="text-muted-foreground">
+            외 {meshes.length - MULTI_SELECTION_LIST_LIMIT}개
+          </li>
+        )}
       </ul>
     </div>
   );

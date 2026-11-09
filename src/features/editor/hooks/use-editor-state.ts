@@ -11,6 +11,7 @@ import type { ContextMenuState } from "../lib/context-menu";
 import type { EditorRuntime } from "../lib/editor-runtime";
 import type { HistoryState } from "../lib/history";
 import type { MeshPresetId } from "../lib/mesh-presets";
+import type { PerformanceState } from "../lib/performance-monitor";
 import type { PlacementState } from "../lib/placement-tool";
 import type { SceneFileState } from "../lib/scene-file";
 import {
@@ -206,5 +207,18 @@ export function useAssets(runtime: Runtime): readonly Asset[] {
     assets?.subscribe ?? subscribeNoop,
     assets?.list ?? getNoAssets,
     getNoAssets,
+  );
+}
+
+const HIDDEN_STATS: PerformanceState = { visible: false, stats: null };
+const getHiddenStats = () => HIDDEN_STATS;
+
+/** 성능 표시 (켜져 있는지와 마지막 측정값) */
+export function usePerformanceState(runtime: Runtime): PerformanceState {
+  const stats = runtime?.stats;
+  return useSyncExternalStore(
+    stats?.subscribe ?? subscribeNoop,
+    stats?.getState ?? getHiddenStats,
+    getHiddenStats,
   );
 }

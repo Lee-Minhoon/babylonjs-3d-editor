@@ -12,6 +12,7 @@ import { DiscardChangesDialog } from "./discard-changes-dialog";
 import { EditorHeader } from "./editor-header";
 import { EditorViewport } from "./editor-viewport";
 import { MeshSidebar } from "./mesh-sidebar";
+import { PerformanceOverlay } from "./performance-overlay";
 import { PropertiesPanel } from "./properties-panel";
 import { RecoveryDialog } from "./recovery-dialog";
 import { SelectionBox } from "./selection-box";
@@ -44,6 +45,7 @@ export function Editor() {
               )}
               {runtime && <AddMenuPopup runtime={runtime} />}
               {runtime && <ContextMenuPopup runtime={runtime} />}
+              {runtime && <PerformanceOverlay runtime={runtime} />}
             </div>
             <PropertiesPanel runtime={runtime} />
           </div>

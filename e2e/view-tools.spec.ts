@@ -3,11 +3,13 @@ import { expect, test } from "@playwright/test";
 import {
   closeMenu,
   expectScene,
+  mockFileSystem,
   openEditor,
   placePreset,
   sceneList,
   selectMesh,
   undoMenuText,
+  writeMockFile,
 } from "./editor";
 
 test.beforeEach(async ({ page }) => {
@@ -97,4 +99,61 @@ test("기즈모 축: 툴바 버튼과 보기 메뉴가 같은 상태를 바꾼�
   ).toBeChecked();
   await local.click();
   await expect(toggle).toHaveAccessibleName("기즈모 축: 로컬 축");
+});
+
+test("성능 표시: 보기 메뉴로 켜면 FPS·객체 수가 보이고, 끄면 사라진다", async ({
+  page,
+}) => {
+  await placePreset(page, "1", -120, 60);
+  await placePreset(page, "2", 120, 60);
+  const overlay = page.getByLabel("성능", { exact: true });
+  await expect(overlay).toHaveCount(0);
+
+  await page.getByRole("menuitem", { name: "보기", exact: true }).click();
+  await page.getByRole("menuitemcheckbox", { name: "성능 표시" }).click();
+  await expect(overlay).toContainText(/FPS\s*\d+ \(/);
+  await expect(overlay).toContainText(/객체\s*2/);
+
+  await page.getByRole("menuitem", { name: "보기", exact: true }).click();
+  await page.getByRole("menuitemcheckbox", { name: "성능 표시" }).click();
+  await expect(overlay).toHaveCount(0);
+});
+
+test("메쉬가 많아도 씬 목록은 보이는 줄만 그리고, 스크롤하면 아래 줄이 나온다", async ({
+  page,
+}) => {
+  const meshes = Array.from({ length: 300 }, (_, i) => ({
+    presetId: "box",
+    name: `Box ${i + 1}`,
+    position: [(i % 20) * 1.5, 0.5, Math.floor(i / 20) * 1.5],
+    rotation: [0, 0, 0],
+    scaling: [1, 1, 1],
+    material: null,
+  }));
+  await mockFileSystem(page);
+  await page.reload();
+  await openEditor(page);
+  await writeMockFile(
+    page,
+    "many.json",
+    JSON.stringify({ format: "babylonjs-3d-editor/scene", version: 8, meshes }),
+  );
+  await page.keyboard.press("Meta+o");
+  await expect(page.getByText("씬 (300)")).toBeVisible();
+  const rendered = await sceneList(page).count();
+  expect(rendered).toBeLessThan(100);
+  await expect(sceneList(page).first()).toHaveAttribute("aria-setsize", "300");
+
+  // ⌘A는 그려지지 않은 줄까지 모두 고른다
+  await page.keyboard.press("Meta+a");
+  await expect(page.getByText("메쉬 300개 선택됨")).toBeVisible();
+  await expect(page.getByText("외 250개")).toBeVisible();
+
+  await page
+    .getByRole("list", { name: "씬 메쉬" })
+    .evaluate((list) =>
+      list.closest("[data-slot=scroll-area-viewport]")!.scrollTo(0, 1e6),
+    );
+  await expect(sceneList(page).last()).toHaveText("Box 300");
+  await expect(sceneList(page).last()).toHaveAttribute("aria-posinset", "300");
 });

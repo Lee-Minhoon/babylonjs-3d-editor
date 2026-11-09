@@ -19,6 +19,10 @@ import {
   createMaterialLibrary,
   type MaterialLibrary,
 } from "./material-library";
+import {
+  createPerformanceMonitor,
+  type PerformanceMonitor,
+} from "./performance-monitor";
 import { createPlacementTool, type PlacementTool } from "./placement-tool";
 import { bindPointerRouter } from "./pointer-router";
 import { createSceneExport, type SceneExport } from "./scene-export";
@@ -48,6 +52,7 @@ export type EditorRuntime = {
   help: ShortcutHelp;
   addMenu: AddMenu;
   contextMenu: ContextMenu;
+  stats: PerformanceMonitor;
   cameraView: CameraView;
   boxSelect: BoxSelect;
   gizmo: TransformGizmo;
@@ -88,6 +93,7 @@ export function createEditorRuntime(
   const unbindCamera = bindCameraControls(camera, { tools, placement });
   const boxSelect = createBoxSelect(scene, selection);
   const contextMenu = createContextMenu();
+  const stats = createPerformanceMonitor(scene);
   const unbindPointer = bindPointerRouter(scene, {
     gizmo,
     placement,
@@ -128,6 +134,7 @@ export function createEditorRuntime(
       help,
       addMenu,
       contextMenu,
+      stats,
       cameraView,
       boxSelect,
       gizmo,
@@ -145,6 +152,7 @@ export function createEditorRuntime(
       autosave.dispose();
       sceneFile.dispose();
       unbindPointer();
+      stats.dispose();
       boxSelect.dispose();
       unbindCamera();
       cameraView.dispose();

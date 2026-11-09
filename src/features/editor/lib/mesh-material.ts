@@ -108,7 +108,14 @@ export function createMeshMaterial(
   values: MaterialValues,
 ): PBRMaterial {
   const material = new PBRMaterial(name, scene);
+  // 아직 그려진 적 없는 머티리얼이라 "다시 컴파일" 표시가 필요 없다. 막지 않으면 기본값과 다른 속성
+  // (투명 모드·거칠기 채널…)을 바꿀 때마다 씬의 모든 메쉬를 훑어서, 메쉬 N개를 만들면 O(N²)이 된다
+  // (1만 개 씬 열기 18초). 공개 setter로 풀면 그때 한 번 훑으므로 내부 값을 직접 되돌린다.
+  material.blockDirtyMechanism = true;
   setValues(material, values);
+  (
+    material as unknown as { _blockDirtyMechanism: boolean }
+  )._blockDirtyMechanism = false;
   return material;
 }
 

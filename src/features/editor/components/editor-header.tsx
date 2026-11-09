@@ -47,6 +47,7 @@ import {
   useGizmoSpace,
   useHistoryState,
   useOrthographic,
+  usePerformanceState,
   useSceneFileState,
   useSnap,
 } from "../hooks/use-editor-state";
@@ -270,6 +271,7 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
   const snapEnabled = useSnap(runtime, "move").enabled;
   const gizmoSpace = useGizmoSpace(runtime);
   const orthographic = useOrthographic(runtime);
+  const showStats = usePerformanceState(runtime).visible;
   const file = useSceneFileState(runtime);
   const models = modelMenuItems(useAssets(runtime));
   const isWebGPU = runtime?.scene.getEngine().isWebGPU;
@@ -549,6 +551,14 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
             >
               직교 투영
               <MenubarShortcut>{SHORTCUT_LABELS.orthographic}</MenubarShortcut>
+            </MenubarCheckboxItem>
+            <MenubarCheckboxItem
+              closeOnClick
+              checked={showStats}
+              disabled={!runtime}
+              onCheckedChange={(checked) => runtime?.stats.setVisible(checked)}
+            >
+              성능 표시
             </MenubarCheckboxItem>
           </MenubarContent>
         </MenubarMenu>

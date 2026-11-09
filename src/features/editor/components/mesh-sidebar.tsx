@@ -18,6 +18,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useSceneMeshes } from "@/hooks/use-scene-meshes";
+import { useVirtualWindow } from "@/hooks/use-virtual-window";
 import { cn } from "@/lib/utils";
 
 import {
@@ -93,6 +94,8 @@ type SceneListDrag = {
 
 /** 들여쓰기 한 단계 (px) */
 const INDENT = 12;
+/** 줄 높이(h-7 = 28px) + 줄 간격(space-y-0.5 = 2px). 보이는 줄만 그릴 때 위치 계산에 쓴다 */
+const ROW_STRIDE = 30;
 
 /**
  * 씬 목록 한 줄: 클릭 선택(Shift·⌘/Ctrl은 넣고 빼기), 더블클릭 이름 바꾸기,
@@ -101,6 +104,8 @@ const INDENT = 12;
  */
 function SceneListItem({
   row: { mesh, depth, childCount },
+  position,
+  total,
   runtime,
   isSelected,
   collapsed,
@@ -108,6 +113,9 @@ function SceneListItem({
   drag,
 }: {
   row: SceneTreeRow;
+  /** 목록에서 몇 번째 줄인지 (1부터) — 보이는 줄만 그리므로 화면 읽기 프로그램에 전체 위치를 알린다 */
+  position: number;
+  total: number;
   runtime: EditorRuntime;
   isSelected: boolean;
   collapsed: boolean;
@@ -130,6 +138,8 @@ function SceneListItem({
         drag.dragged?.includes(mesh) && "opacity-60",
       )}
       style={{ paddingLeft: depth * INDENT }}
+      aria-posinset={position}
+      aria-setsize={total}
       draggable={!editing}
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = "move";
@@ -361,6 +371,10 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
   const { collapsed, toggle } = useCollapsed(selected);
   const rows = buildSceneTree(meshes, hierarchy.getParent, collapsed);
   const drag = useSceneListDrag(runtime);
+  // 수천 개면 줄마다 includes가 O(N²)이 된다
+  const selectedSet = new Set(selected);
+  // 보이는 줄만 그린다 (메쉬가 수천 개여도 목록·선택 변경이 느려지지 않게)
+  const visible = useVirtualWindow(rows.length, ROW_STRIDE);
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-xs text-sidebar-foreground">
@@ -433,14 +447,26 @@ export function MeshSidebar({ runtime }: MeshSidebarProps) {
               drag.drop("root");
             }}
           >
-            <ScrollArea className="min-h-0 flex-1 pr-3">
-              <ul aria-label="씬 메쉬" className="-mx-1 space-y-0.5">
-                {rows.map((row) => (
+            <ScrollArea
+              className="min-h-0 flex-1 pr-3"
+              viewportRef={visible.ref}
+            >
+              <ul
+                aria-label="씬 메쉬"
+                className="-mx-1 space-y-0.5"
+                style={{
+                  paddingTop: visible.before,
+                  paddingBottom: visible.after,
+                }}
+              >
+                {rows.slice(visible.start, visible.end).map((row, index) => (
                   <SceneListItem
                     key={row.mesh.uniqueId}
                     row={row}
+                    position={visible.start + index + 1}
+                    total={rows.length}
                     runtime={runtime}
-                    isSelected={selected.includes(row.mesh)}
+                    isSelected={selectedSet.has(row.mesh)}
                     collapsed={collapsed.has(row.mesh)}
                     onToggleCollapsed={() => toggle(row.mesh)}
                     drag={drag}
