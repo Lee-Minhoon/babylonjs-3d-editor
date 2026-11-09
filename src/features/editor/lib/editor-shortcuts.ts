@@ -1,30 +1,9 @@
-import type { Scene } from "@babylonjs/core/scene";
-
-import type { AddMenu } from "./add-menu";
-import type { CameraView, ViewName } from "./camera-views";
-import type { Clipboard } from "./clipboard";
-import {
-  copySelected,
-  cutSelected,
-  deleteSelected,
-  dropSelectedToFloor,
-  duplicateSelected,
-  focusSelected,
-  hideSelected,
-  parentSelected,
-  paste,
-  showAllHidden,
-  startRename,
-  unparentSelected,
-} from "./editor-actions";
+import type { ViewName } from "./camera-views";
+import { type CommandId, EDITOR_COMMANDS } from "./editor-commands";
+import type { EditorRuntime } from "./editor-runtime";
 import type { History } from "./history";
 import { MESH_PRESETS, type MeshPresetId } from "./mesh-presets";
-import type { PlacementTool } from "./placement-tool";
-import type { SceneFile } from "./scene-file";
-import type { Selection } from "./selection";
-import type { ShortcutHelp } from "./shortcut-help";
-import type { ToolState, TransformTool } from "./tools";
-import type { TransformGizmo } from "./transform-gizmo";
+import type { TransformTool } from "./tools";
 
 /*
  * 에디터 키보드 단축키를 한 곳에서 처리한다 — 키 목록의 기준은 아래 SHORTCUTS 표다.
@@ -32,6 +11,7 @@ import type { TransformGizmo } from "./transform-gizmo";
  *
  * 표의 한 줄이 단축키 하나: 키 조합 + UI 라벨 + 동작. 메뉴·툴팁·도움말이 보여주는 라벨(SHORTCUT_LABELS,
  * VIEW_SHORTCUTS, getPresetShortcut, getToolShortcut)은 모두 이 표에서 나오므로 처리기와 어긋날 수 없다.
+ * 메뉴에도 있는 동작은 명령 표(editor-commands)의 run을 가리킨다 — 메뉴와 단축키가 같은 코드를 부른다.
  * 새 단축키 = 줄 하나 추가 (+ editor-reference의 도움말 목록). 같은 키 조합이 여럿이면 앞의 것이 먼저고,
  * run이 false("하지 않음")를 돌려주면 다음 줄로 넘어간다 (배치 중 R은 회전, 아니면 크기 도구).
  *
@@ -39,20 +19,6 @@ import type { TransformGizmo } from "./transform-gizmo";
  * 키를 누르고 있을 때의 반복 입력은 repeatable인 줄만 받는다.
  * (새 씬은 단축키 없음 — ⌘N은 브라우저가 가로채 막을 수 없다)
  */
-
-export type EditorShortcutTargets = {
-  scene: Scene;
-  help: ShortcutHelp;
-  addMenu: AddMenu;
-  cameraView: CameraView;
-  history: History;
-  placement: PlacementTool;
-  selection: Selection;
-  tools: ToolState;
-  clipboard: Clipboard;
-  sceneFile: SceneFile;
-  gizmo: TransformGizmo;
-};
 
 /** 단축키 판정에 쓰는 키 이벤트 부분 (KeyboardEvent의 부분집합 — 테스트는 이 모양의 객체를 넘긴다) */
 export type ShortcutKeyEvent = {
@@ -88,8 +54,12 @@ type ShortcutBinding = KeyCombo & {
   /** 처리했을 때 브라우저 기본 동작을 막는다 (기본 true). 글자 키·Esc처럼 막을 게 없으면 false */
   preventDefault?: boolean;
   /** false면 "하지 않음" → 같은 키의 다음 줄로. void는 처리한 것 */
-  run: (targets: EditorShortcutTargets) => boolean | void;
+  run: (runtime: EditorRuntime) => boolean | void;
 };
+
+/** 명령 표의 동작을 단축키 동작으로 */
+const command = (id: CommandId) => (runtime: EditorRuntime) =>
+  EDITOR_COMMANDS[id].run(runtime);
 
 /** 도구 키 (툴바 순서) */
 const TOOL_KEYS: Record<TransformTool, string> = {
@@ -143,17 +113,17 @@ const NAMED_SHORTCUTS = [
     repeatable: true,
     run: ({ history }) => history.redo(),
   },
-  { id: "copy", key: "c", mod: true, label: "⌘C", run: copySelected },
-  { id: "cut", key: "x", mod: true, label: "⌘X", run: cutSelected },
-  { id: "paste", key: "v", mod: true, label: "⌘V", run: paste },
+  { id: "copy", key: "c", mod: true, label: "⌘C", run: command("copy") },
+  { id: "cut", key: "x", mod: true, label: "⌘X", run: command("cut") },
+  { id: "paste", key: "v", mod: true, label: "⌘V", run: command("paste") },
   {
     id: "duplicate",
     key: "d",
     mod: true,
     label: "⌘D",
     // 브라우저 북마크(⌘D)는 에디터 안에서 항상 막는다 → 선택이 없어도 "처리한 것"으로
-    run: (targets) => {
-      duplicateSelected(targets);
+    run: (runtime) => {
+      EDITOR_COMMANDS.duplicate.run(runtime);
     },
   },
   {
@@ -162,25 +132,27 @@ const NAMED_SHORTCUTS = [
     mod: true,
     label: "⌘A",
     // 페이지 글자 전체 선택 대신
-    run: ({ selection }) => selection.selectAll(),
+    run: (runtime) => {
+      EDITOR_COMMANDS.selectAll.run(runtime);
+    },
   },
-  { id: "rename", key: "f2", label: "F2", run: startRename },
+  { id: "rename", key: "f2", label: "F2", run: command("rename") },
+  { id: "delete", key: "backspace", label: "⌫", run: command("delete") },
   {
-    id: "delete",
-    key: "backspace",
-    label: "⌫",
-    run: deleteSelected,
+    id: "deleteForward",
+    key: "delete",
+    label: "Delete",
+    run: command("delete"),
   },
-  { id: "deleteForward", key: "delete", label: "Delete", run: deleteSelected },
   {
     id: "deselect",
     key: "escape",
     label: "Esc",
     preventDefault: false,
     // 배치 중이면 배치 종료, 아니면 선택 해제
-    run: ({ placement, selection }) => {
-      if (placement.isActive()) placement.cancel();
-      else selection.select(null);
+    run: (runtime) => {
+      if (runtime.placement.isActive()) runtime.placement.cancel();
+      else EDITOR_COMMANDS.deselect.run(runtime);
     },
   },
   // 파일 (브라우저의 "페이지 저장"·"열기" 대신)
@@ -241,25 +213,36 @@ const NAMED_SHORTCUTS = [
     run: ({ placement }) => placement.rotate(-1),
   },
   // 객체
-  { id: "focus", key: "f", label: "F", run: focusSelected },
+  { id: "focus", key: "f", label: "F", run: command("focus") },
   {
     id: "hide",
     key: "h",
     label: "H",
     preventDefault: false,
-    run: hideSelected,
+    run: command("hide"),
   },
-  { id: "showAll", key: "h", alt: true, label: "⌥H", run: showAllHidden },
-  { id: "dropToFloor", key: "end", label: "End", run: dropSelectedToFloor },
+  { id: "showAll", key: "h", alt: true, label: "⌥H", run: command("showAll") },
+  {
+    id: "dropToFloor",
+    key: "end",
+    label: "End",
+    run: command("dropToFloor"),
+  },
   // 마지막에 고른 것이 부모
   {
     id: "parent",
     key: "p",
     label: "P",
     preventDefault: false,
-    run: parentSelected,
+    run: command("parent"),
   },
-  { id: "unparent", key: "p", alt: true, label: "⌥P", run: unparentSelected },
+  {
+    id: "unparent",
+    key: "p",
+    alt: true,
+    label: "⌥P",
+    run: command("unparent"),
+  },
   // 보기
   {
     id: "orthographic",
@@ -328,6 +311,11 @@ const SHORTCUTS: readonly ShortcutBinding[] = [
 export const SHORTCUT_LABELS = Object.fromEntries(
   NAMED_SHORTCUTS.map(({ id, label }) => [id, label]),
 ) as Record<ShortcutId, string>;
+
+/** id로 단축키 라벨 (명령 표처럼 id를 문자열로 들고 있는 곳용). 없으면 null */
+export function getShortcutLabel(id: string): string | null {
+  return (SHORTCUT_LABELS as Record<string, string | undefined>)[id] ?? null;
+}
 
 /** UI 표시용 시점 단축키 */
 export const VIEW_SHORTCUTS = Object.fromEntries(
@@ -441,15 +429,13 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return target.closest(POPUP_ZONE)?.closest("[data-open]") != null;
 }
 
-export function bindEditorShortcuts(
-  targets: EditorShortcutTargets,
-): () => void {
+export function bindEditorShortcuts(runtime: EditorRuntime): () => void {
   const onKeyDown = (event: KeyboardEvent) => {
     if (isTypingTarget(event.target)) return;
 
     // 기즈모를 끄는 중에는 아무 단축키도 받지 않는다 — 드래그 동안 메쉬가 시작 자세를 기준으로 피벗을 따라가므로,
     // 그 사이 undo·삭제가 끼어들면 변형이 어긋난다
-    if (targets.gizmo.isDragging()) {
+    if (runtime.gizmo.isDragging()) {
       event.preventDefault();
       return;
     }
@@ -462,7 +448,7 @@ export function bindEditorShortcuts(
         if (event.metaKey || event.ctrlKey) event.preventDefault();
         return;
       }
-      if (binding.run(targets) === false) continue;
+      if (binding.run(runtime) === false) continue;
       if (binding.preventDefault !== false) event.preventDefault();
       return;
     }

@@ -39,41 +39,25 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useSceneMeshes } from "@/hooks/use-scene-meshes";
 
+import { useCommandState } from "../hooks/use-command-state";
 import {
   useActiveTool,
   useAssets,
-  useClipboardHasContent,
   useGizmoSpace,
   useHistoryState,
   useOrthographic,
   useSceneFileState,
-  useSelection,
   useSnap,
 } from "../hooks/use-editor-state";
-import { useMeshFlagCount } from "../hooks/use-mesh-flags";
-import { useMeshHierarchy } from "../hooks/use-mesh-hierarchy";
 import { modelMenuItems } from "../lib/add-menu";
 import type { ViewName } from "../lib/camera-views";
 import {
   alignSelected,
-  copySelected,
-  cutSelected,
-  deleteSelected,
   distributeSelected,
-  dropSelectedToFloor,
-  duplicateSelected,
-  focusSelected,
-  hideSelected,
-  parentSelected,
-  paste,
-  setSelectedLocked,
-  showAllHidden,
   startPresetPlacement,
-  startRename,
-  unparentSelected,
 } from "../lib/editor-actions";
+import type { CommandState } from "../lib/editor-commands";
 import type { EditorRuntime } from "../lib/editor-runtime";
 import {
   getPresetShortcut,
@@ -82,11 +66,7 @@ import {
   VIEW_SHORTCUTS,
 } from "../lib/editor-shortcuts";
 import type { AlignAxis, AlignEdge } from "../lib/mesh-align";
-import {
-  inCreationOrder,
-  LIGHT_PRESETS,
-  MESH_PRESETS,
-} from "../lib/mesh-presets";
+import { LIGHT_PRESETS, MESH_PRESETS } from "../lib/mesh-presets";
 import {
   formatSnapStep,
   type GizmoSpace,
@@ -94,6 +74,7 @@ import {
   type SnapKind,
   type TransformTool,
 } from "../lib/tools";
+import { MenubarCommandItem } from "./command-items";
 import { PresetIcon } from "./preset-icons";
 import { GIZMO_SPACE_LABELS, TOOL_ITEMS } from "./transform-toolbar";
 
@@ -176,69 +157,30 @@ const ALIGN_EDGES: readonly { edge: AlignEdge; label: string }[] = [
  * 객체 메뉴: 숨기기·잠금 · 부모 지정(2개 이상)·해제 · 바닥에 붙이기 · 정렬(2개 이상) · 분배(3개 이상).
  * 정렬 기준은 선택 전체의 바운딩 박스 (mesh-align)
  */
-function ObjectMenu({ runtime }: { runtime: EditorRuntime | null }) {
-  const selected = useSelection(runtime);
-  const sceneMeshes = inCreationOrder(useSceneMeshes(runtime?.scene ?? null));
-  const hiddenCount = useMeshFlagCount(sceneMeshes, "hidden");
-  const lockedCount = useMeshFlagCount(selected, "locked");
-  const hierarchy = useMeshHierarchy();
-  const hasParent = selected.some((mesh) => hierarchy.getParent(mesh));
-  const count = selected.length;
+function ObjectMenu({
+  runtime,
+  state,
+}: {
+  runtime: EditorRuntime | null;
+  state: CommandState;
+}) {
+  const item = { runtime, state };
+  const count = state.selectionCount;
 
   return (
     <MenubarMenu>
       <MenubarTrigger>객체</MenubarTrigger>
       <MenubarContent className="min-w-52">
-        <MenubarItem
-          disabled={count === 0}
-          onClick={() => runtime && hideSelected(runtime)}
-        >
-          숨기기
-          <MenubarShortcut>{SHORTCUT_LABELS.hide}</MenubarShortcut>
-        </MenubarItem>
-        <MenubarItem
-          disabled={hiddenCount === 0}
-          onClick={() => runtime && showAllHidden(runtime)}
-        >
-          숨긴 메쉬 모두 보이기
-          <MenubarShortcut>{SHORTCUT_LABELS.showAll}</MenubarShortcut>
-        </MenubarItem>
+        <MenubarCommandItem id="hide" {...item} />
+        <MenubarCommandItem id="showAll" {...item} />
         <MenubarSeparator />
-        <MenubarItem
-          disabled={lockedCount === count}
-          onClick={() => runtime && setSelectedLocked(runtime, true)}
-        >
-          잠그기
-        </MenubarItem>
-        <MenubarItem
-          disabled={lockedCount === 0}
-          onClick={() => runtime && setSelectedLocked(runtime, false)}
-        >
-          잠금 풀기
-        </MenubarItem>
+        <MenubarCommandItem id="lock" {...item} />
+        <MenubarCommandItem id="unlock" {...item} />
         <MenubarSeparator />
-        <MenubarItem
-          disabled={count < 2}
-          onClick={() => runtime && parentSelected(runtime)}
-        >
-          부모 지정 (마지막에 고른 것)
-          <MenubarShortcut>{SHORTCUT_LABELS.parent}</MenubarShortcut>
-        </MenubarItem>
-        <MenubarItem
-          disabled={!hasParent}
-          onClick={() => runtime && unparentSelected(runtime)}
-        >
-          부모 해제
-          <MenubarShortcut>{SHORTCUT_LABELS.unparent}</MenubarShortcut>
-        </MenubarItem>
+        <MenubarCommandItem id="parent" {...item} />
+        <MenubarCommandItem id="unparent" {...item} />
         <MenubarSeparator />
-        <MenubarItem
-          disabled={count === 0}
-          onClick={() => runtime && dropSelectedToFloor(runtime)}
-        >
-          바닥에 붙이기
-          <MenubarShortcut>{SHORTCUT_LABELS.dropToFloor}</MenubarShortcut>
-        </MenubarItem>
+        <MenubarCommandItem id="dropToFloor" {...item} />
         <MenubarSub>
           <MenubarSubTrigger disabled={count < 2}>정렬</MenubarSubTrigger>
           <MenubarSubContent>
@@ -322,13 +264,12 @@ type EditorHeaderProps = {
 /** 상단 헤더: 앱 이름 · 메뉴바(파일/편집/추가/객체/보기/도움말) · 실행 취소/다시 실행 · 파일 이름 · 렌더러 표시 */
 export function EditorHeader({ runtime }: EditorHeaderProps) {
   const { undoLabel, redoLabel } = useHistoryState(runtime);
-  const selectionCount = useSelection(runtime).length;
-  const hasSelection = selectionCount > 0;
+  const state = useCommandState(runtime);
+  const item = { runtime, state };
   const activeTool = useActiveTool(runtime);
   const snapEnabled = useSnap(runtime, "move").enabled;
   const gizmoSpace = useGizmoSpace(runtime);
   const orthographic = useOrthographic(runtime);
-  const canPaste = useClipboardHasContent(runtime);
   const file = useSceneFileState(runtime);
   const models = modelMenuItems(useAssets(runtime));
   const isWebGPU = runtime?.scene.getEngine().isWebGPU;
@@ -425,78 +366,24 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
               <MenubarShortcut>{SHORTCUT_LABELS.redo}</MenubarShortcut>
             </MenubarItem>
             <MenubarSeparator />
-            <MenubarItem
-              disabled={!hasSelection}
-              onClick={() => runtime && cutSelected(runtime)}
-            >
-              잘라내기
-              <MenubarShortcut>{SHORTCUT_LABELS.cut}</MenubarShortcut>
-            </MenubarItem>
-            <MenubarItem
-              disabled={!hasSelection}
-              onClick={() => runtime && copySelected(runtime)}
-            >
-              복사
-              <MenubarShortcut>{SHORTCUT_LABELS.copy}</MenubarShortcut>
-            </MenubarItem>
-            <MenubarItem
-              disabled={!canPaste}
-              onClick={() => runtime && paste(runtime)}
-            >
-              붙여넣기
-              <MenubarShortcut>{SHORTCUT_LABELS.paste}</MenubarShortcut>
-            </MenubarItem>
-            <MenubarItem
-              disabled={!hasSelection}
-              onClick={() => runtime && duplicateSelected(runtime)}
-            >
-              복제
-              <MenubarShortcut>{SHORTCUT_LABELS.duplicate}</MenubarShortcut>
-            </MenubarItem>
-            <MenubarItem
-              disabled={selectionCount !== 1}
-              onClick={() => runtime && startRename(runtime)}
-            >
-              이름 바꾸기
-              <MenubarShortcut>{SHORTCUT_LABELS.rename}</MenubarShortcut>
-            </MenubarItem>
-            <MenubarItem
-              variant="destructive"
-              disabled={!hasSelection}
-              onClick={() => runtime && deleteSelected(runtime)}
-            >
-              삭제
-              <MenubarShortcut>{SHORTCUT_LABELS.delete}</MenubarShortcut>
-            </MenubarItem>
+            <MenubarCommandItem id="cut" {...item} />
+            <MenubarCommandItem id="copy" {...item} />
+            <MenubarCommandItem id="paste" {...item} />
+            <MenubarCommandItem id="duplicate" {...item} />
+            <MenubarCommandItem id="rename" {...item} />
+            <MenubarCommandItem id="delete" {...item} />
             <MenubarSeparator />
-            <MenubarItem
-              disabled={!runtime}
-              onClick={() => runtime?.selection.selectAll()}
-            >
-              전체 선택
-              <MenubarShortcut>{SHORTCUT_LABELS.selectAll}</MenubarShortcut>
-            </MenubarItem>
-            <MenubarItem
-              disabled={!hasSelection}
-              onClick={() => runtime?.selection.select(null)}
-            >
-              선택 해제
-              <MenubarShortcut>{SHORTCUT_LABELS.deselect}</MenubarShortcut>
-            </MenubarItem>
+            <MenubarCommandItem id="selectAll" {...item} />
+            <MenubarCommandItem id="deselect" {...item} />
           </MenubarContent>
         </MenubarMenu>
 
         <MenubarMenu>
           <MenubarTrigger>추가</MenubarTrigger>
           <MenubarContent>
-            <MenubarItem
-              disabled={!runtime}
-              onClick={() => runtime?.addMenu.open()}
-            >
+            <MenubarCommandItem id="addMenu" {...item}>
               <Search strokeWidth={1.75} aria-hidden />
-              검색해서 추가…
-              <MenubarShortcut>{SHORTCUT_LABELS.addMenu}</MenubarShortcut>
-            </MenubarItem>
+            </MenubarCommandItem>
             <MenubarSeparator />
             {(
               [
@@ -567,7 +454,7 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
           </MenubarContent>
         </MenubarMenu>
 
-        <ObjectMenu runtime={runtime} />
+        <ObjectMenu runtime={runtime} state={state} />
 
         <MenubarMenu>
           <MenubarTrigger>보기</MenubarTrigger>
@@ -630,13 +517,7 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
             <SnapStepSubmenu runtime={runtime} kind="rotate" />
             <SnapStepSubmenu runtime={runtime} kind="scale" />
             <MenubarSeparator />
-            <MenubarItem
-              disabled={!hasSelection}
-              onClick={() => runtime && focusSelected(runtime)}
-            >
-              선택 항목에 맞춰 보기
-              <MenubarShortcut>{SHORTCUT_LABELS.focus}</MenubarShortcut>
-            </MenubarItem>
+            <MenubarCommandItem id="focus" {...item} />
             <MenubarSub>
               <MenubarSubTrigger disabled={!runtime}>시점</MenubarSubTrigger>
               <MenubarSubContent>

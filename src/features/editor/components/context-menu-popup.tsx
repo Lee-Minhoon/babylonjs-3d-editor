@@ -1,7 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
-
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,187 +7,61 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
 } from "@/components/ui/dropdown-menu";
-import { useSceneMeshes } from "@/hooks/use-scene-meshes";
 
-import {
-  useClipboardHasContent,
-  useContextMenuState,
-  useSelection,
-} from "../hooks/use-editor-state";
-import { useMeshFlagCount } from "../hooks/use-mesh-flags";
-import { useMeshHierarchy } from "../hooks/use-mesh-hierarchy";
-import {
-  copySelected,
-  cutSelected,
-  deleteSelected,
-  dropSelectedToFloor,
-  duplicateSelected,
-  focusSelected,
-  hideSelected,
-  parentSelected,
-  paste,
-  setSelectedLocked,
-  showAllHidden,
-  startRename,
-  unparentSelected,
-} from "../lib/editor-actions";
+import { useCommandState } from "../hooks/use-command-state";
+import { useContextMenuState } from "../hooks/use-editor-state";
+import type { CommandState } from "../lib/editor-commands";
 import type { EditorRuntime } from "../lib/editor-runtime";
 import { SHORTCUT_LABELS } from "../lib/editor-shortcuts";
-import { inCreationOrder } from "../lib/mesh-presets";
+import { DropdownCommandItem } from "./command-items";
 
-function Item({
-  shortcut,
-  children,
-  ...props
-}: {
-  shortcut?: string;
-  children: ReactNode;
-  disabled?: boolean;
-  variant?: "default" | "destructive";
-  onClick: () => void;
-}) {
-  return (
-    <DropdownMenuItem {...props}>
-      {children}
-      {shortcut && <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut>}
-    </DropdownMenuItem>
-  );
-}
+type ItemsProps = { runtime: EditorRuntime; state: CommandState };
 
-/** 객체를 우클릭했을 때: 선택한 객체들을 대상으로 (메뉴바 편집·객체 메뉴와 같은 동작) */
-function SelectionItems({ runtime }: { runtime: EditorRuntime }) {
-  const selected = useSelection(runtime);
-  const canPaste = useClipboardHasContent(runtime);
-  const lockedCount = useMeshFlagCount(selected, "locked");
-  const hierarchy = useMeshHierarchy();
-  const hasParent = selected.some((mesh) => hierarchy.getParent(mesh));
-  const count = selected.length;
-
+/** 객체를 우클릭했을 때: 선택한 객체들을 대상으로 (메뉴바 편집·객체 메뉴와 같은 명령 표) */
+function SelectionItems({ runtime, state }: ItemsProps) {
+  const item = { runtime, state };
+  // 잠그기/잠금 풀기는 하나만 — 모두 잠겨 있으면 풀기
+  const lockToggle =
+    state.lockedCount === state.selectionCount ? "unlock" : "lock";
   return (
     <>
-      <Item
-        shortcut={SHORTCUT_LABELS.rename}
-        disabled={count !== 1}
-        onClick={() => startRename(runtime)}
-      >
-        이름 바꾸기
-      </Item>
+      <DropdownCommandItem id="rename" {...item} />
       <DropdownMenuSeparator />
-      <Item shortcut={SHORTCUT_LABELS.cut} onClick={() => cutSelected(runtime)}>
-        잘라내기
-      </Item>
-      <Item
-        shortcut={SHORTCUT_LABELS.copy}
-        onClick={() => copySelected(runtime)}
-      >
-        복사
-      </Item>
-      <Item
-        shortcut={SHORTCUT_LABELS.paste}
-        disabled={!canPaste}
-        onClick={() => paste(runtime)}
-      >
-        붙여넣기
-      </Item>
-      <Item
-        shortcut={SHORTCUT_LABELS.duplicate}
-        onClick={() => duplicateSelected(runtime)}
-      >
-        복제
-      </Item>
+      <DropdownCommandItem id="cut" {...item} />
+      <DropdownCommandItem id="copy" {...item} />
+      <DropdownCommandItem id="paste" {...item} />
+      <DropdownCommandItem id="duplicate" {...item} />
       <DropdownMenuSeparator />
-      <Item
-        shortcut={SHORTCUT_LABELS.hide}
-        onClick={() => hideSelected(runtime)}
-      >
-        숨기기
-      </Item>
-      {lockedCount === count ? (
-        <Item onClick={() => setSelectedLocked(runtime, false)}>잠금 풀기</Item>
-      ) : (
-        <Item onClick={() => setSelectedLocked(runtime, true)}>잠그기</Item>
-      )}
+      <DropdownCommandItem id="hide" {...item} />
+      <DropdownCommandItem id={lockToggle} {...item} />
       <DropdownMenuSeparator />
-      <Item
-        shortcut={SHORTCUT_LABELS.parent}
-        disabled={count < 2}
-        onClick={() => parentSelected(runtime)}
-      >
-        부모 지정 (마지막에 고른 것)
-      </Item>
-      <Item
-        shortcut={SHORTCUT_LABELS.unparent}
-        disabled={!hasParent}
-        onClick={() => unparentSelected(runtime)}
-      >
-        부모 해제
-      </Item>
-      <Item
-        shortcut={SHORTCUT_LABELS.dropToFloor}
-        onClick={() => dropSelectedToFloor(runtime)}
-      >
-        바닥에 붙이기
-      </Item>
-      <Item
-        shortcut={SHORTCUT_LABELS.focus}
-        onClick={() => focusSelected(runtime)}
-      >
-        선택 항목에 맞춰 보기
-      </Item>
+      <DropdownCommandItem id="parent" {...item} />
+      <DropdownCommandItem id="unparent" {...item} />
+      <DropdownCommandItem id="dropToFloor" {...item} />
+      <DropdownCommandItem id="focus" {...item} />
       <DropdownMenuSeparator />
-      <Item
-        shortcut={SHORTCUT_LABELS.delete}
-        variant="destructive"
-        onClick={() => deleteSelected(runtime)}
-      >
-        삭제
-      </Item>
+      <DropdownCommandItem id="delete" {...item} />
     </>
   );
 }
 
-/** 빈 곳을 우클릭했을 때: 씬 전체에 하는 동작 */
+/** 빈 곳을 우클릭했을 때: 씬 전체에 하는 동작. "추가…"는 우클릭한 캔버스 자리에 검색창을 띄운다 */
 function SceneItems({
   runtime,
+  state,
   canvas,
-}: {
-  runtime: EditorRuntime;
-  canvas: { x: number; y: number } | null;
-}) {
-  const canPaste = useClipboardHasContent(runtime);
-  const meshes = inCreationOrder(useSceneMeshes(runtime.scene));
-  const hiddenCount = useMeshFlagCount(meshes, "hidden");
-
+}: ItemsProps & { canvas: { x: number; y: number } | null }) {
+  const item = { runtime, state };
   return (
     <>
-      <Item
-        shortcut={SHORTCUT_LABELS.addMenu}
-        onClick={() => runtime.addMenu.open(canvas)}
-      >
+      <DropdownMenuItem onClick={() => runtime.addMenu.open(canvas)}>
         추가…
-      </Item>
-      <Item
-        shortcut={SHORTCUT_LABELS.paste}
-        disabled={!canPaste}
-        onClick={() => paste(runtime)}
-      >
-        붙여넣기
-      </Item>
+        <DropdownMenuShortcut>{SHORTCUT_LABELS.addMenu}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownCommandItem id="paste" {...item} />
       <DropdownMenuSeparator />
-      <Item
-        shortcut={SHORTCUT_LABELS.selectAll}
-        disabled={meshes.length === 0}
-        onClick={() => runtime.selection.selectAll()}
-      >
-        전체 선택
-      </Item>
-      <Item
-        shortcut={SHORTCUT_LABELS.showAll}
-        disabled={hiddenCount === 0}
-        onClick={() => showAllHidden(runtime)}
-      >
-        숨긴 메쉬 모두 보이기
-      </Item>
+      <DropdownCommandItem id="selectAll" {...item} />
+      <DropdownCommandItem id="showAll" {...item} />
     </>
   );
 }
@@ -200,6 +72,7 @@ function SceneItems({
  */
 export function ContextMenuPopup({ runtime }: { runtime: EditorRuntime }) {
   const state = useContextMenuState(runtime);
+  const commands = useCommandState(runtime);
   if (!state.open) return null;
   const { x, y } = state.client;
   const anchor = {
@@ -226,9 +99,13 @@ export function ContextMenuPopup({ runtime }: { runtime: EditorRuntime }) {
         aria-label={state.kind === "selection" ? "선택 메뉴" : "씬 메뉴"}
       >
         {state.kind === "selection" ? (
-          <SelectionItems runtime={runtime} />
+          <SelectionItems runtime={runtime} state={commands} />
         ) : (
-          <SceneItems runtime={runtime} canvas={state.canvas} />
+          <SceneItems
+            runtime={runtime}
+            state={commands}
+            canvas={state.canvas}
+          />
         )}
       </DropdownMenuContent>
     </DropdownMenu>
