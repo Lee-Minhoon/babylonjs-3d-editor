@@ -119,10 +119,10 @@ export function ManualPage() {
           <header className="space-y-2">
             <h1 className="text-2xl font-bold">사용 설명서</h1>
             <p className="text-sm text-muted-foreground">
-              브라우저에서 기본 도형을 놓고 다듬는 3D 에디터입니다. 단축키는 맥
-              기호로 적었습니다 — Windows에서는 ⌘가 Ctrl, ⌥가 Alt입니다.
-              에디터에서 <Kbd>{SHORTCUT_LABELS.help}</Kbd>를 누르면 단축키
-              요약이 열립니다.
+              브라우저에서 기본 도형·조명·가져온 모델을 놓고 다듬는 3D
+              에디터입니다. 단축키는 맥 기호로 적었습니다 — Windows에서는 ⌘가
+              Ctrl, ⌥가 Alt입니다. 에디터에서 <Kbd>{SHORTCUT_LABELS.help}</Kbd>
+              를 누르면 단축키 요약이 열립니다.
             </p>
           </header>
 
@@ -134,8 +134,8 @@ export function ManualPage() {
                 있으면 점 표시).
               </li>
               <li>
-                <Term>왼쪽</Term>: 메쉬 추가 버튼과 씬 목록. 목록에서 클릭해
-                선택하고, 더블클릭해 이름을 바꾸고, 줄 끝의 자물쇠·눈·✕로
+                <Term>왼쪽</Term>: 메쉬·조명 추가 버튼과 씬 목록. 목록에서
+                클릭해 선택하고, 더블클릭해 이름을 바꾸고, 줄 끝의 자물쇠·눈·✕로
                 잠그기·숨기기·삭제합니다. 끌어서 다른 항목 위에 놓으면 그 자식이
                 됩니다.
               </li>
@@ -144,9 +144,9 @@ export function ManualPage() {
                 축(로컬/월드), 스냅 단위를 고릅니다.
               </li>
               <li>
-                <Term>오른쪽 속성 패널</Term>: 고른 메쉬의
-                이름·위치·회전·크기·머티리얼을 편집합니다. 여러 개를 고르면 함께
-                편집합니다 (이름 제외). 아무것도 고르지 않으면 씬 설정이
+                <Term>오른쪽 속성 패널</Term>: 고른 객체의 이름·위치·회전·크기와
+                모양·머티리얼(조명이면 조명 값)을 편집합니다. 여러 개를 고르면
+                함께 편집합니다 (이름 제외). 아무것도 고르지 않으면 씬 설정이
                 보입니다.
               </li>
               <li>
@@ -226,36 +226,6 @@ export function ManualPage() {
               </li>
               <li>
                 모델이 있는 씬은 묶음 파일(.zip)로 저장됩니다 (아래 저장·열기).
-              </li>
-            </List>
-          </Section>
-
-          <Section id="shape">
-            <p>
-              크기 조절만으로는 안 되는 모양을 속성 패널의 &quot;모양&quot;에서
-              바꿉니다. 슬라이더를 놓을 때 실행 취소 한 번으로 기록되고,
-              복사본과 씬 파일에 따라갑니다. 여러 개를 골랐을 때는 모두 같은
-              종류일 때만 보입니다.
-            </p>
-            <List>
-              {MESH_PRESETS.filter((preset) => preset.params.length > 0).map(
-                (preset) => (
-                  <li key={preset.id}>
-                    <Term>{preset.label}</Term>:{" "}
-                    {preset.params
-                      .map(
-                        (param) =>
-                          `${param.label} ${param.min}~${param.max} (기본 ${param.default})`,
-                      )
-                      .join(" · ")}
-                  </li>
-                ),
-              )}
-              <li>
-                {MESH_PRESETS.filter((preset) => preset.params.length === 0)
-                  .map((preset) => preset.label)
-                  .join(" · ")}
-                는 모양 값이 없습니다 (크기로 조절).
               </li>
             </List>
           </Section>
@@ -393,6 +363,36 @@ export function ManualPage() {
               있습니다. Enter로 확정, Esc로 취소하고, 축 이름(X/Y/Z)을 좌우로
               끌어 값을 조절합니다.
             </p>
+          </Section>
+
+          <Section id="shape">
+            <p>
+              크기 조절만으로는 안 되는 모양을 속성 패널의 &quot;모양&quot;에서
+              바꿉니다. 슬라이더를 놓을 때 실행 취소 한 번으로 기록되고,
+              복사본과 씬 파일에 따라갑니다. 여러 개를 골랐을 때는 모두 같은
+              종류일 때만 보입니다.
+            </p>
+            <List>
+              {MESH_PRESETS.filter((preset) => preset.params.length > 0).map(
+                (preset) => (
+                  <li key={preset.id}>
+                    <Term>{preset.label}</Term>:{" "}
+                    {preset.params
+                      .map(
+                        (param) =>
+                          `${param.label} ${param.min}~${param.max} (기본 ${param.default})`,
+                      )
+                      .join(" · ")}
+                  </li>
+                ),
+              )}
+              <li>
+                {MESH_PRESETS.filter((preset) => preset.params.length === 0)
+                  .map((preset) => preset.label)
+                  .join(" · ")}
+                는 모양 값이 없습니다 (크기로 조절).
+              </li>
+            </List>
           </Section>
 
           <Section id="material">
@@ -624,8 +624,9 @@ export function ManualPage() {
                 간격을 유지합니다.
               </li>
               <li>
-                회전·크기·머티리얼과 자식은 원본을 따르고, 이름은 새로 붙습니다.
-                숨김·잠금은 따라가지 않습니다. 복사본은 최상위에 놓입니다.
+                회전·크기·모양·머티리얼과 자식은 원본을 따르고, 이름은 새로
+                붙습니다. 숨김·잠금은 따라가지 않습니다. 복사본은 최상위에
+                놓입니다.
               </li>
               <li>
                 클립보드는 에디터 안에서만 씁니다 (다른 프로그램과 공유하지
@@ -637,9 +638,9 @@ export function ManualPage() {
           <Section id="file">
             <List>
               <li>
-                씬은 JSON 파일(.json)로 저장합니다: 메쉬 종류, 이름,
-                위치·회전·크기, 머티리얼, 숨김·잠금, 부모. 카메라 위치는
-                저장하지 않습니다.
+                씬은 JSON 파일(.json)로 저장합니다: 메쉬·조명·모델의 종류, 이름,
+                위치·회전·크기, 모양, 머티리얼(공유 머티리얼 포함), 조명 값,
+                숨김·잠금, 부모와 씬 설정. 카메라 위치는 저장하지 않습니다.
               </li>
               <li>
                 가져온 모델이나 텍스처 이미지가 있으면{" "}
@@ -670,10 +671,11 @@ export function ManualPage() {
               <li>
                 <Term>glTF(.glb)로 내보내기</Term>: Blender·게임 엔진·웹
                 뷰어에서 여는 표준 3D 파일입니다. 메쉬 이름·위치·회전·크기와
-                머티리얼(색·메탈릭·거칠기·발광색·불투명도·조명 무시)이
-                들어갑니다. 숨긴 메쉬, 바닥 격자, 카메라·조명, 씬 설정은
-                빠집니다. 조명도 아직 내보내지 않습니다. 이 파일은 에디터로 다시
-                열 수 없습니다 — 편집은 씬 파일(.json·.zip)로 이어 갑니다.
+                머티리얼(색·메탈릭·거칠기·발광색·불투명도·조명 무시·텍스처)이
+                들어갑니다. 가져온 모델도 메쉬로 들어갑니다. 숨긴 메쉬, 바닥
+                격자, 카메라·조명, 씬 설정은 빠집니다. 조명도 아직 내보내지
+                않습니다. 이 파일은 에디터로 다시 열 수 없습니다 — 편집은 씬
+                파일(.json·.zip)로 이어 갑니다.
               </li>
               <li>
                 <Term>스크린샷 저장</Term>: 지금 시점을 PNG로 저장합니다. 바닥
