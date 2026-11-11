@@ -54,33 +54,58 @@ export function isAdditiveClick(event: {
 
 export function createSelection(scene: Scene): Selection {
   let selected: readonly AbstractMesh[] = [];
+  let selectedSet = new Set<AbstractMesh>();
   const listeners = createListeners();
 
   const outline = new SelectionOutlineLayer("__selection-outline", scene);
   outline.outlineColor = new Color3(1, 0.6, 0.15);
   outline.outlineThickness = 2;
 
+  /** 선택된 채 씬에서 빠진 메쉬 — 다음에 읽을 때 한꺼번에 뺀다 (메쉬 1만 개를 지우면 1만 번 오므로) */
+  const removed = new Set<AbstractMesh>();
+  /** 빠진 메쉬를 뺐지만 아직 외곽선·구독자에게 알리지 않았다 */
+  let unannounced = false;
+  let announceQueued = false;
+
+  function current(): readonly AbstractMesh[] {
+    if (removed.size > 0) {
+      selected = selected.filter((mesh) => !removed.has(mesh));
+      removed.clear();
+      unannounced = true;
+    }
+    return selected;
+  }
+
+  function announce() {
+    unannounced = false;
+    outline.clearSelection();
+    if (selected.length > 0) outline.addSelection([...selected]);
+    listeners.emit();
+  }
+
   function set(meshes: readonly AbstractMesh[]) {
+    const previous = current();
     const next = [...new Set(meshes)].filter(
       (mesh) => !getMeshFlag(mesh, "hidden"),
     );
     if (
-      next.length === selected.length &&
-      next.every((mesh, index) => mesh === selected[index])
+      next.length === previous.length &&
+      next.every((mesh, index) => mesh === previous[index])
     ) {
+      if (unannounced) announce();
       return;
     }
     selected = next;
-    outline.clearSelection();
-    if (next.length > 0) outline.addSelection([...next]);
-    listeners.emit();
+    selectedSet = new Set(next);
+    announce();
   }
 
   function toggle(mesh: AbstractMesh) {
+    const meshes = current();
     set(
-      selected.includes(mesh)
-        ? selected.filter((item) => item !== mesh)
-        : [...selected, mesh],
+      selectedSet.has(mesh)
+        ? meshes.filter((item) => item !== mesh)
+        : [...meshes, mesh],
     );
   }
 
@@ -93,14 +118,23 @@ export function createSelection(scene: Scene): Selection {
     return hit?.pickedMesh ?? null;
   }
 
+  // 씬에서 빠진 메쉬는 선택에서 뺀다. 읽을 때(getMeshes) 바로 빠지고, 알림은 지우기가 다 끝난 뒤 한 번
   const removedObserver = scene.onMeshRemovedObservable.add((mesh) => {
-    if (selected.includes(mesh)) set(selected.filter((item) => item !== mesh));
+    if (!selectedSet.delete(mesh)) return;
+    removed.add(mesh);
+    if (announceQueued) return;
+    announceQueued = true;
+    queueMicrotask(() => {
+      announceQueued = false;
+      current();
+      if (unannounced) announce();
+    });
   });
   // 숨긴 메쉬를 선택에서 뺀다 (set이 걸러낸다)
-  const unsubscribeFlags = onAnyMeshFlagChange(() => set(selected));
+  const unsubscribeFlags = onAnyMeshFlagChange(() => set(current()));
 
   return {
-    getMeshes: () => selected,
+    getMeshes: current,
     select: (mesh) => set(mesh ? [mesh] : []),
     set,
     selectAll: () =>

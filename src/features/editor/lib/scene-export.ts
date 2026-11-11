@@ -144,9 +144,9 @@ export async function captureScreenshot(scene: Scene): Promise<Blob> {
   }
 }
 
-/** "scene.json" → "scene" (저장 전이면 "scene") */
+/** "scene.json"·"scene.zip" → "scene" (저장 전이면 "scene") */
 export function exportBaseName(sceneFileName: string | null): string {
-  return (sceneFileName ?? "scene").replace(/\.json$/i, "") || "scene";
+  return (sceneFileName ?? "scene").replace(/\.(json|zip)$/i, "") || "scene";
 }
 
 export type SceneExport = {

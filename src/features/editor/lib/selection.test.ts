@@ -37,6 +37,24 @@ describe("selection", () => {
     selection.dispose();
   });
 
+  test("선택한 메쉬가 여럿 빠지면 바로 빠지고, 알림은 한 번에 모아서 한다", async () => {
+    const own = createTestScene();
+    const selection = createSelection(own);
+    const meshes = [0, 1, 2].map(() => addPresetMesh(own, findPreset("box")!));
+    selection.set(meshes);
+    const listener = vi.fn();
+    selection.subscribe(listener);
+    own.removeMesh(meshes[0]);
+    own.removeMesh(meshes[2]);
+    expect(selection.getMeshes()).toEqual([meshes[1]]);
+    expect(listener).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(selection.getMeshes()).toEqual([meshes[1]]);
+    selection.dispose();
+    own.dispose();
+  });
+
   test("같은 선택이면 알리지 않고 같은 배열을 돌려준다 (useSyncExternalStore)", () => {
     const selection = createSelection(scene);
     const [a, b] = [box(), box()];

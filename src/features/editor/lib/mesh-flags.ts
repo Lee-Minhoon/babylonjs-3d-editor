@@ -2,7 +2,7 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
 import { createKeyedListeners, createListeners } from "@/lib/listeners";
 
-import { type Command, createMacroCommand, macroLabel } from "./history";
+import type { Command } from "./history";
 import { isEditorMesh } from "./mesh-presets";
 
 /*
@@ -26,17 +26,41 @@ export function getMeshFlag(mesh: AbstractMesh, flag: MeshFlag): boolean {
   return flag === "hidden" ? !mesh.isVisible : lockedMeshes.has(mesh);
 }
 
+/** 값만 바꾸고 이 메쉬의 구독자에게 알린다. 바뀌었으면 true */
+function writeMeshFlag(
+  mesh: AbstractMesh,
+  flag: MeshFlag,
+  value: boolean,
+): boolean {
+  if (getMeshFlag(mesh, flag) === value) return false;
+  if (flag === "hidden") mesh.isVisible = !value;
+  else if (value) lockedMeshes.add(mesh);
+  else lockedMeshes.delete(mesh);
+  flagChanged.emit(mesh);
+  return true;
+}
+
 export function setMeshFlag(
   mesh: AbstractMesh,
   flag: MeshFlag,
   value: boolean,
 ) {
-  if (getMeshFlag(mesh, flag) === value) return;
-  if (flag === "hidden") mesh.isVisible = !value;
-  else if (value) lockedMeshes.add(mesh);
-  else lockedMeshes.delete(mesh);
-  flagChanged.emit(mesh);
-  anyFlagChanged.emit();
+  if (writeMeshFlag(mesh, flag, value)) anyFlagChanged.emit();
+}
+
+/**
+ * 여러 메쉬를 한 번에. "어떤 메쉬든 바뀜" 알림은 끝에 한 번만 — 구독자(선택·메뉴 개수)가
+ * 메쉬마다 전체를 다시 훑으면 1만 개 숨기기가 O(N²)이 된다.
+ */
+function setMeshFlags(
+  meshes: readonly AbstractMesh[],
+  flag: MeshFlag,
+  value: boolean,
+) {
+  let changed = false;
+  for (const mesh of meshes)
+    changed = writeMeshFlag(mesh, flag, value) || changed;
+  if (changed) anyFlagChanged.emit();
 }
 
 /** 이 메쉬의 숨김·잠금이 바뀌면 호출된다 */
@@ -68,13 +92,14 @@ export function createMeshFlagCommand(
   value: boolean,
 ): Command | null {
   const verb = FLAG_VERBS[flag][value ? "on" : "off"];
-  const commands = meshes
-    .filter((mesh) => getMeshFlag(mesh, flag) !== value)
-    .map((mesh): Command => ({
-      label: `${mesh.name} ${verb}`,
-      execute: () => setMeshFlag(mesh, flag, value),
-      undo: () => setMeshFlag(mesh, flag, !value),
-    }));
-  if (commands.length === 0) return null;
-  return createMacroCommand(macroLabel(commands, verb), commands);
+  const targets = meshes.filter((mesh) => getMeshFlag(mesh, flag) !== value);
+  if (targets.length === 0) return null;
+  return {
+    label:
+      targets.length === 1
+        ? `${targets[0].name} ${verb}`
+        : `메쉬 ${targets.length}개 ${verb}`,
+    execute: () => setMeshFlags(targets, flag, value),
+    undo: () => setMeshFlags(targets, flag, !value),
+  };
 }

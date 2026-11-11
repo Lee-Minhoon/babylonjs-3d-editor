@@ -90,6 +90,7 @@ src/
   - 성능 표시(`lib/performance-monitor.ts`, 런타임 `stats`, 보기 메뉴 → `performance-overlay.tsx`): 켜져 있을 때만 0.5초마다 FPS·그리기 호출(`SceneInstrumentation`)·객체·삼각형 수를 잰다.
   - 씬 목록은 **보이는 줄만 그린다** (`useVirtualWindow`, 공용 `src/hooks/` — 줄 간격 `ROW_STRIDE`가 고정이어야 한다, 줄 높이를 바꾸면 같이 고친다). 전체 개수·위치는 `aria-setsize`/`aria-posinset`. E2E에서 화면 밖 줄은 목록에 없으니 메쉬 수는 "씬 (N)"으로 본다. 여러 개 선택 목록은 앞의 50개 이름만.
   - 메쉬마다 도는 곳에서 `selection.includes` 같은 배열 검색을 줄마다 하지 않는다 (Set) — 1만 개면 O(N²).
+  - 여러 메쉬를 한 번에 바꾸는 동작은 "전체가 바뀜" 알림을 **끝에 한 번만** 보낸다 — 구독자(선택 외곽선·기즈모 피벗·메뉴 개수·씬 목록)는 알림마다 전체를 훑는다. 숨김·잠금 Command는 `setMeshFlags`로 한 번, 선택은 씬에서 빠진 메쉬를 읽을 때 빼고 알림은 마이크로태스크로 모으며, `useSceneMeshes`도 마이크로태스크로 모은다 (2000개 숨기기·삭제 4초 → 수 ms).
   - 새 머티리얼은 값을 넣는 동안 Babylon dirty 표시를 막는다 (`createMeshMaterial`) — 기본값과 다른 속성(투명 모드·거칠기 채널)을 바꿀 때마다 씬의 모든 메쉬를 훑어서 메쉬 N개 만들기가 O(N²)이 된다.
   - 인스턴싱은 하지 않았다: 메쉬마다 전용 머티리얼·모양 값이 있어 같은 지오메트리+머티리얼 묶음이 드물고, 1만 개에서도 그리기는 60fps였다. 남은 비용: 많이 고르면 선택 외곽선이 고른 메쉬를 한 번 더 그린다 (1만 개 선택 20fps).
 - 레이아웃: 상단 `editor-header`(메뉴바: 파일/편집/추가/객체/보기 + undo/redo), 왼쪽 `mesh-sidebar`, 가운데 뷰포트 + `transform-toolbar`, 오른쪽 `properties-panel`(아래에 `history-panel`).

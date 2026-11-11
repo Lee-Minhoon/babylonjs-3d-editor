@@ -5,6 +5,7 @@ import {
   createMeshFlagCommand,
   getMeshFlag,
   isPickableInViewport,
+  onAnyMeshFlagChange,
   onMeshFlagChange,
   setMeshFlag,
 } from "./mesh-flags";
@@ -61,5 +62,21 @@ describe("mesh-flags", () => {
     expect(createMeshFlagCommand([a], "locked", true)!.label).toBe(
       `${a.name} 잠금`,
     );
+  });
+
+  test("여러 메쉬를 바꾸는 Command는 '어떤 메쉬든 바뀜'을 한 번만 알린다 (1만 개 숨기기가 O(N²)이 되지 않게)", () => {
+    const meshes = [box(), box(), box()];
+    const one = vi.fn();
+    const any = vi.fn();
+    const unsubscribeOne = onMeshFlagChange(meshes[1], one);
+    const unsubscribeAny = onAnyMeshFlagChange(any);
+    const command = createMeshFlagCommand(meshes, "hidden", true)!;
+    command.execute();
+    expect(any).toHaveBeenCalledTimes(1);
+    expect(one).toHaveBeenCalledTimes(1);
+    command.undo();
+    expect(any).toHaveBeenCalledTimes(2);
+    unsubscribeOne();
+    unsubscribeAny();
   });
 });

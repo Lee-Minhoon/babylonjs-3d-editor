@@ -290,53 +290,15 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
         <MenubarMenu>
           <MenubarTrigger>파일</MenubarTrigger>
           <MenubarContent>
-            <MenubarItem
-              disabled={!runtime}
-              onClick={() => void runtime?.sceneFile.newScene()}
-            >
-              새 씬
-            </MenubarItem>
-            <MenubarItem
-              disabled={!runtime}
-              onClick={() => void runtime?.sceneFile.open()}
-            >
-              열기…
-              <MenubarShortcut>{SHORTCUT_LABELS.open}</MenubarShortcut>
-            </MenubarItem>
+            <MenubarCommandItem id="newScene" {...item} />
+            <MenubarCommandItem id="open" {...item} />
             <MenubarSeparator />
-            <MenubarItem
-              disabled={!runtime}
-              onClick={() => void runtime?.sceneFile.save()}
-            >
-              저장
-              <MenubarShortcut>{SHORTCUT_LABELS.save}</MenubarShortcut>
-            </MenubarItem>
-            <MenubarItem
-              disabled={!runtime}
-              onClick={() => void runtime?.sceneFile.saveAs()}
-            >
-              다른 이름으로 저장…
-              <MenubarShortcut>{SHORTCUT_LABELS.saveAs}</MenubarShortcut>
-            </MenubarItem>
+            <MenubarCommandItem id="save" {...item} />
+            <MenubarCommandItem id="saveAs" {...item} />
             <MenubarSeparator />
-            <MenubarItem
-              disabled={!runtime}
-              onClick={() => void runtime?.assetImport.importModel()}
-            >
-              모델 가져오기(.glb)…
-            </MenubarItem>
-            <MenubarItem
-              disabled={!runtime}
-              onClick={() => void runtime?.sceneExport.exportGlb()}
-            >
-              glTF(.glb)로 내보내기…
-            </MenubarItem>
-            <MenubarItem
-              disabled={!runtime}
-              onClick={() => void runtime?.sceneExport.saveScreenshot()}
-            >
-              스크린샷 저장…
-            </MenubarItem>
+            <MenubarCommandItem id="importModel" {...item} />
+            <MenubarCommandItem id="exportGlb" {...item} />
+            <MenubarCommandItem id="screenshot" {...item} />
           </MenubarContent>
         </MenubarMenu>
 
@@ -445,13 +407,9 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
                   </MenubarItem>
                 );
               })}
-              <MenubarItem
-                disabled={!runtime}
-                onClick={() => void runtime?.assetImport.importModel()}
-              >
+              <MenubarCommandItem id="importModel" {...item}>
                 <FileUp strokeWidth={1.75} aria-hidden />
-                모델 가져오기…
-              </MenubarItem>
+              </MenubarCommandItem>
             </MenubarGroup>
           </MenubarContent>
         </MenubarMenu>
@@ -566,13 +524,7 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
         <MenubarMenu>
           <MenubarTrigger>도움말</MenubarTrigger>
           <MenubarContent>
-            <MenubarItem
-              disabled={!runtime}
-              onClick={() => runtime?.help.setOpen(true)}
-            >
-              단축키
-              <MenubarShortcut>{SHORTCUT_LABELS.help}</MenubarShortcut>
-            </MenubarItem>
+            <MenubarCommandItem id="help" {...item} />
             <MenubarItem
               render={<Link href="/manual" target="_blank" rel="noopener" />}
             >

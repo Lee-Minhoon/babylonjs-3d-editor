@@ -94,6 +94,7 @@ describe("내보낼 파일 이름", () => {
     [null, "scene"],
     ["castle.json", "castle"],
     ["Castle.JSON", "Castle"],
+    ["castle.zip", "castle"],
     ["notes.txt", "notes.txt"],
     [".json", "scene"],
   ])("%s → %s", (fileName, expected) => {

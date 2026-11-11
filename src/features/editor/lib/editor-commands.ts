@@ -50,8 +50,49 @@ export type EditorCommand = {
 };
 
 const hasSelection = (state: CommandState) => state.selectionCount > 0;
+const always = () => true;
 
 export const EDITOR_COMMANDS = {
+  // 파일
+  newScene: {
+    label: "새 씬",
+    enabled: always,
+    run: ({ sceneFile }) => void sceneFile.newScene(),
+  },
+  open: {
+    label: "열기…",
+    shortcut: "open",
+    enabled: always,
+    run: ({ sceneFile }) => void sceneFile.open(),
+  },
+  save: {
+    label: "저장",
+    shortcut: "save",
+    enabled: always,
+    run: ({ sceneFile }) => void sceneFile.save(),
+  },
+  saveAs: {
+    label: "다른 이름으로 저장…",
+    shortcut: "saveAs",
+    enabled: always,
+    run: ({ sceneFile }) => void sceneFile.saveAs(),
+  },
+  importModel: {
+    label: "모델 가져오기(.glb)…",
+    enabled: always,
+    run: ({ assetImport }) => void assetImport.importModel(),
+  },
+  exportGlb: {
+    label: "glTF(.glb)로 내보내기…",
+    enabled: always,
+    run: ({ sceneExport }) => void sceneExport.exportGlb(),
+  },
+  screenshot: {
+    label: "스크린샷 저장…",
+    enabled: always,
+    run: ({ sceneExport }) => void sceneExport.saveScreenshot(),
+  },
+  // 편집
   cut: {
     label: "잘라내기",
     shortcut: "cut",
@@ -151,8 +192,14 @@ export const EDITOR_COMMANDS = {
   addMenu: {
     label: "검색해서 추가…",
     shortcut: "addMenu",
-    enabled: () => true,
+    enabled: always,
     run: ({ addMenu }) => addMenu.open(),
+  },
+  help: {
+    label: "단축키",
+    shortcut: "help",
+    enabled: always,
+    run: ({ help }) => help.setOpen(true),
   },
 } as const satisfies Record<string, EditorCommand>;
 

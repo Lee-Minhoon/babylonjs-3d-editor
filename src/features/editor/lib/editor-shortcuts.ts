@@ -161,7 +161,7 @@ const NAMED_SHORTCUTS = [
     key: "s",
     mod: true,
     label: "⌘S",
-    run: (t) => void t.sceneFile.save(),
+    run: command("save"),
   },
   {
     id: "saveAs",
@@ -169,14 +169,14 @@ const NAMED_SHORTCUTS = [
     mod: true,
     shift: true,
     label: "⌘⇧S",
-    run: (t) => void t.sceneFile.saveAs(),
+    run: command("saveAs"),
   },
   {
     id: "open",
     key: "o",
     mod: true,
     label: "⌘O",
-    run: (t) => void t.sceneFile.open(),
+    run: command("open"),
   },
   // 추가·배치
   {
@@ -258,7 +258,7 @@ const NAMED_SHORTCUTS = [
     key: "?",
     shift: "any",
     label: "?",
-    run: ({ help }) => help.setOpen(true),
+    run: command("help"),
   },
 ] as const satisfies readonly ShortcutBinding[];
 

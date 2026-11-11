@@ -24,8 +24,18 @@ const enabledIds = (state: CommandState) =>
   );
 
 describe("명령 활성 조건 (메뉴바·우클릭 메뉴가 같은 표를 본다)", () => {
-  test("빈 씬: 검색해서 추가만", () => {
-    expect(enabledIds(EMPTY)).toEqual(["addMenu"]);
+  test("빈 씬: 파일·추가·도움말처럼 선택과 무관한 것만", () => {
+    expect(enabledIds(EMPTY)).toEqual([
+      "newScene",
+      "open",
+      "save",
+      "saveAs",
+      "importModel",
+      "exportGlb",
+      "screenshot",
+      "addMenu",
+      "help",
+    ]);
   });
 
   test("메쉬 하나 선택: 하나짜리 동작(이름 바꾸기)까지, 둘 이상 필요한 부모 지정은 아님", () => {
