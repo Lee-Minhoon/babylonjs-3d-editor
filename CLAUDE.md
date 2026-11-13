@@ -33,7 +33,7 @@ pnpm build      # 프로덕션 빌드
 - `lib/` 로직을 바꾸거나 고치면 단위 테스트를 같이 추가·수정한다. 버그를 고칠 땐 그 버그를 재현하는 테스트를 먼저 쓴다. 새 사용자 기능은 E2E 시나리오를 하나 이상 추가한다.
 - 파일 형식(`scene-format.ts`)을 바꾸면 이전 버전 파일 변환 테스트를 반드시 추가한다.
 - E2E에서 메뉴를 닫을 땐 `closeMenu`(열린 메뉴가 포커스를 가져간 뒤 Esc, 다 닫힐 때까지 대기), 실행 취소 라벨은 `undoMenuText`를 쓴다. `click()` 직후 바로 Esc를 누르면 메뉴가 아직 열리는 중이라 Esc가 트리거에서 에디터로 가 선택을 풀고, 닫히는 중인 메뉴의 항목도 locator에 잡힌다 (열림은 `[role=menu][data-open]`으로 본다).
-- E2E가 간헐적으로 실패하면 재시도 횟수를 늘리지 말고 원인을 찾는다 (예: Esc 직후 blur 커밋 버그는 E2E 반복 실행에서 발견됨). 확인은 `pnpm test:e2e --repeat-each=3`.
+- E2E가 간헐적으로 실패하면 재시도 횟수를 늘리지 말고 원인을 찾는다 (예: Esc 직후 blur 커밋 버그는 E2E 반복 실행에서 발견됨). 확인은 `pnpm test:e2e --repeat-each=3` (스펙 하나만: `pnpm test:e2e e2e/foo.spec.ts --repeat-each=3` — `--`를 끼우면 Playwright가 뒤의 인자를 무시하고 조용히 전체를 한 번 돈다).
 
 ## 포맷 / 린트
 

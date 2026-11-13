@@ -159,8 +159,9 @@ function SceneListItem({
       }}
       // 우클릭 메뉴: 안 골라져 있으면 이 줄만 고른 뒤 (뷰포트와 같다)
       onContextMenu={(event) => {
-        event.preventDefault();
+        // 이름 편집 중엔 입력칸의 브라우저 메뉴(붙여넣기)를 그대로 둔다
         if (editing) return;
+        event.preventDefault();
         if (!runtime.selection.getMeshes().includes(mesh)) {
           runtime.selection.select(mesh);
         }

@@ -93,19 +93,20 @@ export async function loadModelTemplate(
     // 반복 노드를 InstancedMesh가 아니라 메쉬로 (합칠 수 있게)
     pluginOptions: { gltf: { createInstances: false } },
   });
-  // 조명 변경 등에서 씬이 머티리얼을 다시 컴파일하도록 씬에 등록한다 (메쉬는 넣지 않는다)
-  for (const material of container.materials) scene.addMaterial(material);
-  for (const texture of container.textures) scene.addTexture(texture);
   // 부모부터 차례로 계산해야 자식의 월드 행렬이 맞다
   const computeTree = (node: Node) => {
     if (node instanceof TransformNode) node.computeWorldMatrix(true);
     for (const child of node.getChildren()) computeTree(child);
   };
   container.rootNodes.forEach(computeTree);
+  let template: Mesh;
   try {
-    const template = mergeModelParts(scene, name, container.meshes);
-    scene.removeMesh(template);
-    return template;
+    template = mergeModelParts(scene, name, container.meshes);
+  } catch (error) {
+    // 합치지 못하면(메쉬 없는 glTF) 머티리얼·텍스처도 버린다 — 쓸 원본이 없는데 남으면 가져올 때마다 샌다
+    for (const material of container.materials) material.dispose(true, true);
+    for (const texture of container.textures) texture.dispose();
+    throw error;
   } finally {
     // 머티리얼·텍스처는 원본이 쓰므로 남기고 나머지(노드·뼈대·애니메이션)만 해제
     for (const group of container.animationGroups) group.dispose();
@@ -113,4 +114,9 @@ export async function loadModelTemplate(
     for (const mesh of container.meshes) mesh.dispose(false, false);
     for (const node of container.transformNodes) node.dispose(false, false);
   }
+  // 조명 변경 등에서 씬이 머티리얼을 다시 컴파일하도록 씬에 등록한다 (메쉬는 넣지 않는다)
+  for (const material of container.materials) scene.addMaterial(material);
+  for (const texture of container.textures) scene.addTexture(texture);
+  scene.removeMesh(template);
+  return template;
 }

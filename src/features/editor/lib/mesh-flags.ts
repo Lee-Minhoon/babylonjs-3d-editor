@@ -49,10 +49,10 @@ export function setMeshFlag(
 }
 
 /**
- * 여러 메쉬를 한 번에. "어떤 메쉬든 바뀜" 알림은 끝에 한 번만 — 구독자(선택·메뉴 개수)가
+ * 여러 메쉬를 한 번에 (Command·파일 열기). "어떤 메쉬든 바뀜" 알림은 끝에 한 번만 — 구독자(선택·메뉴 개수)가
  * 메쉬마다 전체를 다시 훑으면 1만 개 숨기기가 O(N²)이 된다.
  */
-function setMeshFlags(
+export function setMeshFlags(
   meshes: readonly AbstractMesh[],
   flag: MeshFlag,
   value: boolean,

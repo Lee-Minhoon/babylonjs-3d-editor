@@ -9,7 +9,11 @@ import { getEditorParent } from "./mesh-hierarchy";
 import { isLightObject } from "./mesh-presets";
 import type { SceneFileNotice } from "./scene-file";
 import { getEditorMeshes } from "./scene-format";
-import { applyTransform, captureTransform } from "./transform-command";
+import {
+  applyTransform,
+  captureTransform,
+  isSameTransform,
+} from "./transform-command";
 
 /*
  * 내보내기 (파일 메뉴): glTF 바이너리(.glb)와 뷰포트 스크린샷(.png). 씬은 바꾸지 않는다 (히스토리·저장 상태와 무관).
@@ -57,8 +61,10 @@ export async function exportGlb(scene: Scene, baseName: string): Promise<Blob> {
  * (직렬화기는 빠진 노드의 자식을 그 위 노드에 바로 붙인다). 그래서 내보내는 동안만 가장 가까운
  * 내보내는 조상(없으면 최상위)으로 옮겨 둔다 — 월드 자세는 그대로라 화면은 바뀌지 않는다.
  * 잠깐이라 setMeshParent(씬 목록 알림)를 거치지 않고, 돌려놓는 함수를 돌려준다.
+ * 직렬화는 비동기라 그동안 편집(기즈모·패널·undo)이 끼어들 수 있다 — 안 바뀐 메쉬는 원래 값을
+ * 비트 그대로 되돌리고, 바뀐 메쉬는 그 월드 자세를 지키며 부모만 되돌린다 (편집을 덮어쓰지 않게).
  */
-function liftOutOfSkippedParents(exported: readonly AbstractMesh[]) {
+export function liftOutOfSkippedParents(exported: readonly AbstractMesh[]) {
   const included = new Set(exported);
   const moved = exported.flatMap((mesh) => {
     const parent = getEditorParent(mesh);
@@ -67,12 +73,16 @@ function liftOutOfSkippedParents(exported: readonly AbstractMesh[]) {
     while (target && !included.has(target)) target = getEditorParent(target);
     const before = captureTransform(mesh);
     mesh.setParent(target);
-    return [{ mesh, parent, before }];
+    return [{ mesh, parent, before, lifted: captureTransform(mesh) }];
   });
   return () => {
-    for (const { mesh, parent, before } of moved) {
-      mesh.parent = parent;
-      applyTransform(mesh, before);
+    for (const { mesh, parent, before, lifted } of moved) {
+      if (isSameTransform(captureTransform(mesh), lifted)) {
+        mesh.parent = parent;
+        applyTransform(mesh, before);
+      } else {
+        mesh.setParent(parent);
+      }
     }
   };
 }

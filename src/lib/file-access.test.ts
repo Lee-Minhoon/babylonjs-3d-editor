@@ -43,8 +43,10 @@ describe("saveFile — File System Access API가 없을 때 (다운로드)", () 
 
 describe("saveFile — 파일 핸들", () => {
   const writable = { write: vi.fn(), close: vi.fn() };
-  const handleOf = (name: string, createWritable = async () => writable) =>
-    ({ name, createWritable }) as unknown as FileSystemFileHandle;
+  const handleOf = (
+    name: string,
+    createWritable: () => Promise<unknown> = async () => writable,
+  ) => ({ name, createWritable }) as unknown as FileSystemFileHandle;
 
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -83,6 +85,23 @@ describe("saveFile — 파일 핸들", () => {
     expect(picker).toHaveBeenCalledWith(
       expect.objectContaining({ suggestedName: "level.json" }),
     );
+  });
+
+  test("쓰다 실패하면 스트림을 버리고(abort) 오류를 던진다 (임시 파일·잠금이 남지 않게)", async () => {
+    vi.stubGlobal("window", { showSaveFilePicker: vi.fn() });
+    const stream = {
+      write: vi.fn(async () => {
+        throw new DOMException("full", "QuotaExceededError");
+      }),
+      close: vi.fn(),
+      abort: vi.fn(async () => {}),
+    };
+    const handle = handleOf("level.json", async () => stream);
+    await expect(
+      saveFile("{}", { handle, suggestedName: "x.json", type: TYPE }),
+    ).rejects.toThrow("full");
+    expect(stream.abort).toHaveBeenCalledOnce();
+    expect(stream.close).not.toHaveBeenCalled();
   });
 
   test("다른 쓰기 오류는 그대로 던진다", async () => {

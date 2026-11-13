@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   createAssetStore,
@@ -6,7 +6,7 @@ import {
   modelPresetId,
 } from "./asset-store";
 import { addPresetObject } from "./editor-lights";
-import { getMeshFlag, setMeshFlag } from "./mesh-flags";
+import { getMeshFlag, onAnyMeshFlagChange, setMeshFlag } from "./mesh-flags";
 import { getMaterialValues, MATERIAL_DEFAULTS } from "./mesh-material";
 import {
   addPresetMesh,
@@ -99,6 +99,14 @@ describe("저장 → 열기 왕복", () => {
     expect(text).toContain('"position": [1, 0.5, -2]');
   });
 
+  test("아주 큰 값도 그대로 저장돼 다시 열린다 (반올림이 Infinity가 되면 JSON에 null이 남는다)", () => {
+    const box = addPresetMesh(scene, findPreset("box")!);
+    box.position.x = 1e303;
+    const text = stringifySceneFile(serializeScene(scene));
+    expect(text).toContain('"position": [1e+303, 0, 0]');
+    expect(parseSceneFile(text).meshes[0].position[0]).toBe(1e303);
+  });
+
   test("숫자 배열처럼 보이는 이름도 글자 그대로 저장한다", () => {
     addPresetMesh(scene, findPreset("box")!, gold, "[ 1, 2 ]");
     addPresetMesh(scene, findPreset("box")!, gold, '"position": [\n 1 ]');
@@ -122,15 +130,21 @@ describe("저장 → 열기 왕복", () => {
     buildScene();
     const [box, sphere] = getEditorMeshes(scene);
     setMeshFlag(box, "hidden", true);
+    setMeshFlag(sphere, "hidden", true);
     setMeshFlag(sphere, "locked", true);
     const text = stringifySceneFile(serializeScene(scene));
     clearEditorMeshes(scene);
 
+    // "어떤 메쉬든 바뀜" 알림은 종류마다 한 번 — 메쉬마다 알리면 개수를 세는 구독자가 N번 전체를 훑는다
+    const anyChanged = vi.fn();
+    const unsubscribe = onAnyMeshFlagChange(anyChanged);
     loadSceneFile(scene, parseSceneFile(text));
+    unsubscribe();
+    expect(anyChanged).toHaveBeenCalledTimes(2);
     const [loadedBox, loadedSphere] = getEditorMeshes(scene);
     expect(getMeshFlag(loadedBox, "hidden")).toBe(true);
     expect(getMeshFlag(loadedBox, "locked")).toBe(false);
-    expect(getMeshFlag(loadedSphere, "hidden")).toBe(false);
+    expect(getMeshFlag(loadedSphere, "hidden")).toBe(true);
     expect(getMeshFlag(loadedSphere, "locked")).toBe(true);
   });
 
@@ -486,7 +500,28 @@ describe("v8 에셋 · 가져온 모델", () => {
         ],
         meshes: [],
       },
-      "id가 올바르지 않습니다",
+      "id가 올바르지 않거나 겹칩니다",
+    ],
+    [
+      "겹치는 에셋 id (뒤의 것이 앞의 것을 덮어쓴다)",
+      {
+        assets: [
+          {
+            id: "0123456789abcdef",
+            name: "a.png",
+            type: "image",
+            mimeType: "image/png",
+          },
+          {
+            id: "0123456789abcdef",
+            name: "a.glb",
+            type: "model",
+            mimeType: MODEL_MIME_TYPE,
+          },
+        ],
+        meshes: [],
+      },
+      "겹칩니다",
     ],
     [
       "assets에 없는 텍스처",

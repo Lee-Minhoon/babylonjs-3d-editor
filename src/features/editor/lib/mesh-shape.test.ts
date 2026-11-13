@@ -1,14 +1,21 @@
 import { describe, expect, test, vi } from "vitest";
 
+import {
+  createAssetStore,
+  MODEL_MIME_TYPE,
+  modelPresetId,
+} from "./asset-store";
 import { captureMeshSnapshot, createMeshFromSnapshot } from "./clipboard";
+import { addPresetObject } from "./editor-lights";
 import { addPresetMesh, findPreset, getShapeParams } from "./mesh-presets";
 import {
   applyShapeParams,
   createShapeCommand,
   isSameShape,
   onShapeChange,
+  shapeProperty,
 } from "./mesh-shape";
-import { createTestScene } from "./test-scene";
+import { createTestScene, fakeModelLoader } from "./test-scene";
 
 const scene = createTestScene();
 
@@ -73,6 +80,24 @@ describe("모양 파라미터", () => {
     );
     expect(getShapeParams(copy)).toEqual({ radius: 0.1 });
     expect(vertexCount(copy)).toBe(vertexCount(capsule));
+  });
+
+  test("모델 객체에는 적용하지 않는다 (원본·다른 복제본과 지오메트리를 공유한다)", async () => {
+    const store = createAssetStore(scene, { loadModel: fakeModelLoader });
+    const asset = await store.add({
+      name: "m.glb",
+      type: "model",
+      mimeType: MODEL_MIME_TYPE,
+      bytes: new Uint8Array([1, 2, 3]),
+    });
+    const preset = findPreset(modelPresetId(asset.id))!;
+    const object = addPresetObject(scene, preset);
+    const sibling = addPresetObject(scene, preset);
+    expect(sibling.subMeshes).toHaveLength(2);
+    expect(shapeProperty.get(object)).toBeNull();
+    applyShapeParams(object, {});
+    expect(sibling.subMeshes).toHaveLength(2);
+    store.dispose();
   });
 
   test("isSameShape", () => {

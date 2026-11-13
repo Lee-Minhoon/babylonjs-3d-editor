@@ -149,9 +149,10 @@ const NAMED_SHORTCUTS = [
     key: "escape",
     label: "Esc",
     preventDefault: false,
-    // 배치 중이면 배치 종료, 아니면 선택 해제
+    // 박스를 끄는 중이면 박스 취소 (떼도 고르지 않게), 배치 중이면 배치 종료, 아니면 선택 해제
     run: (runtime) => {
-      if (runtime.placement.isActive()) runtime.placement.cancel();
+      if (runtime.boxSelect.isPending()) runtime.boxSelect.cancel();
+      else if (runtime.placement.isActive()) runtime.placement.cancel();
       else EDITOR_COMMANDS.deselect.run(runtime);
     },
   },
@@ -411,6 +412,17 @@ const SHORTCUT_FREE_ZONE = '[role="slider"]';
  */
 const POPUP_ZONE =
   '[role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]';
+
+/**
+ * 한글(IME) 조합 중의 키인가 — 조합 중의 Enter는 글자 확정용이라 입력칸이 끝내면 마지막 글자가 잘리거나 겹친다.
+ * Safari는 조합을 끝내는 Enter에서 isComposing이 false라 keyCode 229(IME 처리 중)도 함께 본다.
+ */
+export function isComposingKey(event: {
+  nativeEvent: { isComposing: boolean };
+  keyCode: number;
+}): boolean {
+  return event.nativeEvent.isComposing || event.keyCode === 229;
+}
 
 /** 단축키 처리기가 건너뛰는 곳(입력창·슬라이더·셀렉트, 열린 팝업)인가. 패널이 ⌘Z를 직접 처리할지 판단할 때도 쓴다 */
 export function isTypingTarget(target: EventTarget | null): boolean {

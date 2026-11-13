@@ -59,6 +59,18 @@ describe("카메라 포인터 규칙", () => {
     expect(resolve(0)).toBeNull();
   });
 
+  test("배치 중엔 Shift+왼쪽도 회전 (박스 선택이 없는데 카메라까지 무시하면 죽은 입력)", () => {
+    const { resolve, tools, placement } = setup();
+    for (const tool of ["move", "select"] as const) {
+      tools.setTool(tool);
+      placement.toggle(findPreset("box")!);
+      expect(resolve(0, { shift: true })).toBe("rotate");
+      expect(resolve(0, { ctrl: true })).toBe("pan");
+      placement.cancel();
+      expect(resolve(0, { shift: true })).toBeNull();
+    }
+  });
+
   test("휠·키보드 규칙은 건드리지 않는다", () => {
     const { camera, tools } = setup();
     const others = () =>

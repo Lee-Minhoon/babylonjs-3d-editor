@@ -1,3 +1,4 @@
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 
@@ -6,6 +7,7 @@ import {
   findPreset,
   getPresetId,
   getShapeParams,
+  type MeshPreset,
   recordShapeParams,
   type ShapeParams,
   shapeParamsOf,
@@ -18,13 +20,23 @@ import {
  * 패널은 onShapeChange로 구독한다 (editable-property — 머티리얼과 같은 틀).
  */
 
-/** 메쉬의 모양 속성 (get은 에디터 메쉬가 아니면 null). 편집 한 번(슬라이더 놓기) = Command 하나 */
+/** 모양 값이 있는 프리셋 메쉬의 프리셋. 모델(원본과 지오메트리를 공유)·파라미터 없는 프리셋은 null */
+function shapePreset(mesh: AbstractMesh): MeshPreset | null {
+  const presetId = getPresetId(mesh);
+  const preset = presetId ? findPreset(presetId) : undefined;
+  return preset && !preset.model && preset.params.length > 0 ? preset : null;
+}
+
+/**
+ * 메쉬의 모양 속성 (get은 모양 값이 있는 프리셋 메쉬가 아니면 null → apply가 아무것도 하지 않는다).
+ * 모델 객체는 반드시 null — 정점을 바꾸면 원본·다른 복제본과 공유하는 지오메트리가 함께 바뀐다.
+ * 편집 한 번(슬라이더 놓기) = Command 하나
+ */
 export const shapeProperty = createMeshProperty<ShapeParams>({
   verb: "모양",
-  read: getShapeParams,
+  read: (mesh) => (shapePreset(mesh) ? getShapeParams(mesh) : null),
   write(mesh, shape) {
-    const presetId = getPresetId(mesh);
-    const preset = presetId && findPreset(presetId);
+    const preset = shapePreset(mesh);
     if (!preset) return;
     const params = shapeParamsOf(preset, shape);
     const scene = mesh.getScene();

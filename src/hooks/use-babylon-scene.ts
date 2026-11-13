@@ -55,7 +55,13 @@ export function useBabylonScene(
         engine.runRenderLoop(() => scene.render());
 
         const resizeObserver = new ResizeObserver(() => engine.resize());
-        resizeObserver.observe(canvas);
+        try {
+          // CSS 크기가 그대로인 배율 변경(다른 배율 모니터로 창 이동)에도 알림을 받아야 engine.resize()가
+          // adaptToDeviceRatio를 다시 적용한다 — Babylon은 resize() 안에서만 배율을 갱신한다
+          resizeObserver.observe(canvas, { box: "device-pixel-content-box" });
+        } catch {
+          resizeObserver.observe(canvas); // Safari: device-pixel-content-box 미지원
+        }
 
         teardown = () => {
           resizeObserver.disconnect();

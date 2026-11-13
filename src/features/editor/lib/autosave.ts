@@ -83,36 +83,51 @@ export function createAutosave({
     listeners.emit();
   };
 
-  const write = () => {
-    timer = null;
-    writing = writing.then(writeNow);
+  const reportError = (error: unknown) => {
+    if (reportedError) return;
+    reportedError = true;
+    onError(
+      "자동 저장을 할 수 없습니다",
+      error instanceof Error ? error.message : String(error),
+    );
+  };
+
+  /** 저장소 작업을 진행 중인 쓰기 뒤에 잇는다 (지우기와 저장이 서로 끼어들지 않게) */
+  const enqueue = (task: () => Promise<void>) => {
+    writing = writing.then(task);
     return writing;
   };
 
-  /** 지금 상태를 저장소에 반영한다 (변경이 있으면 남기고, 깨끗한데 기록이 남아 있으면 지운다) */
-  const writeNow = async () => {
+  /**
+   * 지금 상태를 저장소에 반영한다 (변경이 있으면 남기고, 깨끗한데 기록이 남아 있으면 지운다).
+   * 내용은 지금(동기) 읽는다 — 런타임 해제 직전의 flush가 씬이 해제된 뒤 빈 씬을 남기지 않게.
+   */
+  const write = () => {
+    timer = null;
     const { dirty, fileName } = sceneFile.getState();
-    try {
-      if (dirty) {
-        await storage.save({
-          ...sceneFile.serialize(),
-          fileName,
-          savedAt: Date.now(),
-        });
-        stored = true;
-      } else if (stored) {
-        await storage.clear();
-        stored = false;
+    const record: AutosaveRecord | null = dirty
+      ? { ...sceneFile.serialize(), fileName, savedAt: Date.now() }
+      : null;
+    return enqueue(async () => {
+      try {
+        if (record) {
+          await storage.save(record);
+          stored = true;
+        } else if (stored) {
+          await storage.clear();
+          stored = false;
+        }
+        reportedError = false;
+      } catch (error) {
+        reportError(error);
       }
-      reportedError = false;
-    } catch (error) {
-      if (reportedError) return;
-      reportedError = true;
-      onError(
-        "자동 저장을 할 수 없습니다",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
+    });
+  };
+
+  /** 기록을 지운다 (복구를 버리거나 복구에 실패했을 때) */
+  const clear = () => {
+    stored = false;
+    void enqueue(() => storage.clear().catch(reportError));
   };
 
   const schedule = () => {
@@ -155,8 +170,7 @@ export function createAutosave({
           "자동 저장 기록을 복구하지 못했습니다",
           error instanceof Error ? error.message : String(error),
         );
-        void storage.clear();
-        stored = false;
+        clear();
       } finally {
         recovering = false;
       }
@@ -164,8 +178,7 @@ export function createAutosave({
       startWatching();
     },
     discard() {
-      void storage.clear();
-      stored = false;
+      clear();
       setPending(null);
       startWatching();
     },
@@ -210,14 +223,13 @@ export function createBrowserAutosaveStorage(
       const stored = await store.get<StoredRecord>(KEY);
       if (!stored) return null;
       const { assetIds = [], ...rest } = stored;
-      const assets = await Promise.all(
-        assetIds.map((id) => store.get<Asset>(assetKey(id))),
-      );
-      storedIds = new Set(assetIds);
-      return {
-        ...rest,
-        assets: assets.filter((asset): asset is Asset => asset !== undefined),
-      };
+      const assets = (
+        await Promise.all(assetIds.map((id) => store.get<Asset>(assetKey(id))))
+      ).filter((asset): asset is Asset => asset !== undefined);
+      // 실제로 있는 것만 "있다"고 기억한다 — 기록에만 있고 키가 없는 에셋(다른 탭이 지움·끊긴 쓰기)을
+      // 있다고 믿으면 다음 저장이 그 에셋을 다시 쓰지 않아 기록이 계속 복구 불가능한 채로 남는다
+      storedIds = new Set(assets.map((asset) => asset.id));
+      return { ...rest, assets };
     },
     async save({ assets, ...rest }) {
       for (const asset of assets) {

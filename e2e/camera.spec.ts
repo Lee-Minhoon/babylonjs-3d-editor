@@ -61,6 +61,27 @@ test("선택 도구의 왼쪽 드래그·모든 도구의 Shift+드래그는 박
   expect(await undoMenuText(page)).toContain("Sphere 1 추가");
 });
 
+test("박스를 끄는 중 Esc는 박스를 취소한다 (떼도 고르지 않음)", async ({
+  page,
+}) => {
+  await placePreset(page, "1", -150, 0);
+  await placePreset(page, "2", 150, 0);
+  await page.keyboard.press("q");
+
+  const from = await viewportPoint(page, -320, -160);
+  const to = await viewportPoint(page, 320, 160);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(selectedNames(page)).toHaveCount(0);
+
+  // 다시 끌면 평소처럼 고른다
+  await dragViewport(page, [-320, -160], [320, 160]);
+  await expect(selectedNames(page)).toHaveText(["Box 1", "Sphere 1"]);
+});
+
 test("숫자패드 5는 직교 투영, 7·보기 메뉴는 시점을 바꾼다 (히스토리에 남지 않음)", async ({
   page,
 }) => {

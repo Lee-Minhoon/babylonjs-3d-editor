@@ -10,7 +10,7 @@ import type { ToolState } from "./tools";
  *
  *   왼쪽 드래그        회전 (선택 도구에선 박스 선택, 배치 중이면 회전)
  *   ⌥ + 왼쪽 드래그    선택 도구에서 회전
- *   Shift + 왼쪽 드래그 박스 선택 (기존 선택에 더함, 모든 도구)
+ *   Shift + 왼쪽 드래그 박스 선택 (기존 선택에 더함, 모든 도구 — 배치 중이면 회전)
  *   ⌃ + 왼쪽 드래그    팬 (Babylon 기본)
  *   오른쪽 / 가운데 드래그  팬
  *   휠 · 핀치          줌 (Babylon 기본)
@@ -46,8 +46,8 @@ export const MOUSE_CONTROLS: readonly {
   },
   {
     input: "Shift + 왼쪽 드래그",
-    selectTool: "박스 선택 (기존 선택에 더함)",
-    otherTools: "박스 선택 (기존 선택에 더함)",
+    selectTool: "박스 선택 (기존 선택에 더함, 배치 중엔 카메라 회전)",
+    otherTools: "박스 선택 (기존 선택에 더함, 배치 중엔 카메라 회전)",
   },
   {
     input: "오른쪽 · 가운데 드래그, ⌃ + 왼쪽 드래그",
@@ -76,8 +76,18 @@ export function isBoxSelectDrag(
   return event.shiftKey || (selects && !event.altKey);
 }
 
-/** 카메라 포인터 입력 규칙 (첫 번째로 맞는 것이 이긴다). 맞는 게 없으면 카메라는 움직이지 않는다 */
-export function cameraPointerMap(selects: boolean): PointerEntry[] {
+/**
+ * 카메라 포인터 입력 규칙 (첫 번째로 맞는 것이 이긴다). 맞는 게 없으면 카메라는 움직이지 않는다.
+ * Shift+왼쪽은 박스 선택에 양보하지만, 배치 중에는 박스 선택이 없으므로(isBoxSelectDrag) 회전으로 둔다
+ * — 아니면 배치 중 Shift+드래그가 아무것도 안 하는 죽은 입력이 된다.
+ */
+export function cameraPointerMap({
+  selects,
+  placing,
+}: {
+  selects: boolean;
+  placing: boolean;
+}): PointerEntry[] {
   return [
     {
       source: "pointer",
@@ -85,19 +95,21 @@ export function cameraPointerMap(selects: boolean): PointerEntry[] {
       modifiers: { ctrl: true },
       interaction: "pan",
     },
-    selects
-      ? {
-          source: "pointer",
-          button: 0,
-          modifiers: { alt: true, shift: false },
-          interaction: "rotate",
-        }
-      : {
-          source: "pointer",
-          button: 0,
-          modifiers: { shift: false },
-          interaction: "rotate",
-        },
+    placing
+      ? { source: "pointer", button: 0, interaction: "rotate" }
+      : selects
+        ? {
+            source: "pointer",
+            button: 0,
+            modifiers: { alt: true, shift: false },
+            interaction: "rotate",
+          }
+        : {
+            source: "pointer",
+            button: 0,
+            modifiers: { shift: false },
+            interaction: "rotate",
+          },
     { source: "pointer", button: 1, interaction: "pan" },
     { source: "pointer", button: 2, interaction: "pan" },
   ];
@@ -111,7 +123,10 @@ export function bindCameraControls(
   const input = camera.movement.input;
   const apply = () => {
     input.inputMap = [
-      ...cameraPointerMap(leftDragSelects(tools, placement)),
+      ...cameraPointerMap({
+        selects: leftDragSelects(tools, placement),
+        placing: placement.isActive(),
+      }),
       ...input.inputMap.filter((entry) => entry.source !== "pointer"),
     ];
   };

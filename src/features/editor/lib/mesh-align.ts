@@ -1,4 +1,4 @@
-// Ray와 함께 scene.multiPickWithRay를 등록한다
+// Ray와 함께 ray.intersectsMesh를 등록한다
 import { Ray } from "@babylonjs/core/Culling/ray";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
@@ -15,6 +15,7 @@ import {
   applyTransform,
   captureTransform,
   createTransformCommand,
+  type TransformKind,
   type TransformSnapshot,
 } from "./transform-command";
 
@@ -81,7 +82,7 @@ function refreshWorld(mesh: AbstractMesh) {
 /** 메쉬별 이동량으로 Command 하나 (움직이지 않는 메쉬는 뺀다). 모두 그대로면 null */
 function createShiftCommand(
   moves: readonly { mesh: AbstractMesh; delta: Vector3 }[],
-  verb: "바닥에 붙이기" | "정렬" | "분배",
+  verb: Extract<TransformKind, "바닥에 붙이기" | "정렬" | "분배">,
 ): Command | null {
   const commands = moves
     .filter(({ delta }) => delta.length() > EPSILON)
@@ -98,14 +99,21 @@ function createShiftCommand(
   return createMacroCommand(macroLabel(commands, verb), commands);
 }
 
+/** 표면이 될 수 있는 메쉬와 그 월드 AABB (광선을 쏘기 전에 박스로 거른다) */
+type Obstacle = { mesh: AbstractMesh; min: Vector3; max: Vector3 };
+
+const toObstacle = (mesh: AbstractMesh): Obstacle => ({
+  mesh,
+  ...worldBounds(mesh),
+});
+
 /**
  * 메쉬 밑면이 닿을 높이: 바운딩 박스 가운데 높이에서 아래로 광선을 쏴 맞은 윗면 중 가장 높은 곳,
  * 없으면 바닥(y=0). 가운데에서 쏘므로 조금 파묻힌 메쉬는 그 표면 위로 올라온다.
+ * scene.multiPickWithRay는 광선마다 씬의 모든 메쉬를 훑어 전체 선택 → End가 O(M·N)이 된다
+ * (2000개에 8초) — 광선 아래에 박스가 걸치는 메쉬에만 정확한 교차를 묻는다.
  */
-function findFloor(
-  mesh: AbstractMesh,
-  obstacles: ReadonlySet<AbstractMesh>,
-): number {
+function findFloor(mesh: AbstractMesh, obstacles: readonly Obstacle[]): number {
   const { min, max } = worldBounds(mesh);
   const center = min.add(max).scale(0.5);
   const half = max.subtract(min).scale(0.5);
@@ -116,13 +124,19 @@ function findFloor(
       center.y,
       center.z + fz * half.z,
     );
-    const hits = mesh
-      .getScene()
-      .multiPickWithRay(new Ray(origin, Vector3.Down()), (other) =>
-        obstacles.has(other),
-      );
-    for (const hit of hits ?? []) {
-      const normal = hit.getNormal(true);
+    const ray = new Ray(origin, Vector3.Down());
+    for (const obstacle of obstacles) {
+      if (
+        obstacle.min.y > origin.y ||
+        origin.x < obstacle.min.x ||
+        origin.x > obstacle.max.x ||
+        origin.z < obstacle.min.z ||
+        origin.z > obstacle.max.z
+      ) {
+        continue;
+      }
+      const hit = ray.intersectsMesh(obstacle.mesh);
+      const normal = hit.hit ? hit.getNormal(true) : null;
       if (hit.pickedPoint && normal && normal.y >= TOP_FACE_MIN_NORMAL_Y) {
         floor = Math.max(floor, hit.pickedPoint.y);
       }
@@ -146,33 +160,29 @@ export function createDropToFloorCommand(
   const pending = new Set(
     meshes.flatMap((mesh) => [mesh, ...getEditorDescendants(mesh)]),
   );
-  const obstacles = new Set(
-    inCreationOrder(scene.meshes).filter(
-      (mesh) =>
-        !pending.has(mesh) &&
-        !getMeshFlag(mesh, "hidden") &&
-        !isLightObject(mesh),
-    ),
+  const isSurface = (mesh: AbstractMesh) =>
+    !getMeshFlag(mesh, "hidden") && !isLightObject(mesh);
+  const obstacles = inCreationOrder(scene.meshes)
+    .filter((mesh) => !pending.has(mesh) && isSurface(mesh))
+    .map(toObstacle);
+  const bottoms = new Map(
+    meshes.map((mesh) => [mesh, worldBounds(mesh).min.y] as const),
   );
-  const ordered = meshes.toSorted(
-    (a, b) => worldBounds(a).min.y - worldBounds(b).min.y,
-  );
+  const ordered = meshes.toSorted((a, b) => bottoms.get(a)! - bottoms.get(b)!);
 
   // 차례로 실제로 옮겨 보며(다음 메쉬의 표면이 되도록) 이동량을 잰 뒤 원래대로 돌린다
   const originals = ordered.map((mesh) => captureTransform(mesh));
   const moves = ordered.map((mesh) => {
     const delta = new Vector3(
       0,
-      findFloor(mesh, obstacles) - worldBounds(mesh).min.y,
+      findFloor(mesh, obstacles) - bottoms.get(mesh)!,
       0,
     );
     mesh.position.addInPlace(toLocalDelta(mesh, delta));
     refreshWorld(mesh);
-    obstacles.add(mesh);
+    obstacles.push(toObstacle(mesh));
     for (const child of getEditorDescendants(mesh)) {
-      if (!getMeshFlag(child, "hidden") && !isLightObject(child)) {
-        obstacles.add(child);
-      }
+      if (isSurface(child)) obstacles.push(toObstacle(child));
     }
     return { mesh, delta };
   });

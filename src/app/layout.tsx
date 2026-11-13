@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
 import "./globals.css";
 
 // globals.css: --font-sans ← Roboto, --font-mono ← Geist Mono
-const roboto = Roboto({ subsets: ["latin"], variable: "--font-sans" });
+// (변수 이름을 --font-sans로 두면 globals.css의 `--font-sans: var(--font-sans)`가 자기 참조가 된다)
+const roboto = Roboto({ subsets: ["latin"], variable: "--font-roboto" });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",

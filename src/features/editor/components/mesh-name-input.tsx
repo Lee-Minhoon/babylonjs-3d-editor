@@ -8,7 +8,11 @@ import { Input } from "@/components/ui/input";
 
 import { useMeshName } from "../hooks/use-mesh-name";
 import { renameMesh } from "../lib/editor-actions";
-import { getShortcutKey, handleFieldHistoryKey } from "../lib/editor-shortcuts";
+import {
+  getShortcutKey,
+  handleFieldHistoryKey,
+  isComposingKey,
+} from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 
 type MeshNameInputProps = {
@@ -40,7 +44,7 @@ export function MeshNameInput({
       onFocus={(event) => event.currentTarget.select()}
       onKeyDown={(event) => {
         // 한글 조합 중의 Enter는 글자 확정용이다 — 여기서 끝내면 마지막 글자가 잘리거나 겹친다
-        if (event.nativeEvent.isComposing) return;
+        if (isComposingKey(event)) return;
         const input = event.currentTarget;
         const key = getShortcutKey(event);
         if (key === "enter") {

@@ -2,6 +2,7 @@ import { GizmoManager } from "@babylonjs/core/Gizmos/gizmoManager";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { describe, expect, test, vi } from "vitest";
 
+import { addPresetObject } from "./editor-lights";
 import { createHistory, createMacroCommand } from "./history";
 import { createParentCommand, getEditorParent } from "./mesh-hierarchy";
 import { addPresetMesh, findPreset } from "./mesh-presets";
@@ -71,6 +72,21 @@ describe("transform gizmo", () => {
     expect(gizmo.getTarget()?.position.x).toBeCloseTo(2);
     history.redo();
     expect(gizmo.getTarget()?.position.x).toBeCloseTo(12);
+  });
+
+  test("크기 도구에서는 조명 아이콘에 붙지 않는다 (조명은 크기가 없다 — 속성 패널과 같게)", () => {
+    const { scene, tools, selection, gizmo, box } = setup();
+    const light = addPresetObject(scene, findPreset("point-light")!);
+    const mesh = box(0);
+    tools.setTool("scale");
+    selection.select(light);
+    expect(gizmo.getTarget()).toBeNull();
+    selection.set([light, mesh]);
+    expect(gizmo.getTarget()).toBe(mesh);
+
+    tools.setTool("move");
+    selection.select(light);
+    expect(gizmo.getTarget()).toBe(light);
   });
 
   test("select 도구나 배치 중에는 숨긴다", () => {

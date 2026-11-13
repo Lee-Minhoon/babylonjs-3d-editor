@@ -107,9 +107,12 @@ export function createHistory({ limit = DEFAULT_LIMIT } = {}): History {
 
   return {
     execute(command) {
+      // 되돌린 기록은 새 Command를 실행하기 전에 버린다 — 버려지는 Command의 dispose는 "자기 undo가 남긴
+      // 상태"를 보고 무엇을 해제할지 정하는데(머티리얼 바꿔 끼우기), 새 Command가 먼저 씬을 바꾸면
+      // 아직 쓰이는 것을 해제한다 (연결 → undo → 다시 연결 → undo 하면 해제된 머티리얼이 돌아온다)
+      disposeAll(redoStack);
       command.execute();
       undoStack.push(command);
-      disposeAll(redoStack);
       if (undoStack.length > limit) {
         undoStack.shift()?.dispose?.();
         base = { base: true };

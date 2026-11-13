@@ -130,6 +130,17 @@ describe("자동 저장", () => {
     expect(current()).toBeNull();
   });
 
+  test("flush는 내용을 그 자리에서 읽는다 (런타임 해제 직전 — 씬이 비워진 뒤 빈 씬이 남지 않게)", async () => {
+    const { autosave, current, addBox } = setup();
+    await settle();
+    addBox();
+    const flushed = autosave.flush();
+    autosave.dispose();
+    clearEditorMeshes(scene);
+    await flushed;
+    expect(JSON.parse(current()!.text).meshes).toHaveLength(1);
+  });
+
   test("저장소 오류는 한 번만 알린다", async () => {
     const { storage, onError, addBox } = setup();
     vi.mocked(storage.save).mockRejectedValue(new Error("quota"));
@@ -197,6 +208,25 @@ describe("복구", () => {
     expect(current()).toBeNull();
     addBox();
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY);
+    expect(storage.save).toHaveBeenCalledTimes(1);
+  });
+
+  test("버리기의 지우기가 끝나기 전엔 새 저장을 시작하지 않는다 (에셋 키를 지우는 사이에 쓰면 기록만 남는다)", async () => {
+    const record = await recordWithTwoBoxes();
+    const { autosave, storage, addBox } = setup(record);
+    let finishClear!: () => void;
+    vi.mocked(storage.clear).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishClear = resolve)),
+    );
+    await settle();
+
+    autosave.discard();
+    addBox();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY);
+    expect(storage.save).not.toHaveBeenCalled();
+
+    finishClear();
+    await settle();
     expect(storage.save).toHaveBeenCalledTimes(1);
   });
 
@@ -308,6 +338,37 @@ describe("에셋이 있는 기록", () => {
 
     await storage.clear();
     expect(data.size).toBe(0);
+  });
+
+  test("기록에 적힌 에셋 키가 없으면(다른 탭이 지움) 다음 저장에서 다시 쓴다", async () => {
+    const data = new Map<string, unknown>([
+      [
+        "autosave",
+        {
+          text: "{}",
+          fileName: null,
+          savedAt: 1,
+          assetIds: ["aaaaaaaaaaaaaaaa"],
+        },
+      ],
+    ]);
+    const storage = createBrowserAutosaveStorage({
+      get: async <T>(key: string) => data.get(key) as T | undefined,
+      set: async (key: string, value: unknown) => void data.set(key, value),
+      delete: async (key: string) => void data.delete(key),
+    });
+    const a = {
+      id: "aaaaaaaaaaaaaaaa",
+      name: "a.png",
+      type: "image" as const,
+      mimeType: "image/png",
+      bytes: new Uint8Array([1]),
+    };
+    expect(await storage.load()).toMatchObject({ assets: [] });
+
+    await storage.save({ text: "{}", assets: [a], fileName: null, savedAt: 2 });
+    expect(data.has("asset:aaaaaaaaaaaaaaaa")).toBe(true);
+    expect(await storage.load()).toMatchObject({ assets: [a] });
   });
 
   test("에셋 목록이 없는 이전 기록도 읽는다", async () => {

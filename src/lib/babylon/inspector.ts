@@ -28,6 +28,8 @@ export function attachInspectorToggle(scene: Scene): () => void {
     }
   };
 
+  // 에디터 키맵 표(features/editor/lib/editor-shortcuts) 밖의 유일한 keydown 리스너 — 개발 전용이고
+  // 공용 lib은 features를 import 할 수 없어서 여기 둔다. ⇧⌥I는 표의 어떤 단축키와도 겹치지 않는다.
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.code === "KeyI" && event.shiftKey && event.altKey) {
       event.preventDefault();

@@ -111,8 +111,14 @@ async function writeToHandle(
   content: FileContent,
 ) {
   const writable = await handle.createWritable();
-  await writable.write(content);
-  await writable.close();
+  try {
+    await writable.write(content);
+    await writable.close();
+  } catch (error) {
+    // 쓰다 실패하면(용량·I/O) 임시 파일과 잠금이 남지 않게 버린다
+    await writable.abort().catch(() => {});
+    throw error;
+  }
 }
 
 function download(name: string, content: FileContent, mimeType: string) {

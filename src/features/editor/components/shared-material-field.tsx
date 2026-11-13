@@ -11,7 +11,11 @@ import {
 } from "@/components/ui/native-select";
 
 import { usePropertyValues } from "../hooks/use-property";
-import { getShortcutKey, handleFieldHistoryKey } from "../lib/editor-shortcuts";
+import {
+  getShortcutKey,
+  handleFieldHistoryKey,
+  isComposingKey,
+} from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 import {
   createLinkCommand,
@@ -60,12 +64,15 @@ export function SharedMaterialField({
         value={mixed ? MIXED : (id ?? OWN)}
         onChange={(event) => {
           const choice = event.target.value;
+          const entry = library.find(choice);
           const command =
             choice === OWN
               ? createUnlinkCommand(meshes)
               : choice === NEW
                 ? createSharedMaterialCommand(library, meshes)
-                : createLinkCommand(meshes, library.find(choice)!);
+                : entry
+                  ? createLinkCommand(meshes, entry)
+                  : null;
           if (command) history.execute(command);
         }}
       >
@@ -97,7 +104,7 @@ export function SharedMaterialField({
             className="h-7"
             onKeyDown={(event) => {
               // 한글 조합 중의 Enter는 글자 확정용
-              if (event.nativeEvent.isComposing) return;
+              if (isComposingKey(event)) return;
               const input = event.currentTarget;
               const key = getShortcutKey(event);
               if (key === "enter") {

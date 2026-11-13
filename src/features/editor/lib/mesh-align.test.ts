@@ -60,6 +60,18 @@ describe("바닥에 붙이기", () => {
   test("이미 붙어 있으면 Command를 만들지 않는다", () => {
     expect(createDropToFloorCommand([box(0, 0.5)])).toBeNull();
   });
+
+  test("전체 선택 → 바닥에 붙이기는 메쉬 수에 비례한다 (광선마다 씬 전체를 훑으면 3000개에 수 초)", () => {
+    const meshes = Array.from({ length: 3000 }, (_, i) =>
+      box((i % 55) * 2, 3 + (i % 7), Math.floor(i / 55) * 2),
+    );
+    const started = performance.now();
+    const command = createDropToFloorCommand(meshes)!;
+    expect(performance.now() - started).toBeLessThan(2000);
+    command.execute();
+    expect(bottom(meshes[0])).toBeCloseTo(0);
+    expect(bottom(meshes[2999])).toBeCloseTo(0);
+  });
 });
 
 describe("정렬·분배", () => {

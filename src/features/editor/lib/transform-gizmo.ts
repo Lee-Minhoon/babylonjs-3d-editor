@@ -6,6 +6,7 @@ import type { Scene } from "@babylonjs/core/scene";
 
 import { createMacroCommand, type History, macroLabel } from "./history";
 import { getEditorParent, topLevelOnly } from "./mesh-hierarchy";
+import { isLightObject } from "./mesh-presets";
 import type { PlacementTool } from "./placement-tool";
 import type { Selection } from "./selection";
 import { type GizmoSpace, type ToolState, type TransformTool } from "./tools";
@@ -76,6 +77,14 @@ export function createTransformGizmo(
     null;
   const observed = new WeakSet<DraggableGizmo>();
 
+  /** 기즈모 대상: 크기 도구에서는 조명 아이콘을 뺀다 (조명은 크기가 없다 — 속성 패널과 같게) */
+  function targetMeshes(tool: TransformTool): readonly AbstractMesh[] {
+    const meshes = selection.getMeshes();
+    return tool === "scale"
+      ? meshes.filter((mesh) => !isLightObject(mesh))
+      : meshes;
+  }
+
   /** 드래그 시작/끝 구독. 기즈모는 처음 켤 때 생성되므로 켤 때마다 확인한다. */
   function observe(
     gizmo: DraggableGizmo | null,
@@ -84,7 +93,7 @@ export function createTransformGizmo(
     if (!gizmo || observed.has(gizmo)) return;
     observed.add(gizmo);
     gizmo.onDragStartObservable.add(() => {
-      const meshes = selection.getMeshes();
+      const meshes = targetMeshes(tool);
       const pivotInverse = Matrix.Invert(pivot.computeWorldMatrix(true));
       dragStart = (meshes.length > 1 ? topLevelOnly(meshes) : meshes).map(
         (mesh) => ({
@@ -162,7 +171,7 @@ export function createTransformGizmo(
     // 드래그 중에 선택이 바뀌는 일은 없지만, 피벗을 옮기면 자식이 따라가므로 막아 둔다
     if (dragStart) return;
     const tool = tools.getTool();
-    const meshes = selection.getMeshes();
+    const meshes = targetMeshes(tool);
     const space = tools.getGizmoSpace();
     const visible =
       meshes.length > 0 && tool !== "select" && !placement.isActive();

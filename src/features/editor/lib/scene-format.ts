@@ -19,7 +19,7 @@ import {
   linkMaterial,
 } from "./material-library";
 import { disposeEditorObject } from "./mesh-commands";
-import { getMeshFlag, setMeshFlag } from "./mesh-flags";
+import { getMeshFlag, setMeshFlags } from "./mesh-flags";
 import { getEditorParent, setMeshParent } from "./mesh-hierarchy";
 import {
   getMaterialValues,
@@ -173,6 +173,8 @@ const DEGREES = 180 / Math.PI;
 /** 0.30000000000000004 같은 부동소수 잡음과 -0을 정리한다 */
 function tidy(value: number): number {
   const rounded = Math.round(value * 1e6) / 1e6;
+  // 아주 큰 값은 1e6을 곱하면 Infinity가 돼 JSON에서 null로 남는다 (열 수 없는 파일) — 그대로 둔다
+  if (!Number.isFinite(rounded)) return value;
   return rounded === 0 ? 0 : rounded;
 }
 
@@ -517,15 +519,17 @@ function parseAssets(value: unknown): SceneFileAsset[] {
   if (!Array.isArray(value)) {
     throw new SceneFileError("assets는 배열이어야 합니다.");
   }
+  const ids = new Set<string>();
   return value.map((asset, index) => {
     const where = `assets[${index}]`;
     if (!isRecord(asset)) {
       throw new SceneFileError(`${where}가 객체가 아닙니다.`);
     }
     const { id, name, type, mimeType } = asset;
-    if (typeof id !== "string" || !/^[0-9a-f]{16}$/.test(id)) {
-      throw new SceneFileError(`${where}: id가 올바르지 않습니다.`);
+    if (typeof id !== "string" || !/^[0-9a-f]{16}$/.test(id) || ids.has(id)) {
+      throw new SceneFileError(`${where}: id가 올바르지 않거나 겹칩니다.`);
     }
+    ids.add(id);
     if (typeof name !== "string" || typeof mimeType !== "string") {
       throw new SceneFileError(
         `${where}: name·mimeType은 문자열이어야 합니다.`,
@@ -788,18 +792,28 @@ export function loadSceneFile(scene: Scene, file: SceneFileData) {
   );
   const created = file.meshes.map((entry) => {
     const preset = findPreset(entry.presetId);
-    if (!preset) return null;
+    if (!preset) {
+      // parseSceneFile·loadSceneAssets가 미리 거른다 — 여기까지 오면 에셋 저장소와 어긋난 것이라
+      // 조용히 빼지 않고(자식이 최상위로 올라가 자리가 바뀐다) 실패로 알린다
+      throw new Error(`프리셋 "${entry.presetId}"을(를) 찾을 수 없습니다.`);
+    }
     const mesh = addPresetObject(scene, preset, entry);
     mesh.position = Vector3.FromArray(entry.position);
     mesh.rotationQuaternion = null;
     mesh.rotation = Vector3.FromArray(entry.rotation).scaleInPlace(1 / DEGREES);
     mesh.scaling = Vector3.FromArray(entry.scaling);
-    setMeshFlag(mesh, "hidden", entry.hidden);
-    setMeshFlag(mesh, "locked", entry.locked);
     const material = entry.materialRef && shared.get(entry.materialRef);
     if (material) linkMaterial(mesh, material);
     return mesh;
   });
+  // 숨김·잠금은 종류마다 한 번에 — 메쉬마다 알리면 개수를 세는 구독자가 숨긴 메쉬 수 × 전체를 훑는다
+  for (const flag of ["hidden", "locked"] as const) {
+    setMeshFlags(
+      created.filter((_, index) => file.meshes[index][flag]),
+      flag,
+      true,
+    );
+  }
   // 값은 이미 부모 기준이라 부모만 잇는다 (부모가 뒤에 나와도 되게 다 만든 뒤에)
   file.meshes.forEach((entry, index) => {
     const mesh = created[index];

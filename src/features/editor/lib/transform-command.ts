@@ -93,7 +93,7 @@ export function isSameTransform(
   );
 }
 
-type TransformKind =
+export type TransformKind =
   "이동" | "회전" | "크기" | "바닥에 붙이기" | "정렬" | "분배";
 
 /**

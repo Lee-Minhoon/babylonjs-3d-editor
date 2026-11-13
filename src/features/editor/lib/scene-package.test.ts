@@ -72,4 +72,31 @@ describe("씬 묶음 파일 (.zip)", () => {
     ).resolves.toBeUndefined();
     assets.dispose();
   });
+
+  test("같은 바이트가 다른 종류로 이미 들어와 있으면 SceneFileError (모델 프리셋이 없어 메쉬를 만들 수 없다)", async () => {
+    const assets = createAssetStore(scene, { loadModel: fakeModelLoader });
+    const image = await assets.add({
+      name: "a.png",
+      type: "image",
+      mimeType: "image/png",
+      bytes: new Uint8Array([7]),
+    });
+    const asModel = {
+      id: image.id,
+      name: "a.glb",
+      type: "model" as const,
+      mimeType: MODEL_MIME_TYPE,
+    };
+    await expect(loadSceneAssets(assets, [asModel], new Map())).rejects.toThrow(
+      "종류",
+    );
+    await expect(
+      loadSceneAssets(
+        assets,
+        [asModel],
+        new Map([[assetEntry(asModel), new Uint8Array([7])]]),
+      ),
+    ).rejects.toThrow("종류");
+    assets.dispose();
+  });
 });

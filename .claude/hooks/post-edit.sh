@@ -10,7 +10,7 @@ cd "$CLAUDE_PROJECT_DIR" || exit 0
 
 status=0
 case "$f" in
-  *.ts | *.tsx | *.js | *.jsx | *.mjs)
+  *.ts | *.tsx | *.mts | *.cts | *.js | *.jsx | *.mjs | *.cjs)
     pnpm exec eslint --fix "$f" >&2 || status=2
     ;;
 esac

@@ -106,6 +106,21 @@ describe("공유 머티리얼", () => {
     expect(scene.materials).not.toContain(ownA);
   });
 
+  test("연결 → undo → 다시 연결 → undo 해도 전용 머티리얼이 살아 있다 (버려지는 기록의 dispose가 새 연결보다 먼저)", () => {
+    const history = createHistory();
+    const [a, b] = [box(), box()];
+    history.execute(createSharedMaterialCommand(library, [a])!);
+    const shared = library.find(getLibraryId(a)!)!;
+    const own = b.material!;
+
+    history.execute(createLinkCommand([b], shared)!);
+    history.undo();
+    history.execute(createLinkCommand([b], shared)!); // 앞의 연결 기록이 버려진다
+    history.undo();
+    expect(b.material).toBe(own);
+    expect(scene.materials).toContain(own);
+  });
+
   test("만들기를 되돌린 채 히스토리에서 빠지면 머티리얼을 해제하고, 적용된 채 빠지면 남긴다", () => {
     const history = createHistory();
     const a = box(red);

@@ -386,8 +386,18 @@ export function createPlacementTool(
     );
     const meshes = commands.flatMap((command) => command.getMesh() ?? []);
 
-    if (placement.once) stop();
-    else updatePreview(); // 방금 놓은 메쉬 위로 미리보기를 다시 올린다
+    if (placement.once) {
+      stop();
+    } else {
+      // 방금 놓은 메쉬 위로 미리보기를 다시 올린다 — 피킹은 캐시된 월드 행렬을 쓰는데 새 메쉬는
+      // 만들 때(원점) 계산된 행렬이 이 프레임 것으로 남아 있어 먼저 다시 계산한다 (부모부터)
+      for (const mesh of meshes) {
+        mesh.computeWorldMatrix(true);
+        for (const child of mesh.getChildMeshes())
+          child.computeWorldMatrix(true);
+      }
+      updatePreview();
+    }
     placement.onPlaced?.(meshes);
   }
 

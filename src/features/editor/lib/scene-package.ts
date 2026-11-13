@@ -79,20 +79,27 @@ export async function loadSceneAssets(
   await Promise.all(
     assets.map(async (asset) => {
       const bytes = files.get(assetEntry(asset));
-      if (!bytes) {
-        if (store.get(asset.id)) return;
+      let added = store.get(asset.id);
+      if (bytes) {
+        try {
+          added = await store.add({ ...asset, bytes });
+        } catch (error) {
+          throw new SceneFileError(
+            `"${asset.name}"을(를) 불러오지 못했습니다: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+        if (added.id !== asset.id) {
+          throw new SceneFileError(`에셋 "${asset.name}"의 내용이 다릅니다.`);
+        }
+      } else if (!added) {
         throw new SceneFileError(`에셋 "${asset.name}"이(가) 파일에 없습니다.`);
       }
-      let added;
-      try {
-        added = await store.add({ ...asset, bytes });
-      } catch (error) {
+      // 같은 바이트가 다른 종류로 이미 들어와 있으면(이미지를 모델이라고 적은 파일) 모델 프리셋이 없어
+      // 메쉬를 만들 수 없다 — 씬을 바꾸기 전에 거른다
+      if (added.type !== asset.type) {
         throw new SceneFileError(
-          `"${asset.name}"을(를) 불러오지 못했습니다: ${error instanceof Error ? error.message : String(error)}`,
+          `에셋 "${asset.name}"의 종류(${asset.type})가 이미 불러온 것(${added.type})과 다릅니다.`,
         );
-      }
-      if (added.id !== asset.id) {
-        throw new SceneFileError(`에셋 "${asset.name}"의 내용이 다릅니다.`);
       }
     }),
   );

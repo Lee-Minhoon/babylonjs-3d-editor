@@ -47,16 +47,30 @@ export function useVirtualWindow(
     };
   }, [element]);
 
-  const start = Math.max(0, Math.floor(view.top / stride) - overscan);
-  const end = Math.min(
-    count,
-    Math.ceil((view.top + view.height) / stride) + overscan,
+  return { ref: setElement, ...virtualRange(count, stride, overscan, view) };
+}
+
+/**
+ * 보이는 범위 계산 (순수 함수). 목록이 줄어들면 스크롤 위치가 새 높이 밖에 있을 수 있는데, 그대로 쓰면
+ * 빈 범위를 그려 콘텐츠가 더 줄고 브라우저가 scrollTop을 한 칸씩 당기며 수십 프레임 빈 화면이 남는다
+ * — 그래서 먼저 스크롤 위치를 새 높이 안으로 당긴다.
+ */
+export function virtualRange(
+  count: number,
+  stride: number,
+  overscan: number,
+  view: { top: number; height: number },
+): Omit<VirtualWindow, "ref"> {
+  const top = Math.min(view.top, Math.max(0, count * stride - view.height));
+  const start = Math.max(0, Math.floor(top / stride) - overscan);
+  const end = Math.max(
+    start,
+    Math.min(count, Math.ceil((top + view.height) / stride) + overscan),
   );
   return {
-    ref: setElement,
     start,
-    end: Math.max(start, end),
+    end,
     before: start * stride,
-    after: Math.max(0, count - Math.max(start, end)) * stride,
+    after: Math.max(0, count - end) * stride,
   };
 }

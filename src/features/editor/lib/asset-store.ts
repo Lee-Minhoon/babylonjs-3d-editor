@@ -9,6 +9,7 @@ import {
   type MeshPreset,
   type MeshPresetId,
   registerModelPreset,
+  unregisterModelPreset,
 } from "./mesh-presets";
 import { loadModelTemplate } from "./model-template";
 
@@ -157,7 +158,10 @@ export function createAssetStore(
     },
     subscribe: listeners.subscribe,
     dispose() {
-      for (const template of templates.values()) template.dispose(false, true);
+      for (const [id, template] of templates) {
+        unregisterModelPreset(modelPresetId(id));
+        template.dispose(false, true);
+      }
       for (const url of urls.values()) URL.revokeObjectURL(url);
       templates.clear();
       urls.clear();

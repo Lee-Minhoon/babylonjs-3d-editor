@@ -301,6 +301,11 @@ export function registerModelPreset(preset: MeshPreset) {
   modelPresets.set(preset.id, preset);
 }
 
+/** 에셋 저장소가 해제될 때 (원본 메쉬가 사라지므로 프리셋도 뺀다) */
+export function unregisterModelPreset(id: MeshPresetId) {
+  modelPresets.delete(id);
+}
+
 export function findPreset(id: MeshPresetId): MeshPreset | undefined {
   return ALL_PRESETS.find((preset) => preset.id === id) ?? modelPresets.get(id);
 }
