@@ -36,7 +36,10 @@ export function createKeyedListeners<K>(): KeyedListeners<K> {
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
-        if (listeners.size === 0) byKey.delete(key);
+        // 두 번 불려도 그 사이 같은 키에 새로 생긴 리스너 모음을 지우지 않는다
+        if (listeners.size === 0 && byKey.get(key) === listeners) {
+          byKey.delete(key);
+        }
       };
     },
     emit: (key) => byKey.get(key)?.forEach((listener) => listener()),

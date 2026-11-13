@@ -4,7 +4,6 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
 import { usePropertyValues } from "../hooks/use-property";
 import { usePropertyEdit } from "../hooks/use-property-edit";
-import { handleFieldHistoryKey, isTypingTarget } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 import { findPreset, getPresetId, type MeshPreset } from "../lib/mesh-presets";
 import { shapeProperty } from "../lib/mesh-shape";
@@ -35,7 +34,7 @@ export function ShapeSection({
   history: History;
 }) {
   const shapes = usePropertyValues(shapeProperty, meshes);
-  const { preview, commit, cancel } = usePropertyEdit(
+  const { preview, commit, onKeyDown } = usePropertyEdit(
     shapeProperty,
     meshes,
     history,
@@ -44,15 +43,7 @@ export function ShapeSection({
   if (shapes.length === 0) return null;
 
   return (
-    <div
-      className="space-y-3"
-      // 슬라이더는 editor-shortcuts가 건너뛰므로 undo/redo를 여기서 처리한다
-      onKeyDown={(event) => {
-        if (isTypingTarget(event.target)) {
-          handleFieldHistoryKey(event, history, cancel);
-        }
-      }}
-    >
+    <div className="space-y-3" onKeyDown={onKeyDown}>
       {preset.params.map((param) => (
         <SliderField
           key={param.key}

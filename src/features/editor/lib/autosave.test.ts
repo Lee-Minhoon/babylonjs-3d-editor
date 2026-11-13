@@ -108,6 +108,28 @@ describe("자동 저장", () => {
     expect(storage.save).toHaveBeenCalledTimes(1);
   });
 
+  test("앞 저장이 끝나기 전에 깨끗해지면 저장이 끝난 뒤에 지운다 (지우기가 먼저 가면 기록이 남는다)", async () => {
+    const { history, storage, current, addBox } = setup();
+    const save = vi.mocked(storage.save).getMockImplementation()!;
+    let finishSave!: () => void;
+    vi.mocked(storage.save).mockImplementationOnce(async (record) => {
+      await new Promise<void>((resolve) => (finishSave = resolve));
+      await save(record);
+    });
+    await settle();
+
+    addBox();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY); // 저장 시작 (아직 안 끝남)
+    history.undo();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY);
+    expect(storage.clear).not.toHaveBeenCalled();
+
+    finishSave();
+    await settle();
+    expect(storage.clear).toHaveBeenCalledTimes(1);
+    expect(current()).toBeNull();
+  });
+
   test("저장소 오류는 한 번만 알린다", async () => {
     const { storage, onError, addBox } = setup();
     vi.mocked(storage.save).mockRejectedValue(new Error("quota"));
@@ -172,6 +194,25 @@ describe("복구", () => {
 
     autosave.discard();
     await settle();
+    expect(current()).toBeNull();
+    addBox();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY);
+    expect(storage.save).toHaveBeenCalledTimes(1);
+  });
+
+  test("복구 중 예상 못 한 오류가 나도 알리고 지운 뒤 평소처럼 자동 저장한다", async () => {
+    const record = await recordWithTwoBoxes();
+    const { autosave, sceneFile, onError, current, storage, addBox } =
+      setup(record);
+    vi.spyOn(sceneFile, "restore").mockRejectedValue(new Error("boom"));
+    await settle();
+
+    await autosave.recover();
+    expect(onError).toHaveBeenCalledWith(
+      "자동 저장 기록을 복구하지 못했습니다",
+      "boom",
+    );
+    expect(autosave.getState().pending).toBeNull();
     expect(current()).toBeNull();
     addBox();
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY);

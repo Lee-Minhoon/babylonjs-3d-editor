@@ -55,6 +55,14 @@ function isAbort(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
+/** 핸들의 파일이 옮겨졌거나 지워졌거나, 쓰기 권한을 거절당한 경우 */
+function isHandleUnusable(error: unknown): boolean {
+  return (
+    error instanceof DOMException &&
+    (error.name === "NotFoundError" || error.name === "NotAllowedError")
+  );
+}
+
 function pickWithInput(accept: string): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
@@ -121,7 +129,8 @@ function download(name: string, content: FileContent, mimeType: string) {
 
 /**
  * 내용을 파일로 저장한다. 취소하면 null.
- * @param handle 있으면 묻지 않고 그 파일에 덮어쓴다 (없으면 저장 위치를 묻거나 다운로드)
+ * @param handle 있으면 묻지 않고 그 파일에 덮어쓴다 (없으면 저장 위치를 묻거나 다운로드).
+ *   그 파일이 사라졌거나 쓸 수 없으면 위치를 다시 묻는다 — 아니면 그 뒤의 저장이 모두 같은 오류로 실패한다.
  */
 export async function saveFile(
   content: FileContent,
@@ -136,8 +145,12 @@ export async function saveFile(
   },
 ): Promise<SavedFile | null> {
   if (handle) {
-    await writeToHandle(handle, content);
-    return { name: handle.name, handle };
+    try {
+      await writeToHandle(handle, content);
+      return { name: handle.name, handle };
+    } catch (error) {
+      if (!isHandleUnusable(error)) throw error;
+    }
   }
 
   const picker = (window as FilePickerWindow).showSaveFilePicker;

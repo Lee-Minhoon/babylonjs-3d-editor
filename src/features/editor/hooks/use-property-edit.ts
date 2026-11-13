@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef } from "react";
+import { type KeyboardEvent, useRef } from "react";
 
 import type { EditableProperty } from "../lib/editable-property";
+import { handleFieldHistoryKey, isTypingTarget } from "../lib/editor-shortcuts";
 import { createMacroCommand, type History, macroLabel } from "../lib/history";
 
 /**
@@ -11,6 +12,9 @@ import { createMacroCommand, type History, macroLabel } from "../lib/history";
  *   — 여러 메쉬의 머티리얼에서 거칠기만 바꾸면 각자의 색은 그대로다.
  * commit: 시작 전 값과 달라진 대상만 Command로 만들어 하나로 묶어 기록한다 ("Box 1 머티리얼" / "메쉬 3개 머티리얼").
  * cancel: 미리보기 중이면 시작 전 값으로 되돌리고 true (handleFieldHistoryKey의 cancelEdit).
+ * onKeyDown: 섹션 요소에 단다 — 입력창·슬라이더에 포커스가 있으면 editor-shortcuts가 건너뛰므로 ⌘Z/⌘⇧Z를 여기서
+ *   처리한다 (편집 중이면 먼저 그 편집만 취소). 안쪽 입력칸이 이미 처리한 키(defaultPrevented)와 스위치 같은 버튼의
+ *   키는 건드리지 않는다 — 두 번 undo 되지 않게.
  */
 export function usePropertyEdit<K, T>(
   property: EditableProperty<K, T>,
@@ -59,5 +63,11 @@ export function usePropertyEdit<K, T>(
     return true;
   };
 
-  return { preview, commit, cancel };
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (!event.defaultPrevented && isTypingTarget(event.target)) {
+      handleFieldHistoryKey(event, history, cancel);
+    }
+  };
+
+  return { preview, commit, cancel, onKeyDown };
 }

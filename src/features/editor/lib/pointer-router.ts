@@ -57,6 +57,8 @@ export function bindPointerRouter(
     }
 
     if (info.type === PointerEventTypes.POINTERDOWN) {
+      // 박스를 끄는 중에 누른 다른 버튼은 무시한다 (떼도 박스를 끝내거나 메뉴를 열지 않게)
+      if (boxSelect.isPending()) return;
       const event = info.event as PointerEvent;
       press = { button: event.button, x: scene.pointerX, y: scene.pointerY };
       const startsBox =
@@ -73,6 +75,8 @@ export function bindPointerRouter(
 
     if (info.type !== PointerEventTypes.POINTERUP) return;
     const event = info.event as PointerEvent;
+    // 박스는 왼쪽 버튼을 뗄 때만 끝난다
+    if (boxSelect.isPending() && event.button !== LEFT_BUTTON) return;
     const pressed = press;
     press = null;
     // 박스가 됐으면 탭이 아니다

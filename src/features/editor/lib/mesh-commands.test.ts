@@ -6,6 +6,7 @@ import {
   createSpawnMeshCommand,
 } from "./mesh-commands";
 import { getEditorChildren, setMeshParent } from "./mesh-hierarchy";
+import { setMeshName } from "./mesh-name";
 import { addPresetMesh, findPreset } from "./mesh-presets";
 import { clearEditorMeshes } from "./scene-format";
 import { createTestScene } from "./test-scene";
@@ -37,6 +38,15 @@ describe("createSpawnMeshCommand", () => {
     expect(spawn).toHaveBeenCalledTimes(1);
     expect(command.getMesh()).toBe(mesh);
     expect(scene.meshes).toContain(mesh);
+  });
+
+  test("라벨은 만들 때의 이름으로 굳는다 — 나중에 이름을 바꿔도 그대로", () => {
+    const command = spawnBox();
+    command.execute();
+    const mesh = command.getMesh()!;
+    const label = command.label;
+    setMeshName(mesh, "Wall");
+    expect(command.label).toBe(label);
   });
 
   test("dispose: 씬 밖(undo 상태)일 때만 해제한다 — 씬에 있으면 씬이 소유한다", () => {

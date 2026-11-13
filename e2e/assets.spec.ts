@@ -142,7 +142,14 @@ test("공유 머티리얼: 여러 메쉬가 같이 쓰고, 하나를 고치면 �
   await expect(shared.locator("option:checked")).toHaveText("머티리얼 1");
   expect(await undoMenuText(page)).toContain("머티리얼 1 만들기");
 
+  // 이름 칸 안의 ⌘Z는 한 번만 undo 된다 (칸과 머티리얼 섹션이 둘 다 처리하면 두 단계가 되돌아간다)
   const name = page.getByRole("textbox", { name: "공유 머티리얼 이름" });
+  await name.focus();
+  await page.keyboard.press("Meta+z");
+  expect(await undoMenuText(page)).toContain("Sphere 1 추가");
+  await page.keyboard.press("Meta+Shift+z");
+  await expect(shared.locator("option:checked")).toHaveText("머티리얼 1");
+
   await name.fill("빨간 플라스틱");
   await name.press("Enter");
   await expect(shared.locator("option:checked")).toHaveText("빨간 플라스틱");

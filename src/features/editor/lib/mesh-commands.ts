@@ -45,6 +45,7 @@ export type SpawnMeshCommand = Command & {
 /**
  * 메쉬 생성 공통 Command (추가·붙여넣기·복제).
  * spawn은 첫 execute에서 한 번만 호출되고, redo는 같은 객체를 다시 붙인다.
+ * 라벨은 만들 때의 이름으로 굳힌다 — 나중에 이름을 바꿔도 히스토리의 "Box 1 추가"는 그대로.
  */
 export function createSpawnMeshCommand(
   scene: Scene,
@@ -55,15 +56,19 @@ export function createSpawnMeshCommand(
   let mesh: AbstractMesh | null = null;
   let tree: AbstractMesh[] = [];
   let inScene = false;
+  let label = `${fallbackName} ${verb}`;
 
   return {
     get label() {
-      return `${mesh?.name ?? fallbackName} ${verb}`;
+      return label;
     },
     getMesh: () => mesh,
     execute() {
       if (mesh) attachTree(scene, tree);
-      else mesh = spawn();
+      else {
+        mesh = spawn();
+        label = `${mesh.name} ${verb}`;
+      }
       inScene = true;
     },
     undo() {

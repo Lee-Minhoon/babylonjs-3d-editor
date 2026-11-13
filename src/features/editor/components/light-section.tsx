@@ -13,7 +13,6 @@ import {
   lightProperty,
   type LightValues,
 } from "../lib/editor-lights";
-import { handleFieldHistoryKey, isTypingTarget } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 import {
   ColorField,
@@ -35,7 +34,7 @@ export function LightSection({
   history: History;
 }) {
   const values = usePropertyValues(lightProperty, lights);
-  const { preview, commit, cancel } = usePropertyEdit(
+  const { preview, commit, cancel, onKeyDown } = usePropertyEdit(
     lightProperty,
     lights,
     history,
@@ -54,15 +53,7 @@ export function LightSection({
   const shadows = field("shadows");
 
   return (
-    <div
-      className="space-y-3"
-      // 입력창·슬라이더는 editor-shortcuts가 건너뛰므로 undo/redo를 여기서 처리한다 (스위치는 editor-shortcuts 몫)
-      onKeyDown={(event) => {
-        if (isTypingTarget(event.target)) {
-          handleFieldHistoryKey(event, history, cancel);
-        }
-      }}
-    >
+    <div className="space-y-3" onKeyDown={onKeyDown}>
       <ColorField
         label="빛 색"
         {...field("color")}

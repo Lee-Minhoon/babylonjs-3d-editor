@@ -136,7 +136,6 @@ export function PropertiesPanel({ runtime }: PropertiesPanelProps) {
               key={selectionKey}
               meshes={selected}
               history={runtime.history}
-              withScaling={hasMeshes}
             />
             <p className="text-muted-foreground">
               축 이름(X/Y/Z)을 좌우로 드래그해 값을 조절할 수 있습니다.

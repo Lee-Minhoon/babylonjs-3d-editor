@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import {
+  axisInput,
   clickViewport,
   expectScene,
   mockFileSystem,
@@ -42,6 +43,19 @@ test("조명은 씬 목록에 메쉬와 함께, 속성은 조명 칸만 (크기�
   const y = Number(
     await page.locator("input[aria-label='Y position']").inputValue(),
   );
+  expect(y).toBeGreaterThan(1.5);
+});
+
+test("복제한 조명도 표면 위에 뜬다 (바닥에 파묻히지 않는다)", async ({
+  page,
+}) => {
+  await placeLight(page, "Point Light", -60, 60);
+  await selectMesh(page, "Point Light 1");
+  await page.keyboard.press("Meta+d");
+  await clickViewport(page, 120, 60);
+  await expectScene(page, ["Point Light 1", "Point Light 2"]);
+  // 놓은 복사본이 선택된다
+  const y = Number(await axisInput(page, "Y", "position").inputValue());
   expect(y).toBeGreaterThan(1.5);
 });
 

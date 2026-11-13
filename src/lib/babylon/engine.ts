@@ -2,7 +2,7 @@ import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine";
 
 export type CreateEngineOptions = {
   antialias?: boolean;
-  /** 스크린샷/썸네일 캡처가 필요하면 true */
+  /** 캔버스 픽셀을 그린 뒤에도 읽어야 하면 true (WebGL 폴백에만 적용 — WebGPU 엔진에는 이 옵션이 없다) */
   preserveDrawingBuffer?: boolean;
   /** false면 WebGPU를 시도하지 않고 바로 WebGL을 사용 */
   preferWebGPU?: boolean;

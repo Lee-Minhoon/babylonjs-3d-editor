@@ -29,6 +29,8 @@ export type CommandState = {
   lockedCount: number;
   /** 고른 것 중 부모가 있는 게 있는지 */
   hasParent: boolean;
+  /** 마지막에 고른 것을 부모로 삼을 수 있는 게 있는지 (이미 그 자식이거나 그 조상이면 없다) */
+  canParent: boolean;
   /** 씬에서 숨긴 객체 수 */
   hiddenCount: number;
   /** 씬의 에디터 객체 수 */
@@ -168,7 +170,7 @@ export const EDITOR_COMMANDS = {
   parent: {
     label: "부모 지정 (마지막에 고른 것)",
     shortcut: "parent",
-    enabled: (state) => state.selectionCount >= 2,
+    enabled: (state) => state.canParent,
     run: parentSelected,
   },
   unparent: {

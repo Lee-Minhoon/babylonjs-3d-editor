@@ -40,3 +40,58 @@ describe("saveFile — File System Access API가 없을 때 (다운로드)", () 
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:scene");
   });
 });
+
+describe("saveFile — 파일 핸들", () => {
+  const writable = { write: vi.fn(), close: vi.fn() };
+  const handleOf = (name: string, createWritable = async () => writable) =>
+    ({ name, createWritable }) as unknown as FileSystemFileHandle;
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  test("핸들이 있으면 묻지 않고 그 파일에 쓴다", async () => {
+    const picker = vi.fn();
+    vi.stubGlobal("window", { showSaveFilePicker: picker });
+    const handle = handleOf("level.json");
+
+    const saved = await saveFile("{}", {
+      handle,
+      suggestedName: "scene.json",
+      type: TYPE,
+    });
+    expect(saved).toEqual({ name: "level.json", handle });
+    expect(writable.write).toHaveBeenCalledWith("{}");
+    expect(picker).not.toHaveBeenCalled();
+  });
+
+  test("핸들의 파일이 사라졌으면 위치를 다시 묻는다 (그 뒤 저장이 모두 실패하지 않게)", async () => {
+    const picked = handleOf("moved.json");
+    const picker = vi.fn(async () => picked);
+    vi.stubGlobal("window", { showSaveFilePicker: picker });
+    const gone = handleOf("level.json", async () => {
+      throw new DOMException("missing", "NotFoundError");
+    });
+
+    const saved = await saveFile("{}", {
+      handle: gone,
+      suggestedName: "level.json",
+      type: TYPE,
+    });
+    expect(saved).toEqual({ name: "moved.json", handle: picked });
+    expect(picker).toHaveBeenCalledWith(
+      expect.objectContaining({ suggestedName: "level.json" }),
+    );
+  });
+
+  test("다른 쓰기 오류는 그대로 던진다", async () => {
+    vi.stubGlobal("window", { showSaveFilePicker: vi.fn() });
+    const broken = handleOf("level.json", async () => {
+      throw new DOMException("disk", "QuotaExceededError");
+    });
+    await expect(
+      saveFile("{}", { handle: broken, suggestedName: "x.json", type: TYPE }),
+    ).rejects.toThrow("disk");
+  });
+});

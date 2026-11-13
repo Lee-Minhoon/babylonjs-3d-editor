@@ -22,7 +22,7 @@ import {
   addPresetMesh,
   findPreset,
   getPresetId,
-  inCreationOrder,
+  isEditorMesh,
   isLightObject,
   type LightKind,
   type MeshPreset,
@@ -143,10 +143,13 @@ function createBabylonLight(kind: LightKind, name: string, scene: Scene) {
   return new PointLight(name, Vector3.Zero(), scene);
 }
 
-/** 그림자를 드리우는 메쉬: 보이는 에디터 메쉬 (조명 아이콘 제외) */
+/** 그림자를 드리우는 메쉬: 보이는 에디터 메쉬 (조명 아이콘 제외). 매 프레임 부르므로 정렬하지 않는다 (순서는 상관없다) */
 function shadowCasters(scene: Scene): AbstractMesh[] {
-  return inCreationOrder(scene.meshes).filter(
-    (mesh) => !isLightObject(mesh) && !getMeshFlag(mesh, "hidden"),
+  return scene.meshes.filter(
+    (mesh) =>
+      isEditorMesh(mesh) &&
+      !isLightObject(mesh) &&
+      !getMeshFlag(mesh, "hidden"),
   );
 }
 

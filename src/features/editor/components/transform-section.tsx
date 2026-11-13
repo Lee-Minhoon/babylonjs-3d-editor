@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { NumberField } from "@base-ui/react/number-field";
@@ -8,6 +8,7 @@ import { NumberField } from "@base-ui/react/number-field";
 import { useMeshTransforms } from "../hooks/use-mesh-transform";
 import { getShortcutKey, handleFieldHistoryKey } from "../lib/editor-shortcuts";
 import { createMacroCommand, type History, macroLabel } from "../lib/history";
+import { isLightObject } from "../lib/mesh-presets";
 import {
   applyTransform,
   captureTransform,
@@ -205,46 +206,59 @@ function AxisField({
   );
 }
 
-/** 위치·회전·크기 — 여러 메쉬면 같은 값만 보이고("—"는 다름), 입력하면 모두 그 값이 된다 */
+/**
+ * 위치·회전·크기 — 여러 메쉬면 같은 값만 보이고("—"는 다름), 입력하면 모두 그 값이 된다.
+ * 조명은 크기가 없다: 크기 칸은 조명을 뺀 메쉬만 보고 바꾸며, 조명만 골랐으면 숨긴다.
+ */
 export function TransformSection({
   meshes,
   history,
-  withScaling,
 }: {
   meshes: readonly AbstractMesh[];
   history: History;
-  /** 조명만 골랐으면 크기 칸을 숨긴다 (조명은 크기가 없다) */
-  withScaling: boolean;
 }) {
   const values = useMeshTransforms(meshes);
-  const fields = withScaling
-    ? FIELDS
-    : FIELDS.filter(({ field }) => field !== "scaling");
+  const scalable = useMemo(
+    () => meshes.filter((mesh) => !isLightObject(mesh)),
+    [meshes],
+  );
+  const scalableValues = values.filter((_, i) => !isLightObject(meshes[i]));
+  const fields =
+    scalable.length > 0
+      ? FIELDS
+      : FIELDS.filter(({ field }) => field !== "scaling");
 
   return (
     <div className="space-y-3">
-      {fields.map(({ field, label, ...steps }) => (
-        <div key={field}>
-          <div className="mb-1.5 text-[0.6875rem] text-muted-foreground">
-            {label}
+      {fields.map(({ field, label, ...steps }) => {
+        const scaling = field === "scaling";
+        return (
+          <div key={field}>
+            <div className="mb-1.5 text-[0.6875rem] text-muted-foreground">
+              {label}
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              {AXES.map(({ axis, label: axisLabel, color }) => (
+                <AxisField
+                  key={axis}
+                  meshes={scaling ? scalable : meshes}
+                  history={history}
+                  field={field}
+                  axis={axis}
+                  label={axisLabel}
+                  color={color}
+                  value={sharedAxisValue(
+                    scaling ? scalableValues : values,
+                    field,
+                    axis,
+                  )}
+                  steps={steps}
+                />
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-1">
-            {AXES.map(({ axis, label: axisLabel, color }) => (
-              <AxisField
-                key={axis}
-                meshes={meshes}
-                history={history}
-                field={field}
-                axis={axis}
-                label={axisLabel}
-                color={color}
-                value={sharedAxisValue(values, field, axis)}
-                steps={steps}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

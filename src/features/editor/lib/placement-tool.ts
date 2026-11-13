@@ -203,13 +203,21 @@ export function createPlacementTool(
   /**
    * 묶음의 오프셋을 정한다: 각 미리보기를 (돌리기 전) 원래 자리에 두고 전체 밑면 높이를 잰 뒤,
    * 기준점 = (첫 항목 X, 묶음 밑면 Y, 첫 항목 Z) 에서 각 메쉬 중심까지.
+   * 밑면이 된 항목이 조명이면(lift) 묶음 전체를 그만큼 띄운다 — 복사본 조명도 프리셋 배치처럼 표면 위에 뜬다.
    * Y축 회전은 높이를 바꾸지 않으므로 돌릴 때 다시 잴 필요가 없다.
    */
   function layoutItems(
-    entries: { preview: Mesh; position: Vector3; baseRotation: Vector3 }[],
+    entries: {
+      preview: Mesh;
+      position: Vector3;
+      baseRotation: Vector3;
+      lift: number;
+    }[],
   ) {
     let bottom = Infinity;
-    for (const { preview, position, baseRotation } of entries) {
+    let lift = 0;
+    for (const entry of entries) {
+      const { preview, position, baseRotation } = entry;
       preview.position.copyFrom(position);
       preview.rotationQuaternion = null;
       preview.rotation.copyFrom(baseRotation);
@@ -217,14 +225,15 @@ export function createPlacementTool(
       for (const part of [preview, ...preview.getChildMeshes(false)]) {
         part.computeWorldMatrix(true);
         part.refreshBoundingInfo({});
-        bottom = Math.min(
-          bottom,
-          part.getBoundingInfo().boundingBox.minimumWorld.y,
-        );
+        const partBottom = part.getBoundingInfo().boundingBox.minimumWorld.y;
+        if (partBottom < bottom) {
+          bottom = partBottom;
+          lift = entry.lift;
+        }
       }
     }
     const first = entries[0].position;
-    const anchor = new Vector3(first.x, bottom, first.z);
+    const anchor = new Vector3(first.x, bottom - lift, first.z);
     return entries.map(({ position }) => position.subtract(anchor));
   }
 
@@ -261,10 +270,13 @@ export function createPlacementTool(
     const previous = active?.state.kind === "preset" ? active : null;
     const preview = createPreview(preset);
     const [offset] = layoutItems([
-      { preview, position: Vector3.Zero(), baseRotation: Vector3.Zero() },
+      {
+        preview,
+        position: Vector3.Zero(),
+        baseRotation: Vector3.Zero(),
+        lift: preset.lift ?? 0,
+      },
     ]);
-    // 조명은 표면에서 띄워 놓는다
-    offset.y += preset.lift ?? 0;
     begin({
       state: {
         kind: "preset",
@@ -319,6 +331,7 @@ export function createPlacementTool(
           baseRotation:
             snapshot.transform.rotationQuaternion?.toEulerAngles() ??
             snapshot.transform.rotation.clone(),
+          lift: preset.lift ?? 0,
         },
       ];
     });

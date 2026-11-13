@@ -13,6 +13,7 @@ const EMPTY: CommandState = {
   selectionCount: 0,
   lockedCount: 0,
   hasParent: false,
+  canParent: false,
   hiddenCount: 0,
   meshCount: 0,
   canPaste: false,
@@ -54,6 +55,7 @@ describe("명령 활성 조건 (메뉴바·우클릭 메뉴가 같은 표를 본
       selectionCount: 3,
       lockedCount: 3,
       hasParent: true,
+      canParent: true,
       hiddenCount: 1,
       meshCount: 5,
       canPaste: true,
@@ -65,6 +67,11 @@ describe("명령 활성 조건 (메뉴바·우클릭 메뉴가 같은 표를 본
     expect(ids).toContain("unlock");
     expect(ids).not.toContain("lock"); // 모두 잠겨 있으면 더 잠글 게 없다
     expect(ids).not.toContain("rename"); // 하나일 때만
+  });
+
+  test("부모 지정은 둘 이상 골라도 바뀔 게 없으면(이미 그 자식뿐) 비활성", () => {
+    const ids = enabledIds({ ...EMPTY, selectionCount: 2, meshCount: 2 });
+    expect(ids).not.toContain("parent");
   });
 });
 

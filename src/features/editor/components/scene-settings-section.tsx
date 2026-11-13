@@ -9,7 +9,6 @@ import {
 
 import { usePropertyValue } from "../hooks/use-property";
 import { usePropertyEdit } from "../hooks/use-property-edit";
-import { handleFieldHistoryKey, isTypingTarget } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 import {
   sceneSettingsProperty,
@@ -28,7 +27,7 @@ export function SceneSettingsSection({
   history: History;
 }) {
   const settings = usePropertyValue(sceneSettingsProperty, scene);
-  const { preview, commit, cancel } = usePropertyEdit(
+  const { preview, commit, cancel, onKeyDown } = usePropertyEdit(
     sceneSettingsProperty,
     [scene],
     history,
@@ -36,15 +35,7 @@ export function SceneSettingsSection({
   if (!settings) return null; // 씬 설정은 늘 값이 있다 (적용 전이면 기본값)
 
   return (
-    <div
-      className="space-y-3"
-      // 입력창·슬라이더·셀렉트는 editor-shortcuts가 건너뛰므로 undo/redo를 여기서 처리한다
-      onKeyDown={(event) => {
-        if (isTypingTarget(event.target)) {
-          handleFieldHistoryKey(event, history, cancel);
-        }
-      }}
-    >
+    <div className="space-y-3" onKeyDown={onKeyDown}>
       <ColorField
         label="배경색"
         value={settings.background}

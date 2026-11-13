@@ -106,6 +106,23 @@ describe("공유 머티리얼", () => {
     expect(scene.materials).not.toContain(ownA);
   });
 
+  test("만들기를 되돌린 채 히스토리에서 빠지면 머티리얼을 해제하고, 적용된 채 빠지면 남긴다", () => {
+    const history = createHistory();
+    const a = box(red);
+    history.execute(createSharedMaterialCommand(library, [a])!);
+    const undone = a.material!;
+    history.undo();
+    history.execute(createSharedMaterialCommand(library, [a])!); // redo 스택이 버려진다
+    const kept = a.material!;
+    expect(scene.materials).not.toContain(undone);
+    expect(scene.materials).toContain(kept);
+
+    history.clear();
+    expect(scene.materials).toContain(kept);
+    expect(a.material).toBe(kept);
+    expect(library.getEntries()).toHaveLength(1);
+  });
+
   test("이름 바꾸기 (undo 가능, 같은 이름·빈 이름은 무시)", () => {
     const history = createHistory();
     const a = box();

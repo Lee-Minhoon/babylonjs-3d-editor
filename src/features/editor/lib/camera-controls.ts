@@ -39,7 +39,11 @@ export const MOUSE_CONTROLS: readonly {
     otherTools: "우클릭 메뉴 (배치 중엔 배치 종료)",
   },
   { input: "왼쪽 드래그", selectTool: "박스 선택", otherTools: "카메라 회전" },
-  { input: "⌥ + 왼쪽 드래그", selectTool: "카메라 회전", otherTools: "—" },
+  {
+    input: "⌥ + 왼쪽 드래그",
+    selectTool: "카메라 회전",
+    otherTools: "카메라 회전",
+  },
   {
     input: "Shift + 왼쪽 드래그",
     selectTool: "박스 선택 (기존 선택에 더함)",

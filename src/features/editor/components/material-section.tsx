@@ -11,7 +11,6 @@ import { Switch } from "@/components/ui/switch";
 import { usePropertyValues } from "../hooks/use-property";
 import { usePropertyEdit } from "../hooks/use-property-edit";
 import type { Asset } from "../lib/asset-store";
-import { handleFieldHistoryKey, isTypingTarget } from "../lib/editor-shortcuts";
 import type { History } from "../lib/history";
 import type { MaterialLibrary } from "../lib/material-library";
 import {
@@ -59,7 +58,7 @@ export function MaterialSection({
   onImportImage: () => Promise<Asset | null>;
 }) {
   const materials = usePropertyValues(materialProperty, meshes);
-  const { preview, commit, cancel } = usePropertyEdit(
+  const { preview, commit, cancel, onKeyDown } = usePropertyEdit(
     materialProperty,
     meshes,
     history,
@@ -79,16 +78,7 @@ export function MaterialSection({
   });
 
   return (
-    <div
-      className="space-y-3"
-      // 입력창·슬라이더에 포커스가 있으면 editor-shortcuts가 건너뛰므로 undo/redo를 여기서 처리한다.
-      // 편집 중이면 먼저 그 편집만 취소한다. (스위치 같은 버튼은 editor-shortcuts가 처리 — 두 번 undo 하지 않게)
-      onKeyDown={(event) => {
-        if (isTypingTarget(event.target)) {
-          handleFieldHistoryKey(event, history, cancel);
-        }
-      }}
-    >
+    <div className="space-y-3" onKeyDown={onKeyDown}>
       <SharedMaterialField
         meshes={meshes}
         library={library}

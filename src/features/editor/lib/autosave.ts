@@ -3,7 +3,6 @@ import { createListeners } from "@/lib/listeners";
 
 import type { Asset } from "./asset-store";
 import type { SceneContent, SceneFile } from "./scene-file";
-import { SceneFileError } from "./scene-format";
 
 /*
  * 자동 저장과 복구. 파일로 저장하지 않은 변경이 있으면 잠시(delay) 뒤 브라우저 저장소에 씬을 남기고,
@@ -69,6 +68,11 @@ export function createAutosave({
   let reportedError = false;
   /** 복구 중 (모델을 불러오는 동안 버튼을 다시 눌러도 한 번만) */
   let recovering = false;
+  /**
+   * 진행 중인 쓰기. 다음 쓰기는 이 뒤에 이어 붙인다 — 큰 에셋을 저장하는 동안 깨끗해지면(⌘S·undo)
+   * 지우기가 저장보다 먼저 끝나 기록이 남고, 다음 실행 때 이미 저장한 씬을 복구하겠냐고 묻게 된다.
+   */
+  let writing: Promise<void> = Promise.resolve();
 
   const listeners = createListeners();
   const setPending = (next: AutosaveRecord | null) => {
@@ -79,8 +83,14 @@ export function createAutosave({
     listeners.emit();
   };
 
-  const write = async () => {
+  const write = () => {
     timer = null;
+    writing = writing.then(writeNow);
+    return writing;
+  };
+
+  /** 지금 상태를 저장소에 반영한다 (변경이 있으면 남기고, 깨끗한데 기록이 남아 있으면 지운다) */
+  const writeNow = async () => {
     const { dirty, fileName } = sceneFile.getState();
     try {
       if (dirty) {
@@ -140,8 +150,11 @@ export function createAutosave({
       try {
         await sceneFile.restore(record, record.fileName);
       } catch (error) {
-        if (!(error instanceof SceneFileError)) throw error;
-        onError("자동 저장 기록을 복구하지 못했습니다", error.message);
+        // 어떤 오류든 알리고 기록을 버린다 — 대화상자가 열린 채 자동 저장도 시작되지 않는 상태로 남지 않게
+        onError(
+          "자동 저장 기록을 복구하지 못했습니다",
+          error instanceof Error ? error.message : String(error),
+        );
         void storage.clear();
         stored = false;
       } finally {
@@ -157,9 +170,11 @@ export function createAutosave({
       startWatching();
     },
     async flush() {
-      if (!timer) return;
-      clearTimeout(timer);
-      await write();
+      if (timer) {
+        clearTimeout(timer);
+        void write();
+      }
+      await writing;
     },
     getState: () => state,
     subscribe: listeners.subscribe,

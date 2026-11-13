@@ -185,7 +185,9 @@ export function buildSceneTree(
   for (const mesh of meshes) {
     const parent = getParent(mesh);
     const key = parent && inList.has(parent) ? parent : null;
-    children.set(key, [...(children.get(key) ?? []), mesh]);
+    const siblings = children.get(key);
+    if (siblings) siblings.push(mesh);
+    else children.set(key, [mesh]);
   }
   const rows: SceneTreeRow[] = [];
   const visit = (mesh: AbstractMesh, depth: number) => {

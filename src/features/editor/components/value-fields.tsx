@@ -110,8 +110,9 @@ export function ColorField({
             else if (key === "escape") {
               input.value = shown;
               input.blur();
-            } else if (
-              // 입력 중인 글자가 있으면 ⌘Z는 그 글자만 되돌린다 (히스토리 undo가 아니라)
+            } else {
+              // 입력 중인 글자가 있으면 ⌘Z는 그 글자만 되돌린다 (히스토리 undo가 아니라).
+              // 처리한 키는 preventDefault 되므로 섹션의 onKeyDown(usePropertyEdit)이 한 번 더 undo 하지 않는다
               handleFieldHistoryKey(event, history, () => {
                 if (
                   (normalizeHex(input.value) ?? input.value.trim()) !== shown
@@ -120,9 +121,7 @@ export function ColorField({
                   return true;
                 }
                 return onCancel();
-              })
-            ) {
-              event.stopPropagation(); // 바깥 onKeyDown이 한 번 더 undo 하지 않게
+              });
             }
           }}
           onBlur={(event) => {

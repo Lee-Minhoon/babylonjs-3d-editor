@@ -126,7 +126,11 @@ function SnapStepSubmenu({
  * 열린 메뉴 안의 키는 editor-shortcuts가 무시하므로 메뉴 탐색은 그대로다.
  */
 function passEditorKeys(event: BaseUIEvent<KeyboardEvent<HTMLElement>>) {
-  if (event.key === "End" || event.code.startsWith("Numpad")) {
+  // 숫자패드 Enter는 메뉴를 여는 키라 메뉴바에 둔다
+  if (
+    event.key === "End" ||
+    (event.code.startsWith("Numpad") && event.code !== "NumpadEnter")
+  ) {
     event.preventBaseUIHandler();
   }
 }
@@ -559,6 +563,7 @@ export function EditorHeader({ runtime }: EditorHeaderProps) {
           <span className="truncate">{file.fileName ?? "제목 없음"}</span>
           {file.dirty && (
             <span
+              role="img"
               className="size-1.5 shrink-0 rounded-full bg-primary"
               aria-label="저장되지 않은 변경 사항"
             />

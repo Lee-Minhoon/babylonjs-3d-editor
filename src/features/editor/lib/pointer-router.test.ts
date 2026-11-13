@@ -9,7 +9,7 @@ import type { PlacementTool } from "./placement-tool";
 import { bindPointerRouter } from "./pointer-router";
 import type { Selection } from "./selection";
 import { createTestScene } from "./test-scene";
-import { createToolState } from "./tools";
+import { createToolState, type TransformTool } from "./tools";
 import type { TransformGizmo } from "./transform-gizmo";
 
 /** 포인터 누름/뗌을 흉내 낸다: 렌더링·피킹 없이 커서 아래 메쉬는 stub이 정한다 */
@@ -17,10 +17,22 @@ function setup({
   under = null as AbstractMesh | null,
   selected = [] as AbstractMesh[],
   placing = false,
+  tool = "move" as TransformTool,
 } = {}) {
   const scene = createTestScene();
   const contextMenu = createContextMenu();
   let current = selected;
+  /** 박스 선택 stub: begin으로 시작하고 end로 끝난다 (움직임 판정은 하지 않고 늘 박스가 됐다고 본다) */
+  let boxPending = false;
+  const boxSelect = {
+    isPending: () => boxPending,
+    begin: vi.fn(() => void (boxPending = true)),
+    update: vi.fn(),
+    end: vi.fn(() => {
+      boxPending = false;
+      return true;
+    }),
+  } as unknown as BoxSelect;
   const selection = {
     getMeshes: () => current,
     meshAtPointer: () => under,
@@ -39,8 +51,8 @@ function setup({
     gizmo: { isPointerOver: () => false } as TransformGizmo,
     placement,
     selection,
-    tools: createToolState(),
-    boxSelect: { isPending: () => false } as unknown as BoxSelect,
+    tools: createToolState(tool),
+    boxSelect,
     contextMenu,
   });
   const pointer = (type: number, button: number, x: number, y: number) => {
@@ -60,6 +72,7 @@ function setup({
     contextMenu,
     selection,
     placement,
+    boxSelect,
     pointer,
     tap,
     getSelected: () => current,
@@ -99,6 +112,25 @@ describe("탭 판정 (pointer-router)", () => {
     tap(0, 10, 10);
     tap(0, 300, 10);
     expect(placement.place).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("박스 선택 중의 다른 버튼 (pointer-router)", () => {
+  test("왼쪽 드래그로 박스를 끄는 중 오른쪽 버튼을 눌렀다 떼도 박스는 계속되고 메뉴도 열리지 않는다", () => {
+    const { boxSelect, contextMenu, selection, pointer } = setup({
+      tool: "select",
+    });
+    pointer(PointerEventTypes.POINTERDOWN, 0, 10, 10);
+    expect(boxSelect.begin).toHaveBeenCalledTimes(1);
+
+    pointer(PointerEventTypes.POINTERDOWN, 2, 60, 60);
+    pointer(PointerEventTypes.POINTERUP, 2, 60, 60);
+    expect(boxSelect.end).not.toHaveBeenCalled();
+    expect(contextMenu.getState().open).toBe(false);
+
+    pointer(PointerEventTypes.POINTERUP, 0, 120, 120);
+    expect(boxSelect.end).toHaveBeenCalledTimes(1);
+    expect(selection.selectAtPointer).not.toHaveBeenCalled(); // 박스가 됐으면 탭이 아니다
   });
 });
 

@@ -39,6 +39,8 @@ export type MaterialLibrary = {
   create(values: MaterialValues, saved?: LibraryMaterial): LibraryEntry;
   add(id: string): void;
   remove(id: string): void;
+  /** 목록에 없는(undo로 빠진) 항목을 버리고 머티리얼을 해제한다 — 만들기 Command가 히스토리에서 빠질 때 */
+  discard(id: string): void;
   rename(id: string, name: string): void;
   /** 새 씬·열기: 모든 항목을 버린다 (쓰는 메쉬가 다 해제된 뒤에) */
   clear(): void;
@@ -110,6 +112,12 @@ export function createMaterialLibrary(scene: Scene): MaterialLibrary {
     remove(id) {
       order = order.filter((item) => item !== id);
       emit();
+    },
+    discard(id) {
+      const entry = created.get(id);
+      if (!entry || order.includes(id)) return;
+      entry.material.dispose(false, true);
+      created.delete(id);
     },
     rename(id, name) {
       const entry = created.get(id);
@@ -247,7 +255,7 @@ export function createUnlinkCommand(
 
 /**
  * 첫 메쉬의 지금 값으로 새 공유 머티리얼을 만들어 메쉬들을 연결하는 Command ("머티리얼 1 만들기").
- * undo하면 연결을 풀고 목록에서도 뺀다.
+ * undo하면 연결을 풀고 목록에서도 뺀다. 되돌린 채 히스토리에서 빠지면 머티리얼도 해제한다.
  */
 export function createSharedMaterialCommand(
   library: MaterialLibrary,
@@ -269,6 +277,7 @@ export function createSharedMaterialCommand(
     },
     dispose() {
       for (const command of links) command.dispose?.();
+      library.discard(entry.id);
     },
   };
 }

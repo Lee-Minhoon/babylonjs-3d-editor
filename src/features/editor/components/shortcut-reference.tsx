@@ -2,6 +2,7 @@ import { Kbd, KbdGroup } from "@/components/ui/kbd";
 
 import { MOUSE_CONTROLS } from "../lib/camera-controls";
 import { SHORTCUT_GROUPS } from "../lib/editor-reference";
+import { getToolShortcut } from "../lib/editor-shortcuts";
 
 /*
  * 단축키 목록과 마우스 조작표. 도움말 창(?)과 사용 설명서(/manual)가 같은 것을 보여준다.
@@ -56,7 +57,7 @@ export function MouseControlsTable() {
               입력
             </th>
             <th scope="col" className="py-1.5 pr-4 font-medium">
-              선택 도구 (Q)
+              선택 도구 ({getToolShortcut("select")})
             </th>
             <th scope="col" className="py-1.5 font-medium">
               이동·회전·크기 도구
